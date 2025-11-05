@@ -42,6 +42,32 @@ const initialFormData: Omit<Farmer, 'id'> = {
     syncedToSheets: false
 };
 
+// Helper function to get geo names from codes
+const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { district: string; mandal?: string; village?: string }) => {
+    try {
+        const districtData = GEO_DATA.find(d => d.code === codes.district);
+        if (type === 'district') {
+            return districtData?.name || codes.district;
+        }
+        if (!districtData) return codes[type] || 'N/A';
+
+        const mandalData = districtData.mandals.find(m => m.code === codes.mandal);
+        if (type === 'mandal') {
+            return mandalData?.name || codes.mandal;
+        }
+        if (!mandalData) return codes[type] || 'N/A';
+
+        if (type === 'village') {
+            const villageData = mandalData.villages.find(v => v.code === codes.village);
+            return villageData?.name || codes.village;
+        }
+    } catch (e) {
+        console.error("Error getting geo name:", e);
+        return 'N/A';
+    }
+    return codes[type] || 'N/A';
+};
+
 // FIX: Moved helper components outside of the RegistrationForm component to prevent re-creation on every render and fix typing issues.
 // By defining props types separately, we improve readability and avoid potential TypeScript parsing issues with complex inline types.
 // FIX: Made `children` prop optional to resolve TypeScript errors where children were not being detected. The component usage in this file always provides children, so this change is safe.
@@ -341,51 +367,81 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                         {/* Geographic Details */}
                         <section className="mt-6">
                              <h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3>
-                             <FormRow>
-                                 <FormLabel required>District</FormLabel>
-                                 <FormField>
-                                     <div className="relative">
-                                         <select name="district" value={formData.district} onChange={handleGeoChange} className={selectInputClass} disabled={!!initialData}>
-                                             <option value="">-- Select District --</option>
-                                             {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
-                                         </select>
-                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                         </div>
-                                     </div>
-                                     <InputError message={errors.district}/>
-                                 </FormField>
-                             </FormRow>
-                             <FormRow>
-                                 <FormLabel required>Mandal</FormLabel>
-                                 <FormField>
-                                     <div className="relative">
-                                         <select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={selectInputClass} disabled={!formData.district || !!initialData}>
-                                             <option value="">-- Select Mandal --</option>
-                                             {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
-                                         </select>
-                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                         </div>
-                                     </div>
-                                      <InputError message={errors.mandal}/>
-                                 </FormField>
-                             </FormRow>
-                             <FormRow>
-                                 <FormLabel required>Village</FormLabel>
-                                 <FormField>
-                                     <div className="relative">
-                                         <select name="village" value={formData.village} onChange={handleChange} className={selectInputClass} disabled={!formData.mandal || !!initialData}>
-                                             <option value="">-- Select Village --</option>
-                                             {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
-                                         </select>
-                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                         </div>
-                                     </div>
-                                      <InputError message={errors.village}/>
-                                 </FormField>
-                             </FormRow>
+                            {initialData ? (
+                                <>
+                                    <FormRow>
+                                        <FormLabel>District</FormLabel>
+                                        <FormField>
+                                            <p className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-900">{getGeoName('district', { district: formData.district })}</p>
+                                        </FormField>
+                                    </FormRow>
+                                    <FormRow>
+                                        <FormLabel>Mandal</FormLabel>
+                                        <FormField>
+                                            <p className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-900">{getGeoName('mandal', { district: formData.district, mandal: formData.mandal })}</p>
+                                        </FormField>
+                                    </FormRow>
+                                    <FormRow>
+                                        <FormLabel>Village</FormLabel>
+                                        <FormField>
+                                            <p className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-900">{getGeoName('village', { district: formData.district, mandal: formData.mandal, village: formData.village })}</p>
+                                        </FormField>
+                                    </FormRow>
+                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="md:col-start-2 md:col-span-2">
+                                            <p className="text-xs text-gray-500 mt-1">Geographic details cannot be changed after registration as they are part of the Farmer ID.</p>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <FormRow>
+                                        <FormLabel required>District</FormLabel>
+                                        <FormField>
+                                            <div className="relative">
+                                                <select name="district" value={formData.district} onChange={handleGeoChange} className={selectInputClass}>
+                                                    <option value="">-- Select District --</option>
+                                                    {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+                                                </select>
+                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                                </div>
+                                            </div>
+                                            <InputError message={errors.district}/>
+                                        </FormField>
+                                    </FormRow>
+                                    <FormRow>
+                                        <FormLabel required>Mandal</FormLabel>
+                                        <FormField>
+                                            <div className="relative">
+                                                <select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={selectInputClass} disabled={!formData.district}>
+                                                    <option value="">-- Select Mandal --</option>
+                                                    {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                                                </select>
+                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                                </div>
+                                            </div>
+                                             <InputError message={errors.mandal}/>
+                                        </FormField>
+                                    </FormRow>
+                                    <FormRow>
+                                        <FormLabel required>Village</FormLabel>
+                                        <FormField>
+                                            <div className="relative">
+                                                <select name="village" value={formData.village} onChange={handleChange} className={selectInputClass} disabled={!formData.mandal}>
+                                                    <option value="">-- Select Village --</option>
+                                                    {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
+                                                </select>
+                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                                </div>
+                                            </div>
+                                             <InputError message={errors.village}/>
+                                        </FormField>
+                                    </FormRow>
+                                </>
+                            )}
                         </section>
                         
                          {/* Bank Details */}
