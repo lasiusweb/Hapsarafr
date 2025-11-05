@@ -1,0 +1,165 @@
+import React, { useState, useEffect } from 'react';
+import { FarmerStatus, Mandal, Village } from '../types';
+import { GEO_DATA } from '../data/geoData';
+
+export interface Filters {
+  searchQuery: string;
+  district: string;
+  mandal: string;
+  village: string;
+  status: string;
+}
+
+interface FilterBarProps {
+  onFilterChange: (filters: Filters) => void;
+}
+
+const initialFilters: Filters = {
+  searchQuery: '',
+  district: '',
+  mandal: '',
+  village: '',
+  status: '',
+};
+
+/**
+ * A custom hook to debounce a value.
+ * This prevents a function from being called too frequently by delaying its update.
+ * @param value The value to debounce
+ * @param delay The delay in milliseconds
+ * @returns The debounced value
+ */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    // Cleanup function to clear the timeout if the value changes before the delay has passed
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
+  const [filters, setFilters] = useState<Filters>(initialFilters);
+  const [mandals, setMandals] = useState<Mandal[]>([]);
+  const [villages, setVillages] = useState<Village[]>([]);
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  
+  // Debounce search query to improve performance by delaying filter updates.
+  const debouncedSearchQuery = useDebounce(localSearchQuery, 500);
+
+  useEffect(() => {
+    onFilterChange(filters);
+  }, [filters, onFilterChange]);
+  
+  // Update the main filter state only when the debounced search query changes.
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, searchQuery: debouncedSearchQuery }));
+  }, [debouncedSearchQuery]);
+
+  // Effect to update mandals when district changes
+  useEffect(() => {
+    if (filters.district) {
+      const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
+      setMandals(selectedDistrict?.mandals || []);
+    } else {
+      setMandals([]);
+    }
+  }, [filters.district]);
+
+  // Effect to update villages when district or mandal changes
+  useEffect(() => {
+    if (filters.district && filters.mandal) {
+      const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
+      const selectedMandal = selectedDistrict?.mandals.find(m => m.code === filters.mandal);
+      setVillages(selectedMandal?.villages || []);
+    } else {
+      setVillages([]);
+    }
+  }, [filters.district, filters.mandal]);
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleGeoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFilters(prev => {
+        const newFilters = {...prev, [name]: value};
+        if (name === 'district') {
+            newFilters.mandal = '';
+            newFilters.village = '';
+        } else if (name === 'mandal') {
+            newFilters.village = '';
+        }
+        return newFilters;
+    });
+  };
+
+  const clearFilters = () => {
+    setFilters(initialFilters);
+    setLocalSearchQuery('');
+  };
+
+  const inputClass = "w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition bg-white";
+
+  return (
+    <div className="bg-white shadow-md rounded-lg p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+             <div className="md:col-span-3">
+                <label htmlFor="searchQuery" className="block text-sm font-medium text-gray-700 mb-1">Search (ID, Name, Mobile)</label>
+                <input
+                    type="text"
+                    id="searchQuery"
+                    name="searchQuery"
+                    value={localSearchQuery}
+                    onChange={(e) => setLocalSearchQuery(e.target.value)}
+                    placeholder="e.g. John Doe, H010124001, 987..."
+                    className={inputClass}
+                    title="Search by farmer's name, unique ID, or mobile number."
+                />
+            </div>
+            <div>
+                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select id="status" name="status" value={filters.status} onChange={handleSelectChange} className={inputClass} title="Filter farmers by their current registration status.">
+                    <option value="">All Statuses</option>
+                    {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+            </div>
+             <div>
+                <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                <select id="district" name="district" value={filters.district} onChange={handleGeoChange} className={inputClass} title="Filter farmers by their district.">
+                    <option value="">All Districts</option>
+                    {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+                </select>
+            </div>
+            <div>
+                <label htmlFor="mandal" className="block text-sm font-medium text-gray-700 mb-1">Mandal</label>
+                <select id="mandal" name="mandal" value={filters.mandal} onChange={handleGeoChange} className={inputClass} disabled={!filters.district} title="Filter farmers by their mandal. A district must be selected first.">
+                    <option value="">All Mandals</option>
+                    {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                </select>
+            </div>
+            <div>
+                <label htmlFor="village" className="block text-sm font-medium text-gray-700 mb-1">Village</label>
+                <select id="village" name="village" value={filters.village} onChange={handleGeoChange} className={inputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
+                    <option value="">All Villages</option>
+                    {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
+                </select>
+            </div>
+            <div className="flex items-end">
+                <button onClick={clearFilters} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition font-semibold" title="Reset all search and filter criteria to their default values.">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+  );
+};
+
+export default FilterBar;
