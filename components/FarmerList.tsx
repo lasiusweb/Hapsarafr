@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Farmer, FarmerStatus, User, UserRole } from '../types';
 import { FarmerModel } from '../db';
 import { GEO_DATA } from '../data/geoData';
@@ -17,11 +17,23 @@ interface FarmerListProps {
     onSelectAll: (allSelected: boolean) => void;
     sortConfig: { key: keyof Farmer | 'id'; direction: 'ascending' | 'descending' } | null;
     onRequestSort: (key: keyof Farmer | 'id') => void;
+    newlyAddedFarmerId: string | null;
+    onHighlightComplete: () => void;
 }
 
-const FarmerList: React.FC<FarmerListProps> = ({ farmers, currentUser, editingRowId, onEditRow, onCancelEditRow, onSaveRow, onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, sortConfig, onRequestSort }) => {
+const FarmerList: React.FC<FarmerListProps> = ({ farmers, currentUser, editingRowId, onEditRow, onCancelEditRow, onSaveRow, onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete }) => {
     
     const [editedFarmerData, setEditedFarmerData] = useState<Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>>({});
+    
+    useEffect(() => {
+        if (newlyAddedFarmerId) {
+            const timer = setTimeout(() => {
+                onHighlightComplete();
+            }, 3000); // Highlight duration: 3 seconds
+
+            return () => clearTimeout(timer);
+        }
+    }, [newlyAddedFarmerId, onHighlightComplete]);
 
     const handleEditClick = (farmer: FarmerModel) => {
         setEditedFarmerData({
@@ -130,8 +142,19 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, currentUser, editingRo
                 {farmers.map(farmer => {
                     const isEditing = editingRowId === farmer.id;
                     const isSelected = selectedFarmerIds.includes(farmer.id);
+                    const isNewlyAdded = newlyAddedFarmerId === farmer.id;
+                    
+                    let rowBgClass = '';
+                    if (isNewlyAdded) {
+                        rowBgClass = 'bg-green-200';
+                    } else if (isEditing) {
+                        rowBgClass = 'bg-yellow-50';
+                    } else if (isSelected) {
+                        rowBgClass = 'bg-green-50';
+                    }
+
                     return (
-                        <tr key={farmer.id} className={isEditing ? 'bg-yellow-50' : isSelected ? 'bg-green-50' : ''}>
+                        <tr key={farmer.id} className={`transition-colors duration-1000 ${rowBgClass}`}>
                             <td className="px-6 py-4 whitespace-nowrap">
                                 <input
                                     type="checkbox"

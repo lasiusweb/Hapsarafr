@@ -115,7 +115,7 @@ const Header: React.FC<{
     <header className="bg-white shadow-md p-4 flex justify-between items-center">
       <div className="flex items-center gap-4">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
+              <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
           </svg>
           <h1 className="text-2xl font-bold text-gray-800">Hapsara Farmer Registration</h1>
           <div className="flex items-center gap-2 border-l pl-4 ml-2">
@@ -219,12 +219,23 @@ const App: React.FC = () => {
   });
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
 
   const database = useDatabase();
   const farmersCollection = database.get<FarmerModel>('farmers');
   
   const allFarmers = useQuery(farmersCollection.query());
   const pendingSyncCount = useQueryCount(farmersCollection.query(Q.where('syncStatus', 'pending')));
+
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => {
+                setNotification(null);
+            }, 5000); // Notification disappears after 5 seconds
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
 
   useEffect(() => {
     const migrateFromLocalStorage = async () => {
@@ -460,6 +471,8 @@ const App: React.FC = () => {
     });
 
     setShowForm(false);
+    setNewlyAddedFarmerId(farmerData.id);
+    setNotification({ message: `Farmer "${farmerData.fullName}" successfully registered!`, type: 'success' });
   };
 
   const handleBulkImportSubmit = async (newFarmers: Farmer[]) => {
@@ -670,6 +683,16 @@ const App: React.FC = () => {
         isOnline={isOnline}
         pendingSyncCount={pendingSyncCount}
       />
+      
+      {notification && (
+        <div className={`fixed top-20 right-6 z-[100] px-6 py-4 rounded-lg shadow-lg text-white transition-transform transform-gpu animate-fade-in-down ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+            <div className="flex items-center">
+                <span className="font-semibold">{notification.message}</span>
+                <button onClick={() => setNotification(null)} className="ml-4 font-bold text-xl leading-none">&times;</button>
+            </div>
+        </div>
+      )}
+
       <main className="p-6">
         <FilterBar onFilterChange={setFilters} />
         <FarmerList 
@@ -686,6 +709,8 @@ const App: React.FC = () => {
             onSelectAll={handleSelectAll}
             sortConfig={sortConfig}
             onRequestSort={handleRequestSort}
+            newlyAddedFarmerId={newlyAddedFarmerId}
+            onHighlightComplete={() => setNewlyAddedFarmerId(null)}
         />
       </main>
       
