@@ -230,16 +230,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             if (!initialData) { // Only generate IDs for new farmers
                 const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
                 
-                const farmersInVillageThisYear = existingFarmers.filter(f => 
+                const farmersInVillage = existingFarmers.filter(f => 
                     f.village === formData.village && 
                     f.mandal === formData.mandal && 
-                    f.district === formData.district && 
-                    new Date(f.registrationDate).getFullYear() === new Date(formData.registrationDate).getFullYear()
+                    f.district === formData.district
                 );
                 
-                const seq = (farmersInVillageThisYear.length + 1).toString().padStart(3, '0');
+                const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
 
-                farmerData.farmerId = `${formData.district}${formData.mandal}${formData.village}${regYear}${seq}`;
+                farmerData.farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
                 
                 const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
                 farmerData.applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
