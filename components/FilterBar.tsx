@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FarmerStatus, Mandal, Village } from '../types';
 import { GEO_DATA } from '../data/geoData';
 
@@ -45,9 +45,6 @@ function useDebounce<T>(value: T, delay: number): T {
 
 const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   const [filters, setFilters] = useState<Filters>(initialFilters);
-  const [mandals, setMandals] = useState<Mandal[]>([]);
-  const [villages, setVillages] = useState<Village[]>([]);
-  
   const debouncedSearchQuery = useDebounce(filters.searchQuery, 500);
 
   // This single effect handles updating the parent component.
@@ -63,25 +60,18 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     onFilterChange(newFiltersForParent);
   }, [debouncedSearchQuery, filters.district, filters.mandal, filters.village, filters.status, onFilterChange]);
 
-  // Effect to update mandals when district changes
-  useEffect(() => {
-    if (filters.district) {
-      const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
-      setMandals(selectedDistrict?.mandals || []);
-    } else {
-      setMandals([]);
-    }
+  // Derive mandals and villages directly from filters state to avoid chained useEffect updates.
+  const mandals: Mandal[] = useMemo(() => {
+    if (!filters.district) return [];
+    const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
+    return selectedDistrict?.mandals || [];
   }, [filters.district]);
 
-  // Effect to update villages when district or mandal changes
-  useEffect(() => {
-    if (filters.district && filters.mandal) {
-      const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
-      const selectedMandal = selectedDistrict?.mandals.find(m => m.code === filters.mandal);
-      setVillages(selectedMandal?.villages || []);
-    } else {
-      setVillages([]);
-    }
+  const villages: Village[] = useMemo(() => {
+    if (!filters.district || !filters.mandal) return [];
+    const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
+    const selectedMandal = selectedDistrict?.mandals.find(m => m.code === filters.mandal);
+    return selectedMandal?.villages || [];
   }, [filters.district, filters.mandal]);
   
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
