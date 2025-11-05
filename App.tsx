@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { Farmer, FarmerStatus, PlantationMethod, PlantType } from './types';
+import { Farmer, FarmerStatus, PlantationMethod, PlantType, User, UserRole } from './types';
 import { GEO_DATA } from './data/geoData';
 import FilterBar, { Filters } from './components/FilterBar';
 
@@ -7,6 +7,8 @@ import FilterBar, { Filters } from './components/FilterBar';
 const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
 const PrintView = lazy(() => import('./components/PrintView'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
+const LoginScreen = lazy(() => import('./components/LoginScreen'));
+const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatusModal'));
 
 
 // Type declarations for CDN libraries
@@ -56,80 +58,120 @@ const useOnlineStatus = () => {
 
 
 const Header: React.FC<{
+  currentUser: User | null;
+  onLogout: () => void;
   onRegister: () => void;
   onExport: () => void;
   onExportCsv: () => void;
   onImport: () => void;
   onSync: () => void;
   onDeleteSelected: () => void;
+  onBatchUpdate: () => void;
   syncLoading: boolean;
   selectedCount: number;
   isOnline: boolean;
   pendingSyncCount: number;
-}> = ({ onRegister, onExport, onExportCsv, onImport, onSync, onDeleteSelected, syncLoading, selectedCount, isOnline, pendingSyncCount }) => (
-  <header className="bg-white shadow-md p-4 flex justify-between items-center">
-    <div className="flex items-center gap-4">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
-        </svg>
-        <h1 className="text-2xl font-bold text-gray-800">Hapsara Farmer Registration</h1>
-        <div className="flex items-center gap-2 border-l pl-4 ml-2">
-            <span
-                className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}
-                title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}
-            ></span>
-            <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
-            {pendingSyncCount > 0 && (
-                <span className="text-sm text-blue-600 font-semibold animate-pulse">({pendingSyncCount} pending sync)</span>
-            )}
+}> = ({ currentUser, onLogout, onRegister, onExport, onExportCsv, onImport, onSync, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount }) => {
+
+  const canRegister = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
+  const canImportExport = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
+  const canSync = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
+  const canDelete = currentUser?.role === UserRole.Admin;
+  const canEdit = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
+
+
+  return (
+    <header className="bg-white shadow-md p-4 flex justify-between items-center">
+      <div className="flex items-center gap-4">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
+          </svg>
+          <h1 className="text-2xl font-bold text-gray-800">Hapsara Farmer Registration</h1>
+          <div className="flex items-center gap-2 border-l pl-4 ml-2">
+              <span
+                  className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}
+                  title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}
+              ></span>
+              <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
+              {pendingSyncCount > 0 && (
+                  <span className="text-sm text-blue-600 font-semibold animate-pulse">({pendingSyncCount} pending sync)</span>
+              )}
+          </div>
+      </div>
+      <div className="flex items-center gap-4">
+        {currentUser && (
+          <div className="text-right border-r pr-4">
+            <p className="font-semibold text-gray-800">{currentUser.name}</p>
+            <p className="text-xs text-gray-500">{currentUser.role}</p>
+          </div>
+        )}
+        <div className="flex gap-2">
+          {canDelete && selectedCount > 0 && (
+            <button
+              onClick={onDeleteSelected}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold flex items-center gap-2"
+              title={`Delete ${selectedCount} selected farmer(s)`}
+            >
+              Delete Selected ({selectedCount})
+            </button>
+          )}
+           {canEdit && selectedCount > 0 && (
+            <button
+              onClick={onBatchUpdate}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition font-semibold flex items-center gap-2"
+              title={`Update status for ${selectedCount} selected farmer(s)`}
+            >
+              Update Status ({selectedCount})
+            </button>
+          )}
+          {canSync && (
+            <button 
+              onClick={onSync} 
+              disabled={syncLoading || selectedCount === 0 || !isOnline} 
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition font-semibold flex items-center gap-2 disabled:bg-blue-300 disabled:cursor-not-allowed"
+              title={!isOnline ? "Syncing is disabled while offline" : (selectedCount === 0 ? "Select farmers to sync" : "Sync selected farmers with the server")}
+            >
+              {syncLoading ? 'Syncing...' : `Sync Selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+            </button>
+          )}
+          {canImportExport && (
+            <>
+              <button onClick={onExportCsv} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition font-semibold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" />
+                </svg>
+                Export to CSV
+              </button>
+              <button onClick={onExport} className="px-4 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 transition font-semibold flex items-center gap-2">
+                Export to Excel
+              </button>
+              <button onClick={onImport} className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition font-semibold flex items-center gap-2">
+                Import from Excel
+              </button>
+            </>
+          )}
+          {canRegister && (
+            <button onClick={onRegister} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold flex items-center gap-2">
+              Register New Farmer
+            </button>
+          )}
         </div>
-    </div>
-    <div className="flex gap-2">
-      {selectedCount > 0 && (
-        <button
-          onClick={onDeleteSelected}
-          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold flex items-center gap-2"
-          title={`Delete ${selectedCount} selected farmer(s)`}
-        >
-          Delete Selected ({selectedCount})
-        </button>
-      )}
-      <button 
-        onClick={onSync} 
-        disabled={syncLoading || selectedCount === 0 || !isOnline} 
-        className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition font-semibold flex items-center gap-2 disabled:bg-blue-300 disabled:cursor-not-allowed"
-        title={!isOnline ? "Syncing is disabled while offline" : (selectedCount === 0 ? "Select farmers to sync" : "Sync selected farmers to Google Sheets")}
-      >
-        {syncLoading ? 'Syncing...' : `Sync Selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
-      </button>
-      <button onClick={onExportCsv} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition font-semibold flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" />
-        </svg>
-        Export to CSV
-      </button>
-      <button onClick={onExport} className="px-4 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 transition font-semibold flex items-center gap-2">
-        Export to Excel
-      </button>
-      <button onClick={onImport} className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition font-semibold flex items-center gap-2">
-        Import from Excel
-      </button>
-      <button onClick={onRegister} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold flex items-center gap-2">
-        Register New Farmer
-      </button>
-    </div>
-  </header>
-);
+        <button onClick={onLogout} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition font-semibold">Logout</button>
+      </div>
+    </header>
+  );
+};
 
 const FarmerList: React.FC<{
     farmers: Farmer[];
+    currentUser: User | null;
     onEdit: (farmer: Farmer) => void;
     onPrint: (farmer: Farmer) => void;
     onExportToPdf: (farmer: Farmer) => void;
     selectedFarmerIds: string[];
     onSelectionChange: (farmerId: string, isSelected: boolean) => void;
     onSelectAll: (allSelected: boolean) => void;
-}> = ({ farmers, onEdit, onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll }) => {
+}> = ({ farmers, currentUser, onEdit, onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll }) => {
     
     const StatusBadge: React.FC<{status: FarmerStatus}> = ({ status }) => {
         const colors: Record<FarmerStatus, string> = {
@@ -163,6 +205,7 @@ const FarmerList: React.FC<{
     }
     
     const allVisibleSelected = farmers.length > 0 && farmers.every(f => selectedFarmerIds.includes(f.id));
+    const canEdit = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
 
     return (
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
@@ -215,7 +258,7 @@ const FarmerList: React.FC<{
                             </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2">
-                           <button onClick={() => onEdit(farmer)} className="text-indigo-600 hover:text-indigo-900">Edit</button>
+                           {canEdit && <button onClick={() => onEdit(farmer)} className="text-indigo-600 hover:text-indigo-900">Edit</button>}
                            <button onClick={() => onPrint(farmer)} className="text-green-600 hover:text-green-900">Print</button>
                            <button onClick={() => onExportToPdf(farmer)} className="text-blue-600 hover:text-blue-900">PDF</button>
                         </td>
@@ -234,22 +277,24 @@ const ModalLoader: React.FC = () => (
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span className="text-lg font-medium text-gray-700">Loading Form...</span>
+            <span className="text-lg font-medium text-gray-700">Loading...</span>
         </div>
     </div>
 );
 
 const App: React.FC = () => {
   const [isAppLaunched, setIsAppLaunched] = useState(false);
+  const [currentUser, setCurrentUser] = useLocalStorage<User | null>('currentUser', null);
   const [farmers, setFarmers] = useLocalStorage<Farmer[]>('farmers', []);
   const [showForm, setShowForm] = useState(false);
   const [editingFarmer, setEditingFarmer] = useState<Farmer | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<Farmer | null>(null);
   const [pdfExportFarmer, setPdfExportFarmer] = useState<Farmer | null>(null);
   const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
-  const [webhookUrl, setWebhookUrl] = useLocalStorage<string>('googleSheetsWebhookUrl', '');
+  const [backendApiUrl, setBackendApiUrl] = useLocalStorage<string>('backendApiUrl', '');
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncQueue, setSyncQueue] = useLocalStorage<Farmer[]>('syncQueue', []);
+  const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
   const isOnline = useOnlineStatus();
   const [filters, setFilters] = useState<Filters>({
     searchQuery: '',
@@ -282,32 +327,33 @@ const App: React.FC = () => {
   const syncOfflineChanges = useCallback(async () => {
       if (!isOnline || syncQueue.length === 0) return;
       
-      let url = webhookUrl;
+      let url = backendApiUrl;
       if (!url) {
-          console.log("Webhook URL is not set. Aborting automatic sync.");
+          console.log("Backend API URL is not set. Aborting automatic sync.");
           return;
       }
       
       console.log(`Attempting to sync ${syncQueue.length} pending changes...`);
       try {
-          // Using 'no-cors' mode, we won't get a real response object, but the request will be sent.
-          await fetch(url, {
+          const response = await fetch(url, {
               method: 'POST',
-              mode: 'no-cors',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ farmers: syncQueue }),
           });
+          
+          if (!response.ok) {
+            throw new Error(`Automatic sync failed with status: ${response.status}`);
+          }
 
           const syncedIds = new Set(syncQueue.map(f => f.id));
           setFarmers(prev => prev.map(f => syncedIds.has(f.id) ? { ...f, syncedToSheets: true } : f));
           setSyncQueue([]);
-          alert(`Successfully synced ${syncQueue.length} pending changes.`);
+          console.log(`Successfully synced ${syncQueue.length} pending changes.`);
 
       } catch (error) {
           console.error("Error during automatic sync:", error);
-          alert("Failed to sync pending changes. The app will retry automatically when connection is stable.");
       }
-  }, [isOnline, syncQueue, webhookUrl, setFarmers, setSyncQueue]);
+  }, [isOnline, syncQueue, backendApiUrl, setFarmers, setSyncQueue]);
 
   useEffect(() => {
       if (isOnline && syncQueue.length > 0) {
@@ -336,8 +382,8 @@ const App: React.FC = () => {
     if (pdfExportFarmer && pdfContainerRef.current) {
         const pdfElement = pdfContainerRef.current;
         html2canvas(pdfElement, { scale: 2 }).then((canvas: HTMLCanvasElement) => {
-            const imgData = canvas.toDataURL('image/png');
             const { jsPDF } = jspdf;
+            const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
@@ -390,7 +436,11 @@ const App: React.FC = () => {
     }
     
     // Add/update farmer in the sync queue, ensuring no duplicates
-    setSyncQueue(prev => [...prev.filter(f => f.id !== updatedFarmerData.id), updatedFarmerData]);
+    setSyncQueue(prev => {
+        const queueMap = new Map(prev.map(f => [f.id, f]));
+        queueMap.set(updatedFarmerData.id, updatedFarmerData);
+        return Array.from(queueMap.values());
+    });
     
     setShowForm(false);
     setEditingFarmer(null);
@@ -418,7 +468,7 @@ const App: React.FC = () => {
   }, [filteredFarmers]);
 
   const handleDeleteSelected = useCallback(() => {
-    if (selectedFarmerIds.length === 0) {
+    if (selectedFarmerIds.length === 0 || currentUser?.role !== UserRole.Admin) {
       return;
     }
     const confirmed = window.confirm(`Are you sure you want to permanently delete ${selectedFarmerIds.length} selected farmer(s)? This action cannot be undone.`);
@@ -428,7 +478,32 @@ const App: React.FC = () => {
       setSyncQueue(prev => prev.filter(f => !selectedIds.has(f.id)));
       setSelectedFarmerIds([]);
     }
-  }, [selectedFarmerIds, setFarmers, setSyncQueue]);
+  }, [selectedFarmerIds, setFarmers, setSyncQueue, currentUser?.role]);
+  
+  const handleBatchStatusUpdate = (newStatus: FarmerStatus) => {
+    if (selectedFarmerIds.length === 0) {
+        alert("No farmers selected for batch update.");
+        return;
+    }
+
+    const selectedIds = new Set(selectedFarmerIds);
+    const updatedFarmers = farmers.map(f =>
+        selectedIds.has(f.id) ? { ...f, status: newStatus, syncedToSheets: false } : f
+    );
+
+    setFarmers(updatedFarmers);
+
+    const farmersToUpdateInQueue = updatedFarmers.filter(f => selectedIds.has(f.id));
+    setSyncQueue(prev => {
+        const queueMap = new Map(prev.map(f => [f.id, f]));
+        farmersToUpdateInQueue.forEach(f => queueMap.set(f.id, f));
+        return Array.from(queueMap.values());
+    });
+
+    alert(`${selectedFarmerIds.length} farmer(s) have been updated to "${newStatus}".`);
+    setSelectedFarmerIds([]);
+    setShowBatchUpdateModal(false);
+  };
 
   const handleExportToExcel = useCallback(() => {
     // @ts-ignore
@@ -678,7 +753,7 @@ const App: React.FC = () => {
     if(event.target) event.target.value = '';
   };
   
-  const handleSyncToGoogleSheets = useCallback(async () => {
+  const handleSyncToServer = useCallback(async () => {
     if (selectedFarmerIds.length === 0) {
         alert("Please select at least one farmer to sync.");
         return;
@@ -688,13 +763,13 @@ const App: React.FC = () => {
         return;
     }
 
-    let url = webhookUrl;
+    let url = backendApiUrl;
     if(!url) {
-      url = prompt("Please enter your Google Sheets Apps Script Webhook URL:") || '';
-      setWebhookUrl(url);
+      url = prompt("Please enter your Backend API Endpoint URL:") || '';
+      setBackendApiUrl(url);
     }
     if(!url){
-        alert("Webhook URL is required for syncing.");
+        alert("Backend API URL is required for syncing.");
         return;
     }
     
@@ -704,39 +779,43 @@ const App: React.FC = () => {
         return;
     }
 
-    if (!window.confirm(`You are about to sync ${farmersToSync.length} farmer record${farmersToSync.length === 1 ? '' : 's'} to Google Sheets. Proceed?`)) {
+    if (!window.confirm(`You are about to sync ${farmersToSync.length} farmer record${farmersToSync.length === 1 ? '' : 's'} to the server. Proceed?`)) {
       return;
     }
 
     setSyncLoading(true);
     try {
-        await fetch(url, {
+        const response = await fetch(url, {
             method: 'POST',
-            mode: 'no-cors',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({farmers: farmersToSync}),
         });
         
-        alert(`Successfully sent ${farmersToSync.length} records for sync!`);
+        if (!response.ok) {
+            let errorBody = 'No additional error info from server.';
+            try {
+                errorBody = await response.text();
+            } catch (e) { /* ignore */ }
+            throw new Error(`Server responded with status ${response.status}. Details: ${errorBody}`);
+        }
+        
+        alert(`Successfully synced ${farmersToSync.length} records!`);
 
         const syncedIds = new Set(farmersToSync.map(f => f.id));
         setFarmers(prev => prev.map(f => syncedIds.has(f.id) ? {...f, syncedToSheets: true} : f));
+        setSyncQueue(prev => prev.filter(f => !syncedIds.has(f.id)));
         setSelectedFarmerIds([]);
 
     } catch(error) {
-        console.error("Error syncing to Google Sheets:", error);
+        console.error("Error syncing to server:", error);
         let errorMessage = "An unknown error occurred during sync.";
         
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-            if (!navigator.onLine) {
-                errorMessage = "Sync failed. You appear to be offline. Please check your internet connection.";
-            } else {
-                errorMessage = "Sync failed. Could not connect to the server. Please check your webhook URL, network connection, and ensure the server is accessible.";
-            }
+        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+             errorMessage = "Sync failed. Could not connect to the server. Please check your API URL, network connection, and ensure the server is accessible.";
         } else if (error instanceof Error) {
-            errorMessage = `Sync failed: ${error.message}. Please check the console for more details.`;
+            errorMessage = `Sync failed: ${error.message}`;
         }
         
         alert(errorMessage);
@@ -744,8 +823,16 @@ const App: React.FC = () => {
         setSyncLoading(false);
     }
 
-  }, [webhookUrl, setWebhookUrl, farmers, setFarmers, selectedFarmerIds, isOnline]);
+  }, [backendApiUrl, setBackendApiUrl, farmers, setFarmers, selectedFarmerIds, isOnline, setSyncQueue]);
   
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+  };
+  
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
   if (!isAppLaunched) {
       return (
           <Suspense fallback={<div className="min-h-screen bg-gray-900" />}>
@@ -754,15 +841,26 @@ const App: React.FC = () => {
       );
   }
 
+  if (!currentUser) {
+    return (
+      <Suspense fallback={<ModalLoader />}>
+        <LoginScreen onLogin={handleLogin} />
+      </Suspense>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header 
+        currentUser={currentUser}
+        onLogout={handleLogout}
         onRegister={handleRegisterClick} 
         onExport={handleExportToExcel}
         onExportCsv={handleExportToCsv}
         onImport={handleImportClick}
-        onSync={handleSyncToGoogleSheets}
+        onSync={handleSyncToServer}
         onDeleteSelected={handleDeleteSelected}
+        onBatchUpdate={() => setShowBatchUpdateModal(true)}
         syncLoading={syncLoading}
         selectedCount={selectedFarmerIds.length}
         isOnline={isOnline}
@@ -771,7 +869,8 @@ const App: React.FC = () => {
       <main className="p-6">
         <FilterBar onFilterChange={setFilters} />
         <FarmerList 
-            farmers={filteredFarmers} 
+            farmers={filteredFarmers}
+            currentUser={currentUser}
             onEdit={handleEditClick} 
             onPrint={setPrintingFarmer}
             onExportToPdf={handleExportToPdf}
@@ -792,6 +891,13 @@ const App: React.FC = () => {
               initialData={editingFarmer}
               existingFarmers={farmers}
           />
+        )}
+        {showBatchUpdateModal && (
+            <BatchUpdateStatusModal
+                selectedCount={selectedFarmerIds.length}
+                onUpdate={handleBatchStatusUpdate}
+                onCancel={() => setShowBatchUpdateModal(false)}
+            />
         )}
       </Suspense>
       

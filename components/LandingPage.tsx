@@ -30,7 +30,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
                      <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
                     </svg>
-                    <h1 className="text-5xl font-bold tracking-tight">KN Hapsara Farmer Registration</h1>
+                    <h1 className="text-5xl font-bold tracking-tight">Hapsara Farmer Registration</h1>
                 </div>
                 <p className="text-lg text-gray-300 mt-4 max-w-3xl mx-auto">
                     A comprehensive offline-capable web application for the Oil Palm Mission that manages farmer registrations, tracks plantation progress, and monitors subsidy payments.
@@ -62,7 +62,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
                 />
             </div>
              <footer className="mt-12 text-sm text-gray-400">
-                <p>&copy; {new Date().getFullYear()} KN Hapsara. All rights reserved.</p>
+                <p>&copy; {new Date().getFullYear()} Hapsara. All rights reserved.</p>
             </footer>
         </div>
     </div>

@@ -16,6 +16,19 @@ export enum FarmerStatus {
   PaymentDone = 'Payment Done',
 }
 
+export enum UserRole {
+  Admin = 'Admin',
+  DataEntry = 'Data Entry Operator',
+  Viewer = 'Viewer',
+}
+
+export interface User {
+  id: string;
+  name: string;
+  role: UserRole;
+  avatar: string;
+}
+
 export interface Farmer {
   id: string; // Unique ID, can be farmerId
   // Personal Details

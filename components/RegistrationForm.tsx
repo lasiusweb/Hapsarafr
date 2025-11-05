@@ -88,9 +88,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [photoPreview, setPhotoPreview] = useState<string | null>(initialData?.photo || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
     const [mandals, setMandals] = useState<Mandal[]>([]);
     const [villages, setVillages] = useState<Village[]>([]);
+    const [showConfirmation, setShowConfirmation] = useState(false);
+    const [preparedFarmerData, setPreparedFarmerData] = useState<Farmer | null>(null);
     
     useEffect(() => {
         if(initialData?.district) {
@@ -192,11 +193,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             newErrors.registrationDate = "Registration date is required.";
         } else {
             registrationDateObj = new Date(formData.registrationDate);
+            // Check for invalid date format
             if (isNaN(registrationDateObj.getTime())) {
-                newErrors.registrationDate = "Invalid registration date format.";
+                newErrors.registrationDate = "Please enter a valid registration date.";
                 registrationDateObj = null; // Invalidate for later checks
             } else if (registrationDateObj > today) {
-                newErrors.registrationDate = "Registration date cannot be in the future.";
+                // Check if the date is in the future
+                newErrors.registrationDate = "Registration date cannot be a future date.";
             }
         }
 
@@ -222,35 +225,45 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (validate()) {
-            if (window.confirm('Are you sure you want to save these changes?')) {
-                let farmerData = { ...formData };
-                if (!initialData) { // Only generate IDs for new farmers
-                    const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
-                    
-                    const farmersInVillageThisYear = existingFarmers.filter(f => 
-                        f.village === formData.village && 
-                        f.mandal === formData.mandal && 
-                        f.district === formData.district && 
-                        new Date(f.registrationDate).getFullYear() === new Date(formData.registrationDate).getFullYear()
-                    );
-                    
-                    const seq = (farmersInVillageThisYear.length + 1).toString().padStart(3, '0');
+            let farmerData = { ...formData };
+            if (!initialData) { // Only generate IDs for new farmers
+                const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
+                
+                const farmersInVillageThisYear = existingFarmers.filter(f => 
+                    f.village === formData.village && 
+                    f.mandal === formData.mandal && 
+                    f.district === formData.district && 
+                    new Date(f.registrationDate).getFullYear() === new Date(formData.registrationDate).getFullYear()
+                );
+                
+                const seq = (farmersInVillageThisYear.length + 1).toString().padStart(3, '0');
 
-                    farmerData.farmerId = `${formData.district}${formData.mandal}${formData.village}${regYear}${seq}`;
-                    
-                    const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
-                    farmerData.applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
-                    
-                    farmerData.asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
+                farmerData.farmerId = `${formData.district}${formData.mandal}${formData.village}${regYear}${seq}`;
+                
+                const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
+                farmerData.applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
+                
+                farmerData.asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
 
-                    farmerData.id = farmerData.farmerId;
-                } else {
-                    farmerData.id = initialData.id;
-                }
-
-                onSubmit(farmerData as Farmer);
+                farmerData.id = farmerData.farmerId;
+            } else {
+                farmerData.id = initialData.id;
             }
+
+            setPreparedFarmerData(farmerData as Farmer);
+            setShowConfirmation(true);
         }
+    };
+    
+    const handleConfirmSubmit = () => {
+        if (preparedFarmerData) {
+            onSubmit(preparedFarmerData);
+        }
+    };
+
+    const handleCancelConfirmation = () => {
+        setShowConfirmation(false);
+        setPreparedFarmerData(null);
     };
 
     const handleCancel = () => {
@@ -572,6 +585,51 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                     </div>
                 </form>
             </div>
+            
+            {showConfirmation && preparedFarmerData && (
+                <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+                        <div className="p-6">
+                            <h3 className="text-2xl font-bold text-gray-800 mb-4">Confirm Details</h3>
+                            <p className="text-gray-600 mb-6">Please review the information below before saving.</p>
+                            
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between border-b pb-2">
+                                    <span className="font-semibold text-gray-600">Full Name:</span>
+                                    <span className="text-gray-900 font-medium">{preparedFarmerData.fullName}</span>
+                                </div>
+                                <div className="flex justify-between border-b pb-2">
+                                    <span className="font-semibold text-gray-600">Farmer ID:</span>
+                                    <span className="text-gray-900 font-mono">{preparedFarmerData.farmerId}</span>
+                                </div>
+                                <div className="flex justify-between border-b pb-2">
+                                    <span className="font-semibold text-gray-600">Aadhaar:</span>
+                                    <span className="text-gray-900">{`**** **** ${preparedFarmerData.aadhaarNumber.slice(-4)}`}</span>
+                                </div>
+                                <div className="flex justify-between border-b pb-2">
+                                    <span className="font-semibold text-gray-600">Mobile:</span>
+                                    <span className="text-gray-900">{preparedFarmerData.mobileNumber}</span>
+                                </div>
+                                <div className="flex justify-between border-b pb-2 items-start">
+                                    <span className="font-semibold text-gray-600">Location:</span>
+                                    <span className="text-gray-900 text-right">
+                                        {getGeoName('village', { district: preparedFarmerData.district, mandal: preparedFarmerData.mandal, village: preparedFarmerData.village })},<br/>
+                                        {getGeoName('mandal', { district: preparedFarmerData.district, mandal: preparedFarmerData.mandal })}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between pb-2">
+                                    <span className="font-semibold text-gray-600">Approved Extent:</span>
+                                    <span className="text-gray-900">{preparedFarmerData.approvedExtent} Acres</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
+                            <button type="button" onClick={handleCancelConfirmation} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Go Back & Edit</button>
+                            <button type="button" onClick={handleConfirmSubmit} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Confirm & Save</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

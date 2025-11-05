@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Farmer } from '../types';
 
 declare var JsBarcode: any;
+declare var QRCode: any;
 
 interface PrintViewProps {
   farmer: Farmer | null;
@@ -10,18 +11,30 @@ interface PrintViewProps {
 
 const PrintView: React.FC<PrintViewProps> = ({ farmer, isForPdf = false }) => {
   const barcodeRef = useRef<SVGSVGElement>(null);
+  const qrCodeRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (farmer && barcodeRef.current) {
-      try {
-        JsBarcode(barcodeRef.current, farmer.farmerId, {
-          format: 'CODE128',
-          displayValue: true,
-          fontSize: 20,
-          height: 70,
-        });
-      } catch (e) {
-        console.error('Barcode generation failed', e);
+    if (farmer) {
+      if (barcodeRef.current) {
+        try {
+          JsBarcode(barcodeRef.current, farmer.farmerId, {
+            format: 'CODE128',
+            displayValue: true,
+            fontSize: 20,
+            height: 70,
+          });
+        } catch (e) {
+          console.error('Barcode generation failed', e);
+        }
+      }
+      if (qrCodeRef.current) {
+        try {
+          QRCode.toCanvas(qrCodeRef.current, farmer.farmerId, { width: 128 }, (error: any) => {
+            if (error) console.error('QR Code generation failed:', error);
+          });
+        } catch (e) {
+          console.error('QR Code generation failed', e);
+        }
       }
     }
   }, [farmer]);
@@ -74,6 +87,10 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, isForPdf = false }) => {
             <div className="mt-4 text-center">
                  <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">FARMER ID</p>
                  <svg ref={barcodeRef}></svg>
+            </div>
+            <div className="mt-6 text-center">
+              <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">SCAN QR CODE</p>
+              <canvas ref={qrCodeRef}></canvas>
             </div>
         </div>
       </div>
