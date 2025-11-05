@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-g" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hapsara Farmer Registration</title>
@@ -11,6 +11,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <!-- WatermelonDB Dependencies -->
+    <script src="https://unpkg.com/@nozbe/watermelondb/dist/watermelon.js"></script>
+    <script src="https://unpkg.com/@nozbe/watermelondb/dist/adapters/lokijs.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/7.8.1/rxjs.umd.min.js"></script>
     <style>
       @media print {
         body > #root > *:not(.print-only) {
@@ -30,7 +34,9 @@
   "imports": {
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@nozbe/watermelondb/": "https://aistudiocdn.com/@nozbe/watermelondb@^0.28.0/",
+    "@nozbe/watermelondb": "https://aistudiocdn.com/@nozbe/watermelondb@^0.28.0"
   }
 }
 </script>

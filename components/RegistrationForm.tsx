@@ -39,7 +39,8 @@ const initialFormData: Omit<Farmer, 'id'> = {
     district: '',
     mandal: '',
     village: '',
-    syncedToSheets: false
+    // FIX: Replaced deprecated 'syncedToSheets' property with 'syncStatus' to align with the Farmer type definition.
+    syncStatus: 'pending'
 };
 
 // Helper function to get geo names from codes

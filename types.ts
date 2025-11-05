@@ -71,7 +71,7 @@ export interface Farmer {
   village: string;
 
   // Sync status
-  syncedToSheets: boolean;
+  syncStatus: 'synced' | 'pending';
 }
 
 export interface Village {
