@@ -5,7 +5,6 @@ import { GEO_DATA } from '../data/geoData';
 interface RegistrationFormProps {
     onSubmit: (farmer: Farmer) => void;
     onCancel: () => void;
-    initialData?: Farmer | null;
     existingFarmers: Farmer[];
 }
 
@@ -39,9 +38,10 @@ const initialFormData: Omit<Farmer, 'id'> = {
     district: '',
     mandal: '',
     village: '',
-    // FIX: Replaced deprecated 'syncedToSheets' property with 'syncStatus' to align with the Farmer type definition.
     syncStatus: 'pending'
 };
+
+const DRAFT_STORAGE_KEY = 'hapsara-farmer-registration-draft';
 
 // Helper function to get geo names from codes
 const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { district: string; mandal?: string; village?: string }) => {
@@ -69,43 +69,83 @@ const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { district: 
     return codes[type] || 'N/A';
 };
 
-// FIX: Moved helper components outside of the RegistrationForm component to prevent re-creation on every render and fix typing issues.
-// By defining props types separately, we improve readability and avoid potential TypeScript parsing issues with complex inline types.
-// FIX: Made `children` prop optional to resolve TypeScript errors where children were not being detected. The component usage in this file always provides children, so this change is safe.
+/**
+ * A custom hook to debounce a value.
+ * This prevents a function from being called too frequently by delaying its update.
+ * @param value The value to debounce
+ * @param delay The delay in milliseconds
+ * @returns The debounced value
+ */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 type FormRowProps = { children?: React.ReactNode };
 const FormRow = ({ children }: FormRowProps) => <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-center">{children}</div>;
 
-// FIX: Made `children` prop optional to resolve TypeScript errors where children were not being detected. The component usage in this file always provides children, so this change is safe.
 type FormFieldProps = { children?: React.ReactNode };
 const FormField = ({ children }: FormFieldProps) => <div className="md:col-span-2">{children}</div>;
 
-// FIX: Made `children` prop optional to resolve TypeScript errors where children were not being detected. The component usage in this file always provides children, so this change is safe.
 type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 const InputError = ({ message }: { message?: string }) => message ? <p className="text-sm text-red-600 mt-1">{message}</p> : null;
 
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, initialData, existingFarmers }) => {
-    const [formData, setFormData] = useState<Omit<Farmer, 'id'>>(initialData ? { ...initialData } : initialFormData);
+const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers }) => {
+    const [formData, setFormData] = useState<Omit<Farmer, 'id'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [photoPreview, setPhotoPreview] = useState<string | null>(initialData?.photo || null);
+    const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [mandals, setMandals] = useState<Mandal[]>([]);
     const [villages, setVillages] = useState<Village[]>([]);
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [preparedFarmerData, setPreparedFarmerData] = useState<Farmer | null>(null);
+    const [hasDraft, setHasDraft] = useState(false);
     
+    const debouncedFormData = useDebounce(formData, 1000); // 1-second delay for auto-save
+
+    // Check for a saved draft when the component mounts
     useEffect(() => {
-        if(initialData?.district) {
-            const selectedDistrict = GEO_DATA.find(d => d.code === initialData.district);
-            setMandals(selectedDistrict?.mandals || []);
+        const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (savedDraft) {
+            try {
+                const draftData = JSON.parse(savedDraft);
+                // Check if the draft is just the initial form state
+                if (JSON.stringify(draftData) !== JSON.stringify(initialFormData)) {
+                     setHasDraft(true);
+                }
+            } catch (e) {
+                console.error("Failed to parse draft", e);
+                localStorage.removeItem(DRAFT_STORAGE_KEY);
+            }
         }
-        if(initialData?.mandal) {
-             const selectedDistrict = GEO_DATA.find(d => d.code === initialData.district);
-             const selectedMandal = selectedDistrict?.mandals.find(m => m.code === initialData.mandal);
-             setVillages(selectedMandal?.villages || []);
+    }, []);
+
+    // Effect to auto-save the form data to localStorage
+    useEffect(() => {
+        // Conditions to prevent saving:
+        // 1. A confirmation modal is open.
+        // 2. The data is the same as the initial empty form.
+        // 3. The "restore draft" prompt is currently showing (don't overwrite the existing draft).
+        if (showConfirmation || hasDraft) return;
+        
+        const isInitial = JSON.stringify(debouncedFormData) === JSON.stringify(initialFormData);
+
+        if (!isInitial) {
+            localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(debouncedFormData));
+        } else {
+            // If the user clears the form back to its initial state, remove the draft.
+            localStorage.removeItem(DRAFT_STORAGE_KEY);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialData]);
+    }, [debouncedFormData, showConfirmation, hasDraft]);
 
     const handleGeoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -174,7 +214,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         if (!formData.district) newErrors.district = 'District is required.';
         if (!formData.mandal) newErrors.mandal = 'Mandal is required.';
         if (!formData.village) newErrors.village = 'Village is required.';
-        if (formData.ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode)) newErrors.ifscCode = "Invalid IFSC code format (e.g., XXXX0000000).";
+        
+        // Bank details validation
+        if (!formData.bankAccountNumber.trim()) newErrors.bankAccountNumber = "Bank Account Number is required.";
+        if (!formData.ifscCode.trim()) {
+            newErrors.ifscCode = "IFSC Code is required.";
+        } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode)) {
+            newErrors.ifscCode = "Invalid IFSC code format (e.g., XXXX0000000).";
+        }
         
         // Relational validations for optional fields
         if (formData.approvedExtent > formData.appliedExtent) newErrors.approvedExtent = "Approved extent cannot be greater than applied extent.";
@@ -227,28 +274,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         e.preventDefault();
         if (validate()) {
             let farmerData = { ...formData };
-            if (!initialData) { // Only generate IDs for new farmers
-                const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
-                
-                const farmersInVillage = existingFarmers.filter(f => 
-                    f.village === formData.village && 
-                    f.mandal === formData.mandal && 
-                    f.district === formData.district
-                );
-                
-                const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
+            
+            const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
+            
+            // Always generate FarmerID (now Hap ID)
+            const farmersInVillage = existingFarmers.filter(f => 
+                f.village === formData.village && 
+                f.mandal === formData.mandal && 
+                f.district === formData.district
+            );
+            
+            const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
+            farmerData.farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
+            
+            const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
+            farmerData.applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
+            
+            farmerData.asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
 
-                farmerData.farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
-                
-                const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
-                farmerData.applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
-                
-                farmerData.asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
-
-                farmerData.id = farmerData.farmerId;
-            } else {
-                farmerData.id = initialData.id;
-            }
+            farmerData.id = farmerData.farmerId;
 
             setPreparedFarmerData(farmerData as Farmer);
             setShowConfirmation(true);
@@ -258,6 +302,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const handleConfirmSubmit = () => {
         if (preparedFarmerData) {
             onSubmit(preparedFarmerData);
+            localStorage.removeItem(DRAFT_STORAGE_KEY);
         }
     };
 
@@ -267,9 +312,40 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     };
 
     const handleCancel = () => {
-        if (window.confirm('Are you sure you want to discard unsaved changes?')) {
+        if (window.confirm('Are you sure you want to discard unsaved changes? This will also clear any saved draft.')) {
+            localStorage.removeItem(DRAFT_STORAGE_KEY);
             onCancel();
         }
+    };
+
+    const handleRestoreDraft = () => {
+        const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (savedDraft) {
+            try {
+                const draftData = JSON.parse(savedDraft);
+                setFormData(draftData);
+                if (draftData.photo) {
+                    setPhotoPreview(draftData.photo);
+                }
+                if (draftData.district) {
+                     const selectedDistrict = GEO_DATA.find(d => d.code === draftData.district);
+                     setMandals(selectedDistrict?.mandals || []);
+                }
+                if (draftData.mandal) {
+                    const selectedDistrict = GEO_DATA.find(d => d.code === draftData.district);
+                    const selectedMandal = selectedDistrict?.mandals.find(m => m.code === draftData.mandal);
+                    setVillages(selectedMandal?.villages || []);
+                }
+            } catch (e) {
+                console.error("Failed to parse draft for restore", e);
+            }
+        }
+        setHasDraft(false); // Hide the prompt
+    };
+
+    const handleDiscardDraft = () => {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        setHasDraft(false); // Hide the prompt
     };
     
     const inputClass = "w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";
@@ -280,8 +356,19 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-full overflow-y-auto">
                 <form onSubmit={handleSubmit} noValidate>
                     <div className="p-6">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">{initialData ? 'Edit Farmer Details' : 'New Farmer Registration'}</h2>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">New Farmer Registration</h2>
                         
+                        {hasDraft && (
+                            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-r-lg" role="alert">
+                                <p className="font-bold">Unsaved Draft Found</p>
+                                <p>Would you like to continue where you left off?</p>
+                                <div className="mt-3">
+                                    <button type="button" onClick={handleRestoreDraft} className="px-4 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold mr-2">Restore Draft</button>
+                                    <button type="button" onClick={handleDiscardDraft} className="px-4 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold">Discard</button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Personal Details */}
                         <section>
                             <h3 className="text-lg font-semibold text-green-700 mb-4">1. Personal Details</h3>
@@ -380,94 +467,65 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                         {/* Geographic Details */}
                         <section className="mt-6">
                              <h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3>
-                            {initialData ? (
-                                <>
-                                    <FormRow>
-                                        <FormLabel>District</FormLabel>
-                                        <FormField>
-                                            <p className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-900">{getGeoName('district', { district: formData.district })}</p>
-                                        </FormField>
-                                    </FormRow>
-                                    <FormRow>
-                                        <FormLabel>Mandal</FormLabel>
-                                        <FormField>
-                                            <p className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-900">{getGeoName('mandal', { district: formData.district, mandal: formData.mandal })}</p>
-                                        </FormField>
-                                    </FormRow>
-                                    <FormRow>
-                                        <FormLabel>Village</FormLabel>
-                                        <FormField>
-                                            <p className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-900">{getGeoName('village', { district: formData.district, mandal: formData.mandal, village: formData.village })}</p>
-                                        </FormField>
-                                    </FormRow>
-                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div className="md:col-start-2 md:col-span-2">
-                                            <p className="text-xs text-gray-500 mt-1">Geographic details cannot be changed after registration as they are part of the Farmer ID.</p>
+                            <FormRow>
+                                <FormLabel required>District</FormLabel>
+                                <FormField>
+                                    <div className="relative">
+                                        <select name="district" value={formData.district} onChange={handleGeoChange} className={selectInputClass}>
+                                            <option value="">-- Select District --</option>
+                                            {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                           <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                                         </div>
                                     </div>
-                                </>
-                            ) : (
-                                <>
-                                    <FormRow>
-                                        <FormLabel required>District</FormLabel>
-                                        <FormField>
-                                            <div className="relative">
-                                                <select name="district" value={formData.district} onChange={handleGeoChange} className={selectInputClass}>
-                                                    <option value="">-- Select District --</option>
-                                                    {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
-                                                </select>
-                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                                </div>
-                                            </div>
-                                            <InputError message={errors.district}/>
-                                        </FormField>
-                                    </FormRow>
-                                    <FormRow>
-                                        <FormLabel required>Mandal</FormLabel>
-                                        <FormField>
-                                            <div className="relative">
-                                                <select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={selectInputClass} disabled={!formData.district}>
-                                                    <option value="">-- Select Mandal --</option>
-                                                    {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
-                                                </select>
-                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                                </div>
-                                            </div>
-                                             <InputError message={errors.mandal}/>
-                                        </FormField>
-                                    </FormRow>
-                                    <FormRow>
-                                        <FormLabel required>Village</FormLabel>
-                                        <FormField>
-                                            <div className="relative">
-                                                <select name="village" value={formData.village} onChange={handleChange} className={selectInputClass} disabled={!formData.mandal}>
-                                                    <option value="">-- Select Village --</option>
-                                                    {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
-                                                </select>
-                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                                </div>
-                                            </div>
-                                             <InputError message={errors.village}/>
-                                        </FormField>
-                                    </FormRow>
-                                </>
-                            )}
+                                    <InputError message={errors.district}/>
+                                </FormField>
+                            </FormRow>
+                            <FormRow>
+                                <FormLabel required>Mandal</FormLabel>
+                                <FormField>
+                                    <div className="relative">
+                                        <select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={selectInputClass} disabled={!formData.district}>
+                                            <option value="">-- Select Mandal --</option>
+                                            {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                           <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    </div>
+                                     <InputError message={errors.mandal}/>
+                                </FormField>
+                            </FormRow>
+                            <FormRow>
+                                <FormLabel required>Village</FormLabel>
+                                <FormField>
+                                    <div className="relative">
+                                        <select name="village" value={formData.village} onChange={handleChange} className={selectInputClass} disabled={!formData.mandal}>
+                                            <option value="">-- Select Village --</option>
+                                            {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                           <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    </div>
+                                     <InputError message={errors.village}/>
+                                </FormField>
+                            </FormRow>
                         </section>
                         
                          {/* Bank Details */}
                         <section className="mt-6">
                             <h3 className="text-lg font-semibold text-green-700 mb-4">3. Bank Details</h3>
                             <FormRow>
-                                <FormLabel>Bank Account Number</FormLabel>
+                                <FormLabel required>Bank Account Number</FormLabel>
                                 <FormField>
                                     <input type="text" name="bankAccountNumber" value={formData.bankAccountNumber} onChange={handleChange} className={inputClass} />
+                                    <InputError message={errors.bankAccountNumber} />
                                 </FormField>
                             </FormRow>
                              <FormRow>
-                                <FormLabel>IFSC Code</FormLabel>
+                                <FormLabel required>IFSC Code</FormLabel>
                                 <FormField>
                                     <input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={inputClass} />
                                     <InputError message={errors.ifscCode} />
@@ -547,7 +605,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                             <FormRow>
                                 <FormLabel>Plantation Date</FormLabel>
                                 <FormField>
-                                    <input type="date" name="plantationDate" value={formData.plantationDate} onChange={handleChange} className={inputClass} />
+                                    <input 
+                                        type="date" 
+                                        name="plantationDate" 
+                                        value={formData.plantationDate} 
+                                        onChange={handleChange} 
+                                        className={`${inputClass} disabled:bg-gray-100 disabled:cursor-not-allowed`}
+                                        min={formData.registrationDate}
+                                        disabled={!formData.registrationDate}
+                                        title={!formData.registrationDate ? "Please select a registration date first" : ""}
+                                    />
                                      <InputError message={errors.plantationDate} />
                                 </FormField>
                             </FormRow>
@@ -572,7 +639,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                             <FormRow>
                                 <FormLabel>Registration Date</FormLabel>
                                 <FormField>
-                                    <input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={inputClass} disabled={!!initialData} />
+                                    <input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={inputClass} max={new Date().toISOString().split('T')[0]} />
                                     <InputError message={errors.registrationDate} />
                                 </FormField>
                             </FormRow>
@@ -581,7 +648,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                     </div>
                     <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
                         <button type="button" onClick={handleCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Cancel</button>
-                        <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">{initialData ? 'Save Changes' : 'Register Farmer'}</button>
+                        <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Register Farmer</button>
                     </div>
                 </form>
             </div>
@@ -599,7 +666,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                     <span className="text-gray-900 font-medium">{preparedFarmerData.fullName}</span>
                                 </div>
                                 <div className="flex justify-between border-b pb-2">
-                                    <span className="font-semibold text-gray-600">Farmer ID:</span>
+                                    <span className="font-semibold text-gray-600">Hap ID:</span>
                                     <span className="text-gray-900 font-mono">{preparedFarmerData.farmerId}</span>
                                 </div>
                                 <div className="flex justify-between border-b pb-2">

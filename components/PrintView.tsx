@@ -65,7 +65,7 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, isForPdf = false }) => {
           <table className="w-full text-left">
             <tbody>
               <DetailRow label="Application ID" value={farmer.applicationId} />
-              <DetailRow label="Farmer ID" value={farmer.farmerId} />
+              <DetailRow label="Hap ID" value={farmer.farmerId} />
               <DetailRow label="Full Name" value={farmer.fullName} />
               <DetailRow label="Father/Husband Name" value={farmer.fatherHusbandName} />
               <DetailRow label="Gender" value={farmer.gender} />
@@ -85,7 +85,7 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, isForPdf = false }) => {
                 <div className="w-32 h-40 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-500 mb-4">No Photo</div>
             )}
             <div className="mt-4 text-center">
-                 <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">FARMER ID</p>
+                 <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">HAP ID</p>
                  <svg ref={barcodeRef}></svg>
             </div>
             <div className="mt-6 text-center">

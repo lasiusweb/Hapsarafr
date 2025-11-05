@@ -113,7 +113,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     <div className="bg-white shadow-md rounded-lg p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
              <div className="md:col-span-3">
-                <label htmlFor="searchQuery" className="block text-sm font-medium text-gray-700 mb-1">Search (ID, Name, Mobile)</label>
+                <label htmlFor="searchQuery" className="block text-sm font-medium text-gray-700 mb-1">Search (Hap ID, Name, Mobile)</label>
                 <input
                     type="text"
                     id="searchQuery"
@@ -122,7 +122,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                     onChange={handleSearchChange}
                     placeholder="e.g. John Doe, H010124001, 987..."
                     className={inputClass}
-                    title="Search by farmer's name, unique ID, or mobile number."
+                    title="Search by farmer's name, Hap ID, or mobile number."
                 />
             </div>
             <div>

@@ -52,6 +52,15 @@ export const mySchema = appSchema({
 export class FarmerModel extends Model {
   static table = 'farmers';
 
+  // FIX: Explicitly declare properties and methods from the base Model class
+  // to make them visible to TypeScript. WatermelonDB adds these at runtime,
+  // but TypeScript's static analysis can't see them without this.
+  readonly id!: string;
+  _raw!: { id: string, [key: string]: any };
+  update!: (recordUpdater?: (record: this) => void | Promise<void>) => Promise<void>;
+  prepareUpdate!: (recordUpdater?: (record: this) => void) => this;
+  prepareDestroyPermanently!: () => this;
+
   @field('fullName') fullName!: string;
   @field('fatherHusbandName') fatherHusbandName!: string;
   @field('aadhaarNumber') aadhaarNumber!: string;

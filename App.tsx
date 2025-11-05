@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspens
 import { Farmer, FarmerStatus, PlantationMethod, PlantType, User, UserRole } from './types';
 import { GEO_DATA } from './data/geoData';
 import FilterBar, { Filters } from './components/FilterBar';
+// FIX: Import FarmerList component to resolve 'Cannot find name' error.
+import FarmerList from './components/FarmerList';
 
 import { useDatabase } from './DatabaseContext';
 import { Q, Query } from '@nozbe/watermelondb';
@@ -10,6 +12,7 @@ import { FarmerModel } from './db';
 // Lazily import components to enable code-splitting
 const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
 const PrintView = lazy(() => import('./components/PrintView'));
+const RawDataView = lazy(() => import('./components/RawDataView'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const LoginScreen = lazy(() => import('./components/LoginScreen'));
 const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatusModal'));
@@ -19,6 +22,13 @@ const BulkImportModal = lazy(() => import('./components/BulkImportModal'));
 // Type declarations for CDN libraries
 declare const html2canvas: any;
 declare const jspdf: any;
+
+// FIX: Added ModalLoader component to be used as a fallback for React Suspense, resolving 'Cannot find name' error.
+const ModalLoader: React.FC = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-[100]">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div>
+    </div>
+);
 
 // Custom hook for localStorage persistence (for non-database values)
 const useLocalStorage = <T,>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
@@ -86,6 +96,7 @@ const Header: React.FC<{
   onExport: () => void;
   onExportCsv: () => void;
   onImport: () => void;
+  onShowRawData: () => void;
   onSync: () => void;
   onDeleteSelected: () => void;
   onBatchUpdate: () => void;
@@ -93,7 +104,7 @@ const Header: React.FC<{
   selectedCount: number;
   isOnline: boolean;
   pendingSyncCount: number;
-}> = ({ currentUser, onLogout, onRegister, onExport, onExportCsv, onImport, onSync, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount }) => {
+}> = ({ currentUser, onLogout, onRegister, onExport, onExportCsv, onImport, onShowRawData, onSync, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount }) => {
   const canRegister = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
   const canImportExport = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
   const canSync = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
@@ -104,7 +115,7 @@ const Header: React.FC<{
     <header className="bg-white shadow-md p-4 flex justify-between items-center">
       <div className="flex items-center gap-4">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
+              <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
           </svg>
           <h1 className="text-2xl font-bold text-gray-800">Hapsara Farmer Registration</h1>
           <div className="flex items-center gap-2 border-l pl-4 ml-2">
@@ -154,6 +165,7 @@ const Header: React.FC<{
               {syncLoading ? 'Syncing...' : `Sync Selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
             </button>
           )}
+          <button onClick={onShowRawData} className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition font-semibold">Raw Data</button>
           {canImportExport && (
             <>
               <button onClick={onExportCsv} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition font-semibold flex items-center gap-2">
@@ -182,133 +194,14 @@ const Header: React.FC<{
   );
 };
 
-const FarmerList: React.FC<{
-    farmers: FarmerModel[];
-    currentUser: User | null;
-    onEdit: (farmer: FarmerModel) => void;
-    onPrint: (farmer: FarmerModel) => void;
-    onExportToPdf: (farmer: FarmerModel) => void;
-    selectedFarmerIds: string[];
-    onSelectionChange: (farmerId: string, isSelected: boolean) => void;
-    onSelectAll: (allSelected: boolean) => void;
-}> = ({ farmers, currentUser, onEdit, onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll }) => {
-    
-    const StatusBadge: React.FC<{status: FarmerStatus}> = ({ status }) => {
-        const colors: Record<FarmerStatus, string> = {
-            [FarmerStatus.Registered]: 'bg-blue-100 text-blue-800',
-            [FarmerStatus.Sanctioned]: 'bg-yellow-100 text-yellow-800',
-            [FarmerStatus.Planted]: 'bg-green-100 text-green-800',
-            [FarmerStatus.PaymentDone]: 'bg-purple-100 text-purple-800',
-        };
-        return <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status]}`}>{status}</span>;
-    };
-
-    const getGeoName = (type: 'district'|'mandal'|'village', farmer: FarmerModel) => {
-        try {
-            if(type === 'district') return GEO_DATA.find(d => d.code === farmer.district)?.name || farmer.district;
-            const district = GEO_DATA.find(d => d.code === farmer.district);
-            if(type === 'mandal') return district?.mandals.find(m => m.code === farmer.mandal)?.name || farmer.mandal;
-            const mandal = district?.mandals.find(m => m.code === farmer.mandal);
-            if(type === 'village') return mandal?.villages.find(v => v.code === farmer.village)?.name || farmer.village;
-        } catch(e) {
-            return 'N/A';
-        }
-    };
-    
-    if (farmers.length === 0) {
-        return (
-            <div className="text-center py-20 text-gray-500 bg-white shadow-md rounded-lg">
-                <h2 className="text-2xl font-semibold">No Farmers Found</h2>
-                <p className="mt-2">Try adjusting your search criteria, or click "Register New Farmer" to add one.</p>
-            </div>
-        );
-    }
-    
-    const allVisibleSelected = farmers.length > 0 && farmers.every(f => selectedFarmerIds.includes(f.id));
-    const canEdit = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
-
-    return (
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                    <tr>
-                        <th className="px-6 py-3">
-                            <input
-                                type="checkbox"
-                                className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                checked={allVisibleSelected}
-                                onChange={(e) => onSelectAll(e.target.checked)}
-                                aria-label="Select all farmers"
-                            />
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Farmer ID</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mobile</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Synced</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                {farmers.map(farmer => (
-                    <tr key={farmer.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                                type="checkbox"
-                                className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                checked={selectedFarmerIds.includes(farmer.id)}
-                                onChange={(e) => onSelectionChange(farmer.id, e.target.checked)}
-                                aria-label={`Select farmer ${farmer.fullName}`}
-                            />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{farmer.fullName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{farmer.mobileNumber}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm"><StatusBadge status={farmer.status as FarmerStatus} /></td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="flex justify-center">
-                                <span 
-                                    className={`h-3 w-3 rounded-full ${farmer.syncStatus === 'synced' ? 'bg-green-500' : 'bg-yellow-400'}`}
-                                    title={farmer.syncStatus === 'synced' ? 'Synced' : 'Pending Sync'}
-                                >
-                                    <span className="sr-only">{farmer.syncStatus === 'synced' ? 'Synced' : 'Pending Sync'}</span>
-                                </span>
-                            </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2">
-                           {canEdit && <button onClick={() => onEdit(farmer)} className="text-indigo-600 hover:text-indigo-900">Edit</button>}
-                           <button onClick={() => onPrint(farmer)} className="text-green-600 hover:text-green-900">Print</button>
-                           <button onClick={() => onExportToPdf(farmer)} className="text-blue-600 hover:text-blue-900">PDF</button>
-                        </td>
-                    </tr>
-                ))}
-                </tbody>
-            </table>
-        </div>
-    );
-};
-
-const ModalLoader: React.FC = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" aria-label="Loading form" role="dialog" aria-modal="true">
-        <div className="bg-white rounded-lg shadow-2xl p-8 flex items-center gap-4">
-            <svg className="animate-spin h-8 w-8 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span className="text-lg font-medium text-gray-700">Loading...</span>
-        </div>
-    </div>
-);
-
 const App: React.FC = () => {
   const [isAppLaunched, setIsAppLaunched] = useState(false);
   const [currentUser, setCurrentUser] = useLocalStorage<User | null>('currentUser', null);
   const [showForm, setShowForm] = useState(false);
-  const [editingFarmer, setEditingFarmer] = useState<FarmerModel | null>(null);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
   const [pdfExportFarmer, setPdfExportFarmer] = useState<FarmerModel | null>(null);
+  const [showRawData, setShowRawData] = useState(false);
   const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
   const [backendApiUrl, setBackendApiUrl] = useLocalStorage<string>('backendApiUrl', '');
   const [syncLoading, setSyncLoading] = useState(false);
@@ -325,6 +218,7 @@ const App: React.FC = () => {
     status: '',
   });
   const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
 
   const database = useDatabase();
   const farmersCollection = database.get<FarmerModel>('farmers');
@@ -380,8 +274,16 @@ const App: React.FC = () => {
     migrateFromLocalStorage();
   }, [database, farmersCollection]);
 
+  const handleRequestSort = useCallback((key: keyof Farmer | 'id') => {
+      let direction: 'ascending' | 'descending' = 'ascending';
+      if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+          direction = 'descending';
+      }
+      setSortConfig({ key, direction });
+  }, [sortConfig]);
+
   const filteredFarmers = useMemo(() => {
-    return allFarmers.filter(farmer => {
+    let farmers = allFarmers.filter(farmer => {
       const search = filters.searchQuery.toLowerCase();
       const matchesSearch = search === '' ||
         farmer.fullName.toLowerCase().includes(search) ||
@@ -394,8 +296,40 @@ const App: React.FC = () => {
       const matchesStatus = filters.status === '' || farmer.status === filters.status;
       
       return matchesSearch && matchesDistrict && matchesMandal && matchesVillage && matchesStatus;
-    }).sort((a, b) => new Date(b.registrationDate).getTime() - new Date(a.registrationDate).getTime());
-  }, [allFarmers, filters]);
+    });
+
+    if (sortConfig !== null) {
+        const numericKeys = new Set(['approvedExtent', 'appliedExtent', 'numberOfPlants']);
+        const dateKeys = new Set(['registrationDate', 'plantationDate']);
+
+        farmers.sort((a, b) => {
+            const key = sortConfig.key as keyof FarmerModel;
+            const aValue = a[key];
+            const bValue = b[key];
+
+            if (aValue === bValue) return 0;
+            if (aValue === null || aValue === undefined) return 1;
+            if (bValue === null || bValue === undefined) return -1;
+            
+            let comparison = 0;
+            if (dateKeys.has(key as string)) {
+                const dateA = new Date(aValue as string).getTime();
+                const dateB = new Date(bValue as string).getTime();
+                if (isNaN(dateA)) return 1;
+                if (isNaN(dateB)) return -1;
+                comparison = dateA > dateB ? 1 : -1;
+            } else if (numericKeys.has(key as string)) {
+                comparison = Number(aValue) > Number(bValue) ? 1 : -1;
+            } else {
+                comparison = String(aValue).localeCompare(String(bValue));
+            }
+            
+            return sortConfig.direction === 'ascending' ? comparison : -comparison;
+        });
+    }
+
+    return farmers;
+  }, [allFarmers, filters, sortConfig]);
 
 
   const syncOfflineChanges = useCallback(async () => {
@@ -487,34 +421,45 @@ const App: React.FC = () => {
   }, [pdfExportFarmer]);
 
   const handleRegisterClick = () => {
-    setEditingFarmer(null);
     setShowForm(true);
   };
   
-  const handleEditClick = (farmer: FarmerModel) => {
-    setEditingFarmer(farmer);
-    setShowForm(true);
+  const handleEditRow = (farmerId: string) => {
+    setEditingRowId(farmerId);
+  };
+  
+  const handleCancelEditRow = () => {
+    setEditingRowId(null);
+  };
+  
+  const handleSaveRow = async (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => {
+    try {
+        await database.write(async () => {
+            await farmerToUpdate.update(record => {
+                if (updatedData.fullName) record.fullName = updatedData.fullName;
+                if (updatedData.mobileNumber) record.mobileNumber = updatedData.mobileNumber;
+                if (updatedData.status) record.status = updatedData.status;
+                record.syncStatus = 'pending';
+            });
+        });
+        setEditingRowId(null);
+    } catch (error) {
+        console.error("Failed to save farmer:", error);
+        alert("Failed to save changes. Please try again.");
+    }
   };
 
   const handleFormSubmit = async (farmerData: Farmer) => {
     const farmerToSave = { ...farmerData, syncStatus: 'pending' as const };
     
     await database.write(async () => {
-      if (editingFarmer) {
-        const farmerRecord = await farmersCollection.find(editingFarmer.id);
-        await farmerRecord.update(record => {
-          Object.assign(record, farmerToSave);
-        });
-      } else {
-        await farmersCollection.create(record => {
-          Object.assign(record, farmerToSave);
-          record._raw.id = farmerToSave.id;
-        });
-      }
+      await farmersCollection.create(record => {
+        Object.assign(record, farmerToSave);
+        record._raw.id = farmerToSave.id;
+      });
     });
 
     setShowForm(false);
-    setEditingFarmer(null);
   };
 
   const handleBulkImportSubmit = async (newFarmers: Farmer[]) => {
@@ -612,7 +557,7 @@ const App: React.FC = () => {
                 if (type === 'village') return mandal?.villages.find(v => v.code === farmer.village)?.name || farmer.village;
             } catch (e) { return 'N/A'; }
         };
-        const headers = ['Farmer ID', 'Application ID', 'Full Name', 'Father/Husband Name', 'Mobile Number', 'Aadhaar Number', 'Gender', 'District', 'Mandal', 'Village', 'Address', 'Status', 'Registration Date', 'Applied Extent (Acres)', 'Approved Extent (Acres)', 'Number of Plants', 'Plantation Date', 'Sync Status'];
+        const headers = ['Hap ID', 'Application ID', 'Full Name', 'Father/Husband Name', 'Mobile Number', 'Aadhaar Number', 'Gender', 'District', 'Mandal', 'Village', 'Address', 'Status', 'Registration Date', 'Applied Extent (Acres)', 'Approved Extent (Acres)', 'Number of Plants', 'Plantation Date', 'Sync Status'];
         const escapeCsvCell = (cellData: any): string => {
             const stringData = String(cellData ?? '');
             if (stringData.includes(',') || stringData.includes('"') || stringData.includes('\n')) {
@@ -716,6 +661,7 @@ const App: React.FC = () => {
         onExport={handleExportToExcel}
         onExportCsv={handleExportToCsv}
         onImport={() => setShowImportModal(true)}
+        onShowRawData={() => setShowRawData(true)}
         onSync={handleOpenSyncConfirmation}
         onDeleteSelected={handleDeleteSelected}
         onBatchUpdate={() => setShowBatchUpdateModal(true)}
@@ -729,12 +675,17 @@ const App: React.FC = () => {
         <FarmerList 
             farmers={filteredFarmers}
             currentUser={currentUser}
-            onEdit={handleEditClick} 
+            editingRowId={editingRowId}
+            onEditRow={handleEditRow}
+            onCancelEditRow={handleCancelEditRow}
+            onSaveRow={handleSaveRow}
             onPrint={setPrintingFarmer}
             onExportToPdf={handleExportToPdf}
             selectedFarmerIds={selectedFarmerIds}
             onSelectionChange={handleSelectionChange}
             onSelectAll={handleSelectAll}
+            sortConfig={sortConfig}
+            onRequestSort={handleRequestSort}
         />
       </main>
       
@@ -742,10 +693,12 @@ const App: React.FC = () => {
         {showForm && (
           <RegistrationForm 
               onSubmit={handleFormSubmit} 
-              onCancel={() => { setShowForm(false); setEditingFarmer(null); }} 
-              initialData={editingFarmer}
+              onCancel={() => { setShowForm(false); }} 
               existingFarmers={allFarmers}
           />
+        )}
+        {showRawData && (
+          <RawDataView farmers={allFarmers} onClose={() => setShowRawData(false)} />
         )}
         {showBatchUpdateModal && (
             <BatchUpdateStatusModal
