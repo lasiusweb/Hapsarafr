@@ -100,6 +100,25 @@ const adapter = new LokiJSAdapter({
   useWebWorker: false,
   useIncrementalIDB: true,
   dbName: 'hapsara-watermelon',
+  // These options are recommended for production environments to improve stability and handle multi-tab scenarios.
+  onIndexedDBVersionChange: () => {
+    // This is a safety measure for schema migrations. If the schema version changes,
+    // reloading the app ensures the database structure is up-to-date.
+    window.location.reload();
+  },
+  extraIncrementalIDBOptions: {
+    onDidOverwrite: () => {
+      // This function is called when the database is overwritten, which can happen if the database is corrupted.
+      // It's a good place to log an error or alert the user that their local data might have been lost.
+      console.warn('Local database was overwritten. If you did not intend to do this, please report an issue.');
+      alert('Local database was reset. Your unsynced data may have been lost.');
+    },
+    onversionchange: () => {
+      // This event is fired when another browser tab is trying to upgrade the database version.
+      // To avoid conflicts, we should close our connection, which is most safely done by reloading the page.
+      window.location.reload();
+    },
+  },
 });
 
 // 4. Create the Database Instance

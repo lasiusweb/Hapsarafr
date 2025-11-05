@@ -133,9 +133,21 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, ed
                     </button>
                 </div>
             )}
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+             <div className="md:hidden px-4 pt-4">
+                <label className="inline-flex items-center">
+                    <input
+                        type="checkbox"
+                        className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                        checked={allVisibleSelected}
+                        onChange={(e) => onSelectAll(e.target.checked)}
+                        aria-label="Select all visible farmers"
+                    />
+                    <span className="ml-2 text-sm font-semibold text-gray-700">Select All Visible</span>
+                </label>
+            </div>
+            <div className="overflow-x-auto p-0 md:p-0">
+                <table className="min-w-full divide-y divide-gray-200 responsive-table">
+                    <thead className="bg-gray-50 hidden md:table-header-group">
                         <tr>
                             <th className="px-6 py-3">
                                 <input
@@ -156,7 +168,7 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, ed
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white divide-y divide-gray-200 md:divide-y-0">
                     {farmers.map(farmer => {
                         const isEditing = editingRowId === farmer.id;
                         const isSelected = selectedFarmerIds.includes(farmer.id);
@@ -173,7 +185,7 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, ed
 
                         return (
                             <tr key={farmer.id} className={`transition-colors duration-1000 ${rowBgClass}`}>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td data-label="" className="px-6 py-4 whitespace-nowrap td-checkbox">
                                     <input
                                         type="checkbox"
                                         className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
@@ -182,8 +194,8 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, ed
                                         aria-label={`Select farmer ${farmer.fullName}`}
                                     />
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                <td data-label="Hap ID" className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
+                                <td data-label="Name" className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     {isEditing ? (
                                         <input 
                                             type="text"
@@ -203,8 +215,8 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, ed
                                         </div>
                                     )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</td>
+                                <td data-label="Mobile" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {isEditing ? (
                                         <input 
                                             type="text"
@@ -216,7 +228,7 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, ed
                                         farmer.mobileNumber
                                     )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <td data-label="Status" className="px-6 py-4 whitespace-nowrap text-sm">
                                     {isEditing ? (
                                         <select
                                             value={editedFarmerData.status || ''}
@@ -229,13 +241,13 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, ed
                                         <StatusBadge status={farmer.status as FarmerStatus} />
                                     )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td data-label="Reg. Date" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {new Date(farmer.registrationDate).toLocaleDateString()}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                <td data-label="Extent (Ac)" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center md:text-right">
                                     {farmer.approvedExtent}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2">
+                                <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2 td-actions">
                                 {isEditing ? (
                                     <>
                                         <button onClick={() => handleSaveClick(farmer)} className="text-green-600 hover:text-green-900">Save</button>

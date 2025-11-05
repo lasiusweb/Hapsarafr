@@ -5,15 +5,19 @@ interface DataMenuProps {
     onImport: () => void;
     onExportExcel: () => void;
     onExportCsv: () => void;
+    onViewRawData: () => void;
     permissions: Set<Permission>;
+    isMobile?: boolean;
+    onAction?: (action: () => void) => void;
 }
 
-const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCsv, permissions }) => {
+const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCsv, onViewRawData, permissions, isMobile = false, onAction = (action) => action() }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const canImport = permissions.has(Permission.CAN_IMPORT_DATA);
     const canExport = permissions.has(Permission.CAN_EXPORT_DATA);
+
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -32,6 +36,25 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
         action();
         setIsOpen(false);
     };
+    
+    // In mobile view, this component will render its items directly.
+    if (isMobile) {
+        return (
+            <>
+                {canImport && (
+                    <button onClick={() => onAction(onImport)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Import from Excel</button>
+                )}
+                 {canExport && (
+                    <>
+                        <button onClick={() => onAction(onViewRawData)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">View Raw Data</button>
+                        <button onClick={() => onAction(onExportExcel)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Export to Excel</button>
+                        <button onClick={() => onAction(onExportCsv)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Export to CSV</button>
+                    </>
+                )}
+            </>
+        )
+    }
+
 
     if (!canImport && !canExport) {
         return null;
@@ -67,14 +90,26 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
                         {canExport && (
                             <>
                                 <button
+                                    onClick={() => handleAction(onViewRawData)}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+                                    role="menuitem"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    <span>View Raw Data</span>
+                                </button>
+                                <div className="border-t my-1"></div>
+                                <button
                                     onClick={() => handleAction(onExportExcel)}
                                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
                                     role="menuitem"
                                 >
                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
-                                    <span>Export to Excel</span>
+                                    <span>Export to Excel (.xlsx)</span>
                                 </button>
                                 <button
                                     onClick={() => handleAction(onExportCsv)}
@@ -82,9 +117,9 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
                                     role="menuitem"
                                 >
                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
                                     </svg>
-                                    <span>Export to CSV</span>
+                                    <span>Export to CSV (.csv)</span>
                                 </button>
                             </>
                         )}
@@ -95,4 +130,5 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
     );
 };
 
+// FIX: Add missing default export
 export default DataMenu;

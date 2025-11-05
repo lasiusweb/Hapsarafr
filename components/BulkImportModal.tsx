@@ -211,9 +211,9 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                 
                 setProcessingResult({ success: successfulCount, failed: failedCount, errors });
 
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Error processing file:", err);
-                setError(`An unexpected error occurred. Please check the file format and ensure it matches the template.`);
+                setError(err.message || `An unexpected error occurred. Please check the file format and ensure it matches the template.`);
             } finally {
                 setIsProcessing(false);
             }

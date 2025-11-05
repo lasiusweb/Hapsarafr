@@ -312,16 +312,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (validate()) {
-            let farmerData = { ...formData };
+// FIX: The farmerData object was missing an 'id' property in its type definition, causing a TypeScript error.
+// The logic is updated to construct a new, fully-typed `Farmer` object with all necessary properties, including the generated IDs.
             const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
             const farmersInVillage = existingFarmers.filter(f => f.village === formData.village && f.mandal === formData.mandal && f.district === formData.district);
             const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
-            farmerData.farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
+            const farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
             const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
-            farmerData.applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
-            farmerData.asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
-            farmerData.id = farmerData.farmerId;
-            setPreparedFarmerData(farmerData as Farmer);
+            const applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
+            const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
+
+            const farmerData: Farmer = {
+                ...formData,
+                id: farmerId,
+                farmerId,
+                applicationId,
+                asoId,
+            };
+
+            setPreparedFarmerData(farmerData);
             setShowConfirmation(true);
         }
     };

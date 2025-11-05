@@ -3,10 +3,11 @@ import React, { useState } from 'react';
 // Supabase client is passed as a prop, using 'any' as it's from a CDN.
 interface SupabaseLoginProps {
   supabase: any; 
+  onSignUp: (name: string, email: string, password: string) => void;
   onAcceptInvitationClick: () => void;
 }
 
-const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase, onAcceptInvitationClick }) => {
+const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase, onSignUp, onAcceptInvitationClick }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -28,21 +29,8 @@ const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase, onAcceptInvitatio
                     setLoading(false);
                     return;
                 }
-                // When signing up, we pass the full name in the options.
-                // This will be used to create the user's profile via a database trigger.
-                const { error } = await supabase.auth.signUp({ 
-                    email, 
-                    password, 
-                    options: { 
-                        data: { 
-                            full_name: name,
-                            avatar_url: 'https://terrigen-cdn-dev.marvel.com/content/prod/1x/003cap_ons_crd_03.jpg' // Default avatar
-                        } 
-                    }
-                });
-                if (error) throw error;
-                setMessage('Sign up successful! Please check your email for a confirmation link.');
-                setIsSignUp(false);
+                // Pass details to parent component to handle sign-up
+                onSignUp(name, email, password);
             } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
@@ -87,7 +75,7 @@ const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase, onAcceptInvitatio
                     {message && <p className="text-sm text-green-600 text-center">{message}</p>}
                     
                     <button type="submit" disabled={loading} className="w-full mt-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-300">
-                        {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Log In')}
+                        {loading ? 'Processing...' : (isSignUp ? 'Continue' : 'Log In')}
                     </button>
                 </form>
                  <div className="text-center mt-4">

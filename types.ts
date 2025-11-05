@@ -1,3 +1,11 @@
+// FIX: Add missing SubscriptionTier enum to resolve import error.
+export enum SubscriptionTier {
+  Free = 'free',
+  Basic = 'basic',
+  Pro = 'pro',
+  Enterprise = 'enterprise',
+}
+
 export enum PlantationMethod {
   Square = 'Square',
   Triangle = 'Triangle',
