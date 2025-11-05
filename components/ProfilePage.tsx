@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { User } from '../types';
+import React, { useState } from 'react';
+import { User, Group } from '../types';
 import AvatarSelectionModal from './AvatarSelectionModal';
 
 interface ProfilePageProps {
     currentUser: User;
+    groups: Group[];
     onSave: (updatedUser: User) => void;
     onBack: () => void;
 }
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, onSave, onBack }) => {
+const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, onBack }) => {
     const [name, setName] = useState(currentUser.name);
     const [avatar, setAvatar] = useState(currentUser.avatar);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    const userGroup = groups.find(g => g.id === currentUser.groupId);
 
     const handleSave = () => {
         onSave({
@@ -46,7 +49,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, onSave, onBack }
                                 </button>
                             </div>
                             <h2 className="text-3xl font-bold text-gray-800">{currentUser.name}</h2>
-                            <p className="text-gray-500">{currentUser.role}</p>
+                            <p className="text-gray-500">{userGroup?.name || 'No Group'}</p>
                         </div>
 
                         <div className="mt-8 space-y-6">
@@ -61,9 +64,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, onSave, onBack }
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Role</label>
+                                <label className="block text-sm font-medium text-gray-700">Group</label>
                                 <p className="mt-1 p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600">
-                                    {currentUser.role} (Role cannot be changed)
+                                    {userGroup?.name || 'No Group'} (Group is managed by an administrator)
                                 </p>
                             </div>
                         </div>

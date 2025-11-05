@@ -16,17 +16,39 @@ export enum FarmerStatus {
   PaymentDone = 'Payment Done',
 }
 
-export enum UserRole {
-  Admin = 'Admin',
-  DataEntry = 'Data Entry Operator',
-  Viewer = 'Viewer',
+export enum Permission {
+  CAN_REGISTER_FARMER = 'CAN_REGISTER_FARMER',
+  CAN_EDIT_FARMER = 'CAN_EDIT_FARMER',
+  CAN_DELETE_FARMER = 'CAN_DELETE_FARMER',
+  CAN_IMPORT_DATA = 'CAN_IMPORT_DATA',
+  CAN_EXPORT_DATA = 'CAN_EXPORT_DATA',
+  CAN_SYNC_DATA = 'CAN_SYNC_DATA',
+  CAN_MANAGE_USERS = 'CAN_MANAGE_USERS',
+  CAN_MANAGE_GROUPS = 'CAN_MANAGE_GROUPS',
+  CAN_INVITE_USERS = 'CAN_INVITE_USERS',
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  permissions: Permission[];
 }
 
 export interface User {
   id: string;
   name: string;
-  role: UserRole;
+  groupId: string;
   avatar: string;
+}
+
+export interface Invitation {
+  id: string; // unique token/code
+  groupId: string;
+  emailFor: string; // The email this was intended for
+  createdAt: string; // ISO string
+  expiresAt: string; // ISO string
+  status: 'pending' | 'accepted';
+  acceptedByUserId?: string;
 }
 
 export interface Farmer {

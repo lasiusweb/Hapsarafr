@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { Farmer, FarmerStatus, PlantationMethod, PlantType, User, UserRole } from './types';
+import { Farmer, FarmerStatus, User, Group, Permission, Invitation } from './types';
 import { GEO_DATA } from './data/geoData';
-import { USERS } from './data/userData';
 import FilterBar, { Filters } from './components/FilterBar';
-// FIX: Import FarmerList component to resolve 'Cannot find name' error.
 import FarmerList from './components/FarmerList';
-
 import { useDatabase } from './DatabaseContext';
 import { Q, Query } from '@nozbe/watermelondb';
 import { FarmerModel } from './db';
+import DataMenu from './components/DataMenu';
+import { initializeSupabase, getSupabase } from './lib/supabase';
 
 // Lazily import components to enable code-splitting
 const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
@@ -19,41 +18,20 @@ const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatus
 const SyncConfirmationModal = lazy(() => import('./components/SyncConfirmationModal'));
 const BulkImportModal = lazy(() => import('./components/BulkImportModal'));
 const ProfilePage = lazy(() => import('./components/ProfilePage'));
+const AdminPage = lazy(() => import('./components/AdminPage'));
+const ConfirmationModal = lazy(() => import('./components/ConfirmationModal'));
+const AcceptInvitation = lazy(() => import('./components/AcceptInvitation'));
+const SupabaseSettingsModal = lazy(() => import('./components/SupabaseSettingsModal'));
 
 // Type declarations for CDN libraries
 declare const html2canvas: any;
 declare const jspdf: any;
 
-// FIX: Added ModalLoader component to be used as a fallback for React Suspense, resolving 'Cannot find name' error.
 const ModalLoader: React.FC = () => (
     <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-[100]">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div>
     </div>
 );
-
-// Custom hook for localStorage persistence (for non-database values)
-const useLocalStorage = <T,>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(error);
-      return initialValue;
-    }
-  });
-
-  const setValue = (value: T | ((val: T) => T)) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error(error);
-    }
-  };
-  return [storedValue, setValue];
-};
 
 // Custom hook to track online status
 const useOnlineStatus = () => {
@@ -81,19 +59,11 @@ const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
   return data;
 };
 
-const useQueryCount = (query: Query<any>): number => {
-    const [count, setCount] = useState(0);
-    useEffect(() => {
-        const subscription = query.observe().subscribe(setCount);
-        return () => subscription.unsubscribe();
-    }, [query]);
-    return count;
-};
-
 const Header: React.FC<{
   currentUser: User | null;
   onLogout: () => void;
   onProfileClick: () => void;
+  onAdminClick: () => void;
   onRegister: () => void;
   onExport: () => void;
   onExportCsv: () => void;
@@ -105,88 +75,39 @@ const Header: React.FC<{
   selectedCount: number;
   isOnline: boolean;
   pendingSyncCount: number;
-}> = ({ currentUser, onLogout, onProfileClick, onRegister, onExport, onExportCsv, onImport, onSync, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount }) => {
-  const canRegister = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
-  const canImportExport = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
-  const canSync = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
-  const canDelete = currentUser?.role === UserRole.Admin;
-  const canEdit = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
+  permissions: Set<Permission>;
+}> = ({ currentUser, onLogout, onProfileClick, onAdminClick, onRegister, onExport, onExportCsv, onImport, onSync, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount, permissions }) => {
+  const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
+  const canSync = permissions.has(Permission.CAN_SYNC_DATA);
+  const canDelete = permissions.has(Permission.CAN_DELETE_FARMER);
+  const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
+  const canManage = permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS);
 
   return (
     <header className="bg-white shadow-md p-4 flex justify-between items-center">
       <div className="flex items-center gap-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
-          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
           <h1 className="text-2xl font-bold text-gray-800">Hapsara Farmer Registration</h1>
           <div className="flex items-center gap-2 border-l pl-4 ml-2">
-              <span
-                  className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}
-                  title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}
-              ></span>
+              <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
               <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
-              {pendingSyncCount > 0 && (
-                  <span className="text-sm text-blue-600 font-semibold animate-pulse">({pendingSyncCount} pending sync)</span>
-              )}
+              {pendingSyncCount > 0 && (<span className="text-sm text-blue-600 font-semibold animate-pulse">({pendingSyncCount} pending sync)</span>)}
           </div>
       </div>
       <div className="flex items-center gap-4">
         {currentUser && (
           <button onClick={onProfileClick} className="text-right border-r pr-4 hover:bg-gray-100 rounded-md p-2 transition">
             <p className="font-semibold text-gray-800">{currentUser.name}</p>
-            <p className="text-xs text-gray-500">{currentUser.role}</p>
+            <p className="text-xs text-gray-500">View Profile</p>
           </button>
         )}
         <div className="flex gap-2">
-          {canDelete && selectedCount > 0 && (
-            <button
-              onClick={onDeleteSelected}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold flex items-center gap-2"
-              title={`Delete ${selectedCount} selected farmer(s)`}
-            >
-              Delete Selected ({selectedCount})
-            </button>
-          )}
-           {canEdit && selectedCount > 0 && (
-            <button
-              onClick={onBatchUpdate}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition font-semibold flex items-center gap-2"
-              title={`Update status for ${selectedCount} selected farmer(s)`}
-            >
-              Update Status ({selectedCount})
-            </button>
-          )}
-          {canSync && (
-            <button 
-              onClick={onSync} 
-              disabled={syncLoading || selectedCount === 0 || !isOnline} 
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition font-semibold flex items-center gap-2 disabled:bg-blue-300 disabled:cursor-not-allowed"
-              title={!isOnline ? "Syncing is disabled while offline" : (selectedCount === 0 ? "Select farmers to sync" : "Sync selected farmers with the server")}
-            >
-              {syncLoading ? 'Syncing...' : `Sync Selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
-            </button>
-          )}
-          {canImportExport && (
-            <>
-              <button onClick={onExportCsv} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition font-semibold flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" />
-                </svg>
-                Export to CSV
-              </button>
-              <button onClick={onExport} className="px-4 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 transition font-semibold flex items-center gap-2">
-                Export to Excel
-              </button>
-              <button onClick={onImport} className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition font-semibold flex items-center gap-2">
-                Import from Excel
-              </button>
-            </>
-          )}
-          {canRegister && (
-            <button onClick={onRegister} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold flex items-center gap-2">
-              Register New Farmer
-            </button>
-          )}
+          {canDelete && selectedCount > 0 && (<button onClick={onDeleteSelected} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold flex items-center gap-2" title={`Delete ${selectedCount} selected farmer(s)`}>Delete Selected ({selectedCount})</button>)}
+          {canEdit && selectedCount > 0 && (<button onClick={onBatchUpdate} className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition font-semibold flex items-center gap-2" title={`Update status for ${selectedCount} selected farmer(s)`}>Update Status ({selectedCount})</button>)}
+          {canSync && (<button onClick={onSync} disabled={syncLoading || selectedCount === 0 || !isOnline} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition font-semibold flex items-center gap-2 disabled:bg-blue-300 disabled:cursor-not-allowed" title={!isOnline ? "Syncing is disabled while offline" : (selectedCount === 0 ? "Select farmers to sync" : "Sync selected farmers with the server")}>{syncLoading ? 'Syncing...' : `Sync Selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`}</button>)}
+          <DataMenu onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} permissions={permissions} />
+          {canRegister && (<button onClick={onRegister} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Register Farmer</button>)}
+          {canManage && (<button onClick={onAdminClick} className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition font-semibold">Admin Panel</button>)}
         </div>
         <button onClick={onLogout} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition font-semibold">Logout</button>
       </div>
@@ -196,28 +117,26 @@ const Header: React.FC<{
 
 const App: React.FC = () => {
   const [isAppLaunched, setIsAppLaunched] = useState(false);
-  const [users, setUsers] = useLocalStorage<User[]>('users', USERS);
-  const [currentUser, setCurrentUser] = useLocalStorage<User | null>('currentUser', null);
-  const [view, setView] = useState<'dashboard' | 'profile'>('dashboard');
+  const [supabase, setSupabase] = useState<any | null>(null);
+  const [session, setSession] = useState<any | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [showSupabaseSettings, setShowSupabaseSettings] = useState(false);
+  
+  const [view, setView] = useState<'dashboard' | 'profile' | 'admin'>('dashboard');
   const [showForm, setShowForm] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
   const [pdfExportFarmer, setPdfExportFarmer] = useState<FarmerModel | null>(null);
   const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
-  const [backendApiUrl, setBackendApiUrl] = useLocalStorage<string>('backendApiUrl', '');
   const [syncLoading, setSyncLoading] = useState(false);
   const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
   const [showSyncConfirmation, setShowSyncConfirmation] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [syncData, setSyncData] = useState<{ farmersToSync: FarmerModel[], url: string } | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [syncData, setSyncData] = useState<{ farmersToSync: FarmerModel[] } | null>(null);
   const isOnline = useOnlineStatus();
-  const [filters, setFilters] = useState<Filters>({
-    searchQuery: '',
-    district: '',
-    mandal: '',
-    village: '',
-    status: '',
-  });
+  const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -227,560 +146,201 @@ const App: React.FC = () => {
   const farmersCollection = database.get<FarmerModel>('farmers');
   
   const allFarmers = useQuery(farmersCollection.query());
-  const pendingSyncCount = useQueryCount(farmersCollection.query(Q.where('syncStatus', 'pending')));
+  const pendingSyncCount = useQuery(farmersCollection.query(Q.where('syncStatus', 'pending'))).length;
+  
+  const currentUserPermissions = useMemo(() => {
+    if (!currentUser) return new Set<Permission>();
+    const userGroup = groups.find(g => g.id === currentUser.groupId);
+    return new Set(userGroup?.permissions || []);
+  }, [currentUser, groups]);
 
-    useEffect(() => {
-        if (notification) {
-            const timer = setTimeout(() => {
-                setNotification(null);
-            }, 5000); // Notification disappears after 5 seconds
-            return () => clearTimeout(timer);
-        }
-    }, [notification]);
+  // --- SUPABASE & AUTH ---
+  useEffect(() => {
+    const client = initializeSupabase();
+    if (client) {
+      setSupabase(client);
+    } else {
+      setShowSupabaseSettings(true);
+    }
+  }, []);
+
+  const fetchUserProfile = useCallback(async (userId: string) => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (error) {
+      console.error('Error fetching user profile:', error);
+    } else if (data) {
+      setCurrentUser({ id: data.id, name: data.full_name, avatar: data.avatar_url, groupId: data.group_id });
+    }
+  }, [supabase]);
+  
+  useEffect(() => {
+    if (!supabase) return;
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+    };
+    getInitialSession();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+      else setCurrentUser(null);
+    });
+    return () => authListener.subscription.unsubscribe();
+  }, [supabase, fetchUserProfile]);
 
   useEffect(() => {
-    const migrateFromLocalStorage = async () => {
-      const migrated = localStorage.getItem('watermelon_migrated');
-      if (migrated) return;
-  
-      const localFarmersJSON = localStorage.getItem('farmers');
-      // Use a type that includes the old `syncedToSheets` property
-      type OldFarmer = Farmer & { syncedToSheets?: boolean };
-      if (!localFarmersJSON) {
-          localStorage.setItem('watermelon_migrated', 'true');
-          return;
-      }
-  
-      const localFarmers: OldFarmer[] = JSON.parse(localFarmersJSON);
-      if (localFarmers.length === 0) {
-          localStorage.setItem('watermelon_migrated', 'true');
-          return;
-      }
-      
-      console.log(`Migrating ${localFarmers.length} farmers from localStorage to WatermelonDB...`);
-  
-      try {
-          await database.write(async () => {
-              const preparedCreations = localFarmers.map(farmer =>
-                  farmersCollection.prepareCreate(record => {
-                      Object.keys(farmer).forEach(key => {
-                          if (key !== 'id' && key !== 'syncedToSheets') {
-                              (record as any)[key] = farmer[key as keyof OldFarmer];
-                          }
-                      });
-                      record.syncStatus = farmer.syncedToSheets ? 'synced' : 'pending';
-                      record._raw.id = farmer.id;
-                  })
-              );
-              await database.batch(...preparedCreations);
-          });
-          console.log("Migration successful!");
-          localStorage.setItem('watermelon_migrated', 'true');
-          localStorage.removeItem('farmers');
-          localStorage.removeItem('syncQueue');
-      } catch (error) {
-          console.error("WatermelonDB migration failed:", error);
-      }
+    if (!supabase) return;
+    const fetchGroups = async () => {
+      const { data, error } = await supabase.from('groups').select('*');
+      if (error) console.error('Error fetching groups:', error);
+      else setGroups(data || []);
     };
+    fetchGroups();
+  }, [supabase]);
+
+  const handleSaveSupabaseSettings = (url: string, key: string) => {
+    localStorage.setItem('supabaseUrl', url);
+    localStorage.setItem('supabaseAnonKey', key);
+    window.location.reload();
+  };
   
-    migrateFromLocalStorage();
-  }, [database, farmersCollection]);
+  const handleLogout = async () => {
+      if (supabase) await supabase.auth.signOut();
+      setCurrentUser(null);
+      setView('dashboard');
+  };
+  // --- END SUPABASE & AUTH ---
 
-  const handleRequestSort = useCallback((key: keyof Farmer | 'id') => {
-      let direction: 'ascending' | 'descending' = 'ascending';
-      if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-          direction = 'descending';
-      }
-      setSortConfig({ key, direction });
-  }, [sortConfig]);
+  useEffect(() => { if (notification) { const timer = setTimeout(() => setNotification(null), 5000); return () => clearTimeout(timer); } }, [notification]);
+  useEffect(() => { if (printingFarmer) { const handleAfterPrint = () => { setPrintingFarmer(null); window.removeEventListener('afterprint', handleAfterPrint); }; window.addEventListener('afterprint', handleAfterPrint); window.print(); return () => window.removeEventListener('afterprint', handleAfterPrint); } }, [printingFarmer]);
+  useEffect(() => { if (pdfExportFarmer && pdfContainerRef.current) { html2canvas(pdfContainerRef.current, { scale: 2 }).then((canvas: HTMLCanvasElement) => { const { jsPDF } = jspdf; const imgData = canvas.toDataURL('image/png'); const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }); const pdfWidth = pdf.internal.pageSize.getWidth(); const pdfHeight = pdf.internal.pageSize.getHeight(); const ratio = canvas.height / canvas.width; let imgWidth = pdfWidth - 20; let imgHeight = imgWidth * ratio; if (imgHeight > pdfHeight - 20) { imgHeight = pdfHeight - 20; imgWidth = imgHeight / ratio; } const xOffset = (pdfWidth - imgWidth) / 2; const yOffset = (pdfHeight - imgHeight) / 2; pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight); pdf.save(`Farmer_Details_${pdfExportFarmer.farmerId}.pdf`); }).finally(() => setPdfExportFarmer(null)); } }, [pdfExportFarmer]);
 
+  const handleRequestSort = useCallback((key: keyof Farmer | 'id') => { let direction: 'ascending' | 'descending' = 'ascending'; if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') { direction = 'descending'; } setSortConfig({ key, direction }); }, [sortConfig]);
+  
   const filteredFarmers = useMemo(() => {
     let farmers = allFarmers.filter(farmer => {
       const search = filters.searchQuery.toLowerCase();
-      const matchesSearch = search === '' ||
-        farmer.fullName.toLowerCase().includes(search) ||
-        farmer.farmerId.toLowerCase().includes(search) ||
-        farmer.mobileNumber.includes(search);
-      
+      const matchesSearch = search === '' || farmer.fullName.toLowerCase().includes(search) || farmer.farmerId.toLowerCase().includes(search) || farmer.mobileNumber.includes(search);
       const matchesDistrict = filters.district === '' || farmer.district === filters.district;
       const matchesMandal = filters.mandal === '' || farmer.mandal === filters.mandal;
       const matchesVillage = filters.village === '' || farmer.village === filters.village;
       const matchesStatus = filters.status === '' || farmer.status === filters.status;
-      
-      return matchesSearch && matchesDistrict && matchesMandal && matchesVillage && matchesStatus;
+      let matchesDate = true;
+      if (filters.registrationDateFrom && farmer.registrationDate < filters.registrationDateFrom) matchesDate = false;
+      if (matchesDate && filters.registrationDateTo && farmer.registrationDate > filters.registrationDateTo) matchesDate = false;
+      return matchesSearch && matchesDistrict && matchesMandal && matchesVillage && matchesStatus && matchesDate;
     });
-
     if (sortConfig !== null) {
-        const numericKeys = new Set(['approvedExtent', 'appliedExtent', 'numberOfPlants']);
-        const dateKeys = new Set(['registrationDate', 'plantationDate']);
-
         farmers.sort((a, b) => {
-            const key = sortConfig.key as keyof FarmerModel;
-            const aValue = a[key];
-            const bValue = b[key];
-
-            if (aValue === bValue) return 0;
-            if (aValue === null || aValue === undefined) return 1;
-            if (bValue === null || bValue === undefined) return -1;
-            
-            let comparison = 0;
-            if (dateKeys.has(key as string)) {
-                const dateA = new Date(aValue as string).getTime();
-                const dateB = new Date(bValue as string).getTime();
-                if (isNaN(dateA)) return 1;
-                if (isNaN(dateB)) return -1;
-                comparison = dateA > dateB ? 1 : -1;
-            } else if (numericKeys.has(key as string)) {
-                comparison = Number(aValue) > Number(bValue) ? 1 : -1;
-            } else {
-                comparison = String(aValue).localeCompare(String(bValue));
-            }
-            
+            const aValue = a[sortConfig.key]; const bValue = b[sortConfig.key];
+            if (aValue === bValue) return 0; if (aValue === null || aValue === undefined) return 1; if (bValue === null || bValue === undefined) return -1;
+            let comparison = String(aValue).localeCompare(String(bValue));
             return sortConfig.direction === 'ascending' ? comparison : -comparison;
         });
     }
-
     return farmers;
   }, [allFarmers, filters, sortConfig]);
 
-
-  const syncOfflineChanges = useCallback(async () => {
-      const pendingFarmers = await farmersCollection.query(Q.where('syncStatus', 'pending')).fetch();
-      if (!isOnline || pendingFarmers.length === 0) return;
-      
-      let url = backendApiUrl;
-      if (!url) {
-          console.log("Backend API URL is not set. Aborting automatic sync.");
-          return;
-      }
-      
-      console.log(`Attempting to sync ${pendingFarmers.length} pending changes...`);
-      try {
-          const response = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ farmers: pendingFarmers }),
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Automatic sync failed with status: ${response.status}`);
-          }
-          
-          await database.write(async () => {
-            const farmersToUpdate = await farmersCollection.query(Q.where('id', Q.oneOf(pendingFarmers.map(f => f.id)))).fetch();
-            const updates = farmersToUpdate.map(farmer => farmer.prepareUpdate(record => {
-                record.syncStatus = 'synced';
-            }));
-            await database.batch(...updates);
-        });
-
-          console.log(`Successfully synced ${pendingFarmers.length} pending changes.`);
-      } catch (error) {
-          console.error("Error during automatic sync:", error);
-      }
-  }, [isOnline, backendApiUrl, database, farmersCollection]);
-
-  useEffect(() => {
-      if (isOnline && pendingSyncCount > 0) {
-          const timer = setTimeout(() => syncOfflineChanges(), 2000);
-          return () => clearTimeout(timer);
-      }
-  }, [isOnline, pendingSyncCount, syncOfflineChanges]);
-
-  useEffect(() => {
-    if (printingFarmer) {
-      const handleAfterPrint = () => {
-        setPrintingFarmer(null);
-        window.removeEventListener('afterprint', handleAfterPrint);
-      };
-      window.addEventListener('afterprint', handleAfterPrint);
-      window.print();
-      return () => window.removeEventListener('afterprint', handleAfterPrint);
+  const handleFormSubmit = async (farmerData: Farmer, photoFile?: File) => {
+    let photoUrl = farmerData.photo || '';
+    if (photoFile && supabase) {
+        setSyncLoading(true);
+        try {
+            const filePath = `public/${farmerData.id}-${photoFile.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+            const { error: uploadError } = await supabase.storage.from('farmer-photos').upload(filePath, photoFile, { upsert: true });
+            if (uploadError) throw uploadError;
+            const { data } = supabase.storage.from('farmer-photos').getPublicUrl(filePath);
+            photoUrl = data.publicUrl;
+        } catch(error) {
+            console.error("Photo upload failed:", error);
+            setNotification({ message: 'Photo upload failed. Please try again.', type: 'error'});
+            setSyncLoading(false);
+            return;
+        } finally {
+            setSyncLoading(false);
+        }
     }
-  }, [printingFarmer]);
-  
-  const handleExportToPdf = (farmer: FarmerModel) => {
-    setPdfExportFarmer(farmer);
-  };
-
-  useEffect(() => {
-    if (pdfExportFarmer && pdfContainerRef.current) {
-        const pdfElement = pdfContainerRef.current;
-        html2canvas(pdfElement, { scale: 2 }).then((canvas: HTMLCanvasElement) => {
-            const { jsPDF } = jspdf;
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const ratio = canvas.height / canvas.width;
-            let imgWidth = pdfWidth - 20;
-            let imgHeight = imgWidth * ratio;
-            if (imgHeight > pdfHeight - 20) {
-                imgHeight = pdfHeight - 20;
-                imgWidth = imgHeight / ratio;
-            }
-            const xOffset = (pdfWidth - imgWidth) / 2;
-            const yOffset = (pdfHeight - imgHeight) / 2;
-            pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
-            pdf.save(`Farmer_Details_${pdfExportFarmer.farmerId}.pdf`);
-        }).catch((err: any) => {
-            console.error("Error generating PDF:", err);
-            alert("Could not generate PDF. Please try again.");
-        }).finally(() => {
-            setPdfExportFarmer(null);
-        });
-    }
-  }, [pdfExportFarmer]);
-
-  const handleRegisterClick = () => {
-    setShowForm(true);
-  };
-  
-  const handleEditRow = (farmerId: string) => {
-    setEditingRowId(farmerId);
-  };
-  
-  const handleCancelEditRow = () => {
-    setEditingRowId(null);
-  };
-  
-  const handleSaveRow = async (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => {
-    try {
-        await database.write(async () => {
-            await farmerToUpdate.update(record => {
-                if (updatedData.fullName) record.fullName = updatedData.fullName;
-                if (updatedData.mobileNumber) record.mobileNumber = updatedData.mobileNumber;
-                if (updatedData.status) record.status = updatedData.status;
-                record.syncStatus = 'pending';
-            });
-        });
-        setEditingRowId(null);
-    } catch (error) {
-        console.error("Failed to save farmer:", error);
-        alert("Failed to save changes. Please try again.");
-    }
-  };
-
-  const handleFormSubmit = async (farmerData: Farmer) => {
-    const farmerToSave = { ...farmerData, syncStatus: 'pending' as const };
-    
-    await database.write(async () => {
-      await farmersCollection.create(record => {
-        Object.assign(record, farmerToSave);
-        record._raw.id = farmerToSave.id;
-      });
-    });
-
+    const farmerToSave = { ...farmerData, photo: photoUrl, syncStatus: 'pending' as const };
+    await database.write(async () => { await farmersCollection.create(record => { Object.assign(record, farmerToSave); record._raw.id = farmerToSave.id; }); });
     setShowForm(false);
     setNewlyAddedFarmerId(farmerData.id);
     setNotification({ message: `Farmer "${farmerData.fullName}" successfully registered!`, type: 'success' });
   };
-
-  const handleBulkImportSubmit = async (newFarmers: Farmer[]) => {
-    if (newFarmers.length === 0) {
-        alert("No valid farmer records to import.");
-        return;
-    }
-
-    try {
-        await database.write(async () => {
-            const preparedCreations = newFarmers.map(farmer => 
-                farmersCollection.prepareCreate(record => {
-                    Object.assign(record, farmer);
-                    record._raw.id = farmer.id;
-                })
-            );
-            await database.batch(...preparedCreations);
-        });
-    } catch (error) {
-        console.error("Error during bulk import database operation:", error);
-        alert(`Failed to save imported farmers to the database. Error: ${(error as Error).message}`);
-    }
-  };
   
-  const handleSelectionChange = (farmerId: string, isSelected: boolean) => {
-    setSelectedFarmerIds(prev => {
-        const newSet = new Set(prev);
-        if (isSelected) { newSet.add(farmerId); } else { newSet.delete(farmerId); }
-        return Array.from(newSet);
-    });
-  };
-
-  const handleSelectAll = useCallback((isSelected: boolean) => {
-      const filteredIds = new Set(filteredFarmers.map(f => f.id));
-      if (isSelected) {
-          setSelectedFarmerIds(prev => Array.from(new Set([...prev, ...Array.from(filteredIds)])));
-      } else {
-          setSelectedFarmerIds(prev => prev.filter(id => !filteredIds.has(id)));
-      }
-  }, [filteredFarmers]);
-
-  const handleDeleteSelected = useCallback(async () => {
-    if (selectedFarmerIds.length === 0 || currentUser?.role !== UserRole.Admin) return;
-    if (window.confirm(`Are you sure you want to permanently delete ${selectedFarmerIds.length} selected farmer(s)? This action cannot be undone.`)) {
-      await database.write(async () => {
-        const farmersToDelete = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
-        const deletions = farmersToDelete.map(farmer => farmer.prepareDestroyPermanently());
-        await database.batch(...deletions);
-      });
-      setSelectedFarmerIds([]);
-    }
-  }, [selectedFarmerIds, currentUser?.role, database, farmersCollection]);
-  
-  const handleBatchStatusUpdate = async (newStatus: FarmerStatus) => {
-    if (selectedFarmerIds.length === 0) {
-        alert("No farmers selected for batch update.");
-        return;
-    }
-    await database.write(async () => {
-      const farmersToUpdate = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
-      const updates = farmersToUpdate.map(farmer => farmer.prepareUpdate(record => {
-        record.status = newStatus;
-        record.syncStatus = 'pending';
-      }));
-      await database.batch(...updates);
-    });
-    alert(`${selectedFarmerIds.length} farmer(s) have been updated to "${newStatus}".`);
-    setSelectedFarmerIds([]);
-    setShowBatchUpdateModal(false);
-  };
-
-  const handleExportToExcel = useCallback(() => {
-    // @ts-ignore
-    const XLSX = window.XLSX;
-    if(!XLSX) { alert("Excel library not loaded!"); return; }
-    const dataToExport = filteredFarmers.length > 0 ? filteredFarmers : allFarmers;
-    if (dataToExport.length === 0) { alert("No farmers to export."); return; }
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport.map(f => ({...f._raw, id: f.id})));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Farmers");
-    XLSX.writeFile(workbook, "HapsaraFarmers.xlsx");
-  }, [allFarmers, filteredFarmers]);
-
-    const handleExportToCsv = useCallback(() => {
-        if (filteredFarmers.length === 0) {
-            alert("No filtered data to export to CSV.");
-            return;
-        }
-        const getGeoName = (type: 'district' | 'mandal' | 'village', farmer: FarmerModel) => {
-            try {
-                if (type === 'district') return GEO_DATA.find(d => d.code === farmer.district)?.name || farmer.district;
-                const district = GEO_DATA.find(d => d.code === farmer.district);
-                if (type === 'mandal') return district?.mandals.find(m => m.code === farmer.mandal)?.name || farmer.mandal;
-                const mandal = district?.mandals.find(m => m.code === farmer.mandal);
-                if (type === 'village') return mandal?.villages.find(v => v.code === farmer.village)?.name || farmer.village;
-            } catch (e) { return 'N/A'; }
-        };
-        const headers = ['Hap ID', 'Application ID', 'Full Name', 'Father/Husband Name', 'Mobile Number', 'Aadhaar Number', 'Gender', 'District', 'Mandal', 'Village', 'Address', 'Status', 'Registration Date', 'Applied Extent (Acres)', 'Approved Extent (Acres)', 'Number of Plants', 'Plantation Date', 'Sync Status'];
-        const escapeCsvCell = (cellData: any): string => {
-            const stringData = String(cellData ?? '');
-            if (stringData.includes(',') || stringData.includes('"') || stringData.includes('\n')) {
-                return `"${stringData.replace(/"/g, '""')}"`;
-            }
-            return stringData;
-        };
-        const csvRows = filteredFarmers.map(farmer => [farmer.farmerId, farmer.applicationId, farmer.fullName, farmer.fatherHusbandName, farmer.mobileNumber, `'${farmer.aadhaarNumber}`, farmer.gender, getGeoName('district', farmer), getGeoName('mandal', farmer), getGeoName('village', farmer), farmer.address, farmer.status, farmer.registrationDate, farmer.appliedExtent, farmer.approvedExtent, farmer.numberOfPlants, farmer.plantationDate, farmer.syncStatus].map(escapeCsvCell).join(','));
-        const csvContent = [headers.join(','), ...csvRows].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", "HapsaraFarmers_Filtered.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }, [filteredFarmers]);
-  
-  const handleConfirmSync = useCallback(async () => {
-    if (!syncData) return;
-
-    const { farmersToSync, url } = syncData;
-
-    setShowSyncConfirmation(false);
-    setSyncData(null);
-    setSyncLoading(true);
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ farmers: farmersToSync }),
-        });
-        if (!response.ok) throw new Error(`Server responded with status ${response.status}.`);
-
-        await database.write(async () => {
-            const updates = farmersToSync.map(farmer => farmer.prepareUpdate(record => {
-                record.syncStatus = 'synced';
-            }));
-            await database.batch(...updates);
-        });
-
-        alert(`Successfully synced ${farmersToSync.length} records!`);
-        setSelectedFarmerIds([]);
-    } catch (error) {
-        let msg = error instanceof TypeError && error.message.includes('Failed to fetch')
-          ? "Sync failed. Could not connect to the server."
-          : `Sync failed: ${(error as Error).message}`;
-        alert(msg);
-    } finally {
-        setSyncLoading(false);
-    }
-  }, [syncData, database]);
-
   const handleOpenSyncConfirmation = useCallback(async () => {
     if (selectedFarmerIds.length === 0) { alert("Please select at least one farmer to sync."); return; }
     if (!isOnline) { alert("You are currently offline. Please connect to the internet to sync."); return; }
-
-    let url = backendApiUrl;
-    if(!url) {
-      url = prompt("Please enter your Backend API Endpoint URL:") || '';
-      setBackendApiUrl(url);
-    }
-    if(!url){ alert("Backend API URL is required for syncing."); return; }
-    
-    const farmersToSync = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds)), Q.where('syncStatus', 'pending')).fetch();
-    if(farmersToSync.length === 0){ alert("All selected farmers are already in sync."); return; }
-
-    setSyncData({ farmersToSync, url });
+    const farmersToSync = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
+    if (farmersToSync.length === 0) { alert("Could not find selected farmers in local DB."); return; }
+    setSyncData({ farmersToSync });
     setShowSyncConfirmation(true);
+  }, [database, farmersCollection, selectedFarmerIds, isOnline]);
 
-  }, [backendApiUrl, setBackendApiUrl, database, farmersCollection, selectedFarmerIds, isOnline]);
+  const handleConfirmSync = useCallback(async () => {
+    if (!syncData || !supabase) return;
+    const { farmersToSync } = syncData;
+    setShowSyncConfirmation(false);
+    setSyncData(null);
+    setSyncLoading(true);
+    try {
+        // Convert WatermelonDB models to plain objects for Supabase
+        const plainFarmers = farmersToSync.map(f => {
+          const plain = { ...f._raw, id: f.id };
+          // Supabase might throw an error on extra properties from WatermelonDB
+          delete (plain as any)._status;
+          delete (plain as any)._changed;
+          return plain;
+        });
+        const { error } = await supabase.from('farmers').upsert(plainFarmers);
+        if (error) throw error;
+        await database.write(async () => {
+            const updates = farmersToSync.map(farmer => farmer.prepareUpdate(record => { record.syncStatus = 'synced'; }));
+            await database.batch(...updates);
+        });
+        setNotification({ message: `Successfully synced ${farmersToSync.length} records!`, type: 'success' });
+        setSelectedFarmerIds([]);
+    } catch (error) {
+        setNotification({ message: `Sync failed: ${(error as Error).message}`, type: 'error' });
+    } finally {
+        setSyncLoading(false);
+    }
+  }, [syncData, database, supabase]);
+
+  const handleSelectAll = useCallback((isSelected: boolean) => { const filteredIds = new Set(filteredFarmers.map(f => f.id)); if (isSelected) { setSelectedFarmerIds(prev => Array.from(new Set([...prev, ...Array.from(filteredIds)]))); } else { setSelectedFarmerIds(prev => prev.filter(id => !filteredIds.has(id))); } }, [filteredFarmers]);
+  const handleDeleteSelected = useCallback(() => { if (selectedFarmerIds.length === 0 || !currentUserPermissions.has(Permission.CAN_DELETE_FARMER)) return; setShowDeleteConfirmation(true); }, [selectedFarmerIds.length, currentUserPermissions]);
+  const handleConfirmDelete = useCallback(async () => { if (selectedFarmerIds.length === 0) return; await database.write(async () => { const farmersToDelete = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch(); const deletions = farmersToDelete.map(farmer => farmer.prepareDestroyPermanently()); await database.batch(...deletions); }); setNotification({ message: `${selectedFarmerIds.length} farmer(s) have been permanently deleted.`, type: 'success' }); setSelectedFarmerIds([]); setShowDeleteConfirmation(false); }, [selectedFarmerIds, database, farmersCollection]);
+  const handleSaveRow = async (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => { try { await database.write(async () => { await farmerToUpdate.update(record => { if (updatedData.fullName) record.fullName = updatedData.fullName; if (updatedData.mobileNumber) record.mobileNumber = updatedData.mobileNumber; if (updatedData.status) record.status = updatedData.status; record.syncStatus = 'pending'; }); }); setEditingRowId(null); } catch (error) { console.error("Failed to save farmer:", error); alert("Failed to save changes. Please try again."); } };
+  const handleBatchStatusUpdate = async (newStatus: FarmerStatus) => { if (selectedFarmerIds.length === 0) { alert("No farmers selected for batch update."); return; } await database.write(async () => { const farmersToUpdate = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch(); const updates = farmersToUpdate.map(farmer => farmer.prepareUpdate(record => { record.status = newStatus; record.syncStatus = 'pending'; })); await database.batch(...updates); }); alert(`${selectedFarmerIds.length} farmer(s) have been updated to "${newStatus}".`); setSelectedFarmerIds([]); setShowBatchUpdateModal(false); };
+  const handleSelectionChange = (farmerId: string, isSelected: boolean) => { setSelectedFarmerIds(prev => { const newSet = new Set(prev); if (isSelected) { newSet.add(farmerId); } else { newSet.delete(farmerId); } return Array.from(newSet); }); };
+  const handleExportToExcel = useCallback(() => { const XLSX = (window as any).XLSX; if(!XLSX) { alert("Excel library not loaded!"); return; } const dataToExport = filteredFarmers.length > 0 ? filteredFarmers : allFarmers; if (dataToExport.length === 0) { alert("No farmers to export."); return; } const worksheet = XLSX.utils.json_to_sheet(dataToExport.map(f => ({...f._raw, id: f.id}))); const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, "Farmers"); XLSX.writeFile(workbook, "HapsaraFarmers.xlsx"); }, [allFarmers, filteredFarmers]);
+  const handleExportToCsv = useCallback(() => { if (filteredFarmers.length === 0) { alert("No filtered data to export to CSV."); return; } const getGeoName = (type: 'district' | 'mandal' | 'village', farmer: FarmerModel) => { try { if (type === 'district') return GEO_DATA.find(d => d.code === farmer.district)?.name || farmer.district; const district = GEO_DATA.find(d => d.code === farmer.district); if (type === 'mandal') return district?.mandals.find(m => m.code === farmer.mandal)?.name || farmer.mandal; const mandal = district?.mandals.find(m => m.code === farmer.mandal); if (type === 'village') return mandal?.villages.find(v => v.code === farmer.village)?.name || farmer.village; } catch (e) { return 'N/A'; } }; const headers = ['Hap ID', 'Application ID', 'Full Name', 'Father/Husband Name', 'Mobile Number', 'Aadhaar Number', 'Gender', 'District', 'Mandal', 'Village', 'Address', 'Status', 'Registration Date', 'Applied Extent (Acres)', 'Approved Extent (Acres)', 'Number of Plants', 'Plantation Date', 'Sync Status']; const escapeCsvCell = (cellData: any): string => { const stringData = String(cellData ?? ''); if (stringData.includes(',') || stringData.includes('"') || stringData.includes('\n')) return `"${stringData.replace(/"/g, '""')}"`; return stringData; }; const csvRows = filteredFarmers.map(farmer => [farmer.farmerId, farmer.applicationId, farmer.fullName, farmer.fatherHusbandName, farmer.mobileNumber, `'${farmer.aadhaarNumber}`, farmer.gender, getGeoName('district', farmer), getGeoName('mandal', farmer), getGeoName('village', farmer), farmer.address, farmer.status, farmer.registrationDate, farmer.appliedExtent, farmer.approvedExtent, farmer.numberOfPlants, farmer.plantationDate, farmer.syncStatus].map(escapeCsvCell).join(',')); const csvContent = [headers.join(','), ...csvRows].join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); const url = URL.createObjectURL(blob); link.setAttribute("href", url); link.setAttribute("download", "HapsaraFarmers_Filtered.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); }, [filteredFarmers]);
   
-  const handleLogin = (user: User) => setCurrentUser(user);
-  const handleLogout = () => {
-      setCurrentUser(null);
-      setView('dashboard'); // Reset view on logout
-  };
-  
-  const handleUpdateUser = (updatedUser: User) => {
-      setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
-      setCurrentUser(updatedUser);
-      setView('dashboard');
-      setNotification({ message: 'Profile updated successfully!', type: 'success' });
-  };
-
-  if (!isAppLaunched) {
-      return (
-          <Suspense fallback={<div className="min-h-screen bg-gray-900" />}>
-              <LandingPage onLaunch={() => setIsAppLaunched(true)} />
-          </Suspense>
-      );
-  }
-
-  if (!currentUser) {
-    return (
-      <Suspense fallback={<ModalLoader />}>
-        <LoginScreen onLogin={handleLogin} users={users} />
-      </Suspense>
-    );
-  }
+  if (!isAppLaunched) return (<Suspense fallback={<div className="min-h-screen bg-gray-900" />}><LandingPage onLaunch={() => setIsAppLaunched(true)} /></Suspense>);
+  if (!supabase) return (<Suspense fallback={<ModalLoader />}>{showSupabaseSettings && <SupabaseSettingsModal onSave={handleSaveSupabaseSettings} />}</Suspense>);
+  if (!session || !currentUser) return (<Suspense fallback={<ModalLoader />}><LoginScreen supabase={supabase} /></Suspense>);
 
   const renderDashboard = () => (
     <>
-      <Header 
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        onProfileClick={() => setView('profile')}
-        onRegister={handleRegisterClick} 
-        onExport={handleExportToExcel}
-        onExportCsv={handleExportToCsv}
-        onImport={() => setShowImportModal(true)}
-        onSync={handleOpenSyncConfirmation}
-        onDeleteSelected={handleDeleteSelected}
-        onBatchUpdate={() => setShowBatchUpdateModal(true)}
-        syncLoading={syncLoading}
-        selectedCount={selectedFarmerIds.length}
-        isOnline={isOnline}
-        pendingSyncCount={pendingSyncCount}
-      />
-      <main className="p-6">
-        <FilterBar onFilterChange={setFilters} />
-        <FarmerList 
-            farmers={filteredFarmers}
-            currentUser={currentUser}
-            editingRowId={editingRowId}
-            onEditRow={handleEditRow}
-            onCancelEditRow={handleCancelEditRow}
-            onSaveRow={handleSaveRow}
-            onPrint={setPrintingFarmer}
-            onExportToPdf={handleExportToPdf}
-            selectedFarmerIds={selectedFarmerIds}
-            onSelectionChange={handleSelectionChange}
-            onSelectAll={handleSelectAll}
-            sortConfig={sortConfig}
-            onRequestSort={handleRequestSort}
-            newlyAddedFarmerId={newlyAddedFarmerId}
-            onHighlightComplete={() => setNewlyAddedFarmerId(null)}
-        />
-      </main>
+      <Header currentUser={currentUser} onLogout={handleLogout} onProfileClick={() => setView('profile')} onAdminClick={() => setView('admin')} onRegister={() => setShowForm(true)} onExport={handleExportToExcel} onExportCsv={handleExportToCsv} onImport={() => setShowImportModal(true)} onSync={handleOpenSyncConfirmation} onDeleteSelected={handleDeleteSelected} onBatchUpdate={() => setShowBatchUpdateModal(true)} syncLoading={syncLoading} selectedCount={selectedFarmerIds.length} isOnline={isOnline} pendingSyncCount={pendingSyncCount} permissions={currentUserPermissions} />
+      <main className="p-6"><FilterBar onFilterChange={setFilters} /><FarmerList farmers={filteredFarmers} canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)} canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)} onDeleteSelected={handleDeleteSelected} editingRowId={editingRowId} onEditRow={setEditingRowId} onCancelEditRow={() => setEditingRowId(null)} onSaveRow={handleSaveRow} onPrint={setPrintingFarmer} onExportToPdf={setPdfExportFarmer} selectedFarmerIds={selectedFarmerIds} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} sortConfig={sortConfig} onRequestSort={handleRequestSort} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} /></main>
     </>
   );
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {notification && (
-        <div className={`fixed top-5 right-6 z-[100] px-6 py-4 rounded-lg shadow-lg text-white transition-transform transform-gpu animate-fade-in-down ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-            <div className="flex items-center">
-                <span className="font-semibold">{notification.message}</span>
-                <button onClick={() => setNotification(null)} className="ml-4 font-bold text-xl leading-none">&times;</button>
-            </div>
-        </div>
-      )}
-
-      {view === 'dashboard' ? renderDashboard() : (
-        <Suspense fallback={<ModalLoader />}>
-            <ProfilePage 
-                currentUser={currentUser}
-                onSave={handleUpdateUser}
-                onBack={() => setView('dashboard')}
-            />
-        </Suspense>
-      )}
-      
+      {notification && (<div className={`fixed top-5 right-6 z-[100] px-6 py-4 rounded-lg shadow-lg text-white transition-transform transform-gpu animate-fade-in-down ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}><div className="flex items-center"><span className="font-semibold">{notification.message}</span><button onClick={() => setNotification(null)} className="ml-4 font-bold text-xl leading-none">&times;</button></div></div>)}
+      {view === 'dashboard' ? renderDashboard() : view === 'profile' ? (<Suspense fallback={<ModalLoader />}><ProfilePage currentUser={currentUser} groups={groups} onSave={() => {}} onBack={() => setView('dashboard')} /></Suspense>) : (<Suspense fallback={<ModalLoader />}><AdminPage users={[]} groups={groups} currentUser={currentUser} onSaveUsers={() => {}} onSaveGroups={() => {}} onBack={() => setView('dashboard')} invitations={[]} onInviteUser={() => ''} /></Suspense>)}
       <Suspense fallback={<ModalLoader />}>
-        {showForm && (
-          <RegistrationForm 
-              onSubmit={handleFormSubmit} 
-              onCancel={() => { setShowForm(false); }} 
-              existingFarmers={allFarmers}
-          />
-        )}
-        {showBatchUpdateModal && (
-            <BatchUpdateStatusModal
-                selectedCount={selectedFarmerIds.length}
-                onUpdate={handleBatchStatusUpdate}
-                onCancel={() => setShowBatchUpdateModal(false)}
-            />
-        )}
-        {showSyncConfirmation && syncData && (
-            <SyncConfirmationModal
-                syncCount={syncData.farmersToSync.length}
-                apiUrl={syncData.url}
-                onConfirm={handleConfirmSync}
-                onCancel={() => {
-                    setShowSyncConfirmation(false);
-                    setSyncData(null);
-                }}
-            />
-        )}
-        {showImportModal && (
-          <BulkImportModal
-              onClose={() => setShowImportModal(false)}
-              onSubmit={handleBulkImportSubmit}
-              existingFarmers={allFarmers}
-          />
-        )}
+        {showForm && (<RegistrationForm onSubmit={handleFormSubmit} onCancel={() => { setShowForm(false); }} existingFarmers={allFarmers} />)}
+        {showBatchUpdateModal && (<BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleBatchStatusUpdate} onCancel={() => setShowBatchUpdateModal(false)} />)}
+        {showSyncConfirmation && syncData && (<SyncConfirmationModal syncCount={syncData.farmersToSync.length} apiUrl={"Supabase Backend"} onConfirm={handleConfirmSync} onCancel={() => { setShowSyncConfirmation(false); setSyncData(null); }} />)}
+        {showImportModal && (<BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={async () => {}} existingFarmers={allFarmers} />)}
+        {showDeleteConfirmation && (<ConfirmationModal isOpen={showDeleteConfirmation} title="Confirm Deletion" message={<><p>Are you sure you want to permanently delete <span className="font-bold">{selectedFarmerIds.length}</span> selected farmer(s)?</p><p className="mt-2 text-sm text-red-700 font-semibold">This action cannot be undone.</p></>} onConfirm={handleConfirmDelete} onCancel={() => setShowDeleteConfirmation(false)} confirmText="Yes, Delete" confirmButtonClass="bg-red-600 hover:bg-red-700" />)}
       </Suspense>
-
       <Suspense fallback={null}>
-        {pdfExportFarmer && (
-          <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '800px' }}>
-            <div ref={pdfContainerRef}>
-              <PrintView farmer={pdfExportFarmer} isForPdf={true} />
-            </div>
-          </div>
-        )}
+        {pdfExportFarmer && (<div style={{ position: 'absolute', left: '-9999px', top: 0, width: '800px' }}><div ref={pdfContainerRef}><PrintView farmer={pdfExportFarmer} isForPdf={true} /></div></div>)}
         <PrintView farmer={printingFarmer} />
       </Suspense>
     </div>

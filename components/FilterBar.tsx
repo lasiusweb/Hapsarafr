@@ -8,6 +8,8 @@ export interface Filters {
   mandal: string;
   village: string;
   status: string;
+  registrationDateFrom: string;
+  registrationDateTo: string;
 }
 
 interface FilterBarProps {
@@ -20,6 +22,8 @@ const initialFilters: Filters = {
   mandal: '',
   village: '',
   status: '',
+  registrationDateFrom: '',
+  registrationDateTo: '',
 };
 
 /**
@@ -51,14 +55,11 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   // It uses the debounced search query but immediate values for other filters.
   useEffect(() => {
     const newFiltersForParent = {
-      district: filters.district,
-      mandal: filters.mandal,
-      village: filters.village,
-      status: filters.status,
+      ...filters,
       searchQuery: debouncedSearchQuery,
     };
     onFilterChange(newFiltersForParent);
-  }, [debouncedSearchQuery, filters.district, filters.mandal, filters.village, filters.status, onFilterChange]);
+  }, [debouncedSearchQuery, filters, onFilterChange]);
 
   // Derive mandals and villages directly from filters state to avoid chained useEffect updates.
   const mandals: Mandal[] = useMemo(() => {
@@ -74,11 +75,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     return selectedMandal?.villages || [];
   }, [filters.district, filters.mandal]);
   
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFilters(prev => ({ ...prev, searchQuery: e.target.value }));
-  };
-
-  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
   };
@@ -112,32 +109,21 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   return (
     <div className="bg-white shadow-md rounded-lg p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-             <div className="md:col-span-3">
+             <div className="md:col-span-4">
                 <label htmlFor="searchQuery" className="block text-sm font-medium text-gray-700 mb-1">Search (Hap ID, Name, Mobile)</label>
                 <input
                     type="text"
                     id="searchQuery"
                     name="searchQuery"
                     value={filters.searchQuery}
-                    onChange={handleSearchChange}
+                    onChange={handleInputChange}
                     placeholder="e.g. John Doe, H010124001, 987..."
                     className={inputClass}
                     title="Search by farmer's name, Hap ID, or mobile number."
                 />
             </div>
+            {/* Geo Filters */}
             <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <div className="relative">
-                    <select id="status" name="status" value={filters.status} onChange={handleFilterChange} className={selectInputClass} title="Filter farmers by their current registration status.">
-                        <option value="">All Statuses</option>
-                        {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
-                </div>
-            </div>
-             <div>
                 <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
                  <div className="relative">
                     <select id="district" name="district" value={filters.district} onChange={handleDistrictChange} className={selectInputClass} title="Filter farmers by their district.">
@@ -164,7 +150,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
             <div>
                 <label htmlFor="village" className="block text-sm font-medium text-gray-700 mb-1">Village</label>
                 <div className="relative">
-                    <select id="village" name="village" value={filters.village} onChange={handleFilterChange} className={selectInputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
+                    <select id="village" name="village" value={filters.village} onChange={handleInputChange} className={selectInputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
                         <option value="">All Villages</option>
                         {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
                     </select>
@@ -173,9 +159,30 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                     </div>
                 </div>
             </div>
-            <div className="flex items-end">
-                <button onClick={clearFilters} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition font-semibold" title="Reset all search and filter criteria to their default values.">
-                    Clear Filters
+            <div>
+                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <div className="relative">
+                    <select id="status" name="status" value={filters.status} onChange={handleInputChange} className={selectInputClass} title="Filter farmers by their current registration status.">
+                        <option value="">All Statuses</option>
+                        {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
+            </div>
+            <div>
+                 <label htmlFor="registrationDateFrom" className="block text-sm font-medium text-gray-700 mb-1">Reg. Date From</label>
+                 <input type="date" name="registrationDateFrom" id="registrationDateFrom" value={filters.registrationDateFrom} onChange={handleInputChange} className={inputClass} title="Filter by the start of the registration date range." />
+            </div>
+             <div>
+                 <label htmlFor="registrationDateTo" className="block text-sm font-medium text-gray-700 mb-1">Reg. Date To</label>
+                 <input type="date" name="registrationDateTo" id="registrationDateTo" value={filters.registrationDateTo} onChange={handleInputChange} className={inputClass} min={filters.registrationDateFrom} title="Filter by the end of the registration date range." />
+            </div>
+
+            <div className="md:col-span-4 flex items-end justify-end">
+                <button onClick={clearFilters} className="w-full md:w-auto px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition font-semibold" title="Reset all search and filter criteria to their default values.">
+                    Clear All Filters
                 </button>
             </div>
         </div>

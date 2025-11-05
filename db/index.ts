@@ -2,7 +2,6 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 import { Model } from '@nozbe/watermelondb';
 import { Database } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
-// FIX: Added field definitions to the FarmerModel class. This provides TypeScript with type information for the model's properties, resolving type errors when accessing these fields in other components.
 import { field } from '@nozbe/watermelondb/decorators';
 import { FarmerStatus, PlantationMethod, PlantType } from '../types';
 

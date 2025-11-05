@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Farmer, FarmerStatus, User, UserRole } from '../types';
+import { Farmer, FarmerStatus } from '../types';
 import { FarmerModel } from '../db';
 import { GEO_DATA } from '../data/geoData';
 
 interface FarmerListProps {
     farmers: FarmerModel[];
-    currentUser: User | null;
+    canEdit: boolean;
+    canDelete: boolean;
     editingRowId: string | null;
     onEditRow: (farmerId: string) => void;
     onCancelEditRow: () => void;
@@ -19,9 +20,10 @@ interface FarmerListProps {
     onRequestSort: (key: keyof Farmer | 'id') => void;
     newlyAddedFarmerId: string | null;
     onHighlightComplete: () => void;
+    onDeleteSelected: () => void;
 }
 
-const FarmerList: React.FC<FarmerListProps> = ({ farmers, currentUser, editingRowId, onEditRow, onCancelEditRow, onSaveRow, onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete }) => {
+const FarmerList: React.FC<FarmerListProps> = ({ farmers, canEdit, canDelete, editingRowId, onEditRow, onCancelEditRow, onSaveRow, onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onDeleteSelected }) => {
     
     const [editedFarmerData, setEditedFarmerData] = useState<Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>>({});
     
@@ -89,7 +91,6 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, currentUser, editingRo
     }
     
     const allVisibleSelected = farmers.length > 0 && farmers.every(f => selectedFarmerIds.includes(f.id));
-    const canEdit = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
 
     const SortIcon: React.FC<{ direction: 'ascending' | 'descending' | null }> = ({ direction }) => {
         if (!direction) {
@@ -115,129 +116,145 @@ const FarmerList: React.FC<FarmerListProps> = ({ farmers, currentUser, editingRo
 
     return (
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                    <tr>
-                        <th className="px-6 py-3">
-                            <input
-                                type="checkbox"
-                                className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                checked={allVisibleSelected}
-                                onChange={(e) => onSelectAll(e.target.checked)}
-                                aria-label="Select all farmers"
-                            />
-                        </th>
-                        <SortableHeader sortKey="farmerId">Hap ID</SortableHeader>
-                        <SortableHeader sortKey="fullName">Name</SortableHeader>
-                        <SortableHeader sortKey="village">Location</SortableHeader>
-                        <SortableHeader sortKey="mobileNumber">Mobile</SortableHeader>
-                        <SortableHeader sortKey="status">Status</SortableHeader>
-                        <SortableHeader sortKey="registrationDate">Reg. Date</SortableHeader>
-                        <SortableHeader sortKey="approvedExtent" className="text-center">Extent (Ac)</SortableHeader>
-                        <SortableHeader sortKey="syncStatus" className="text-center">Synced</SortableHeader>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                {farmers.map(farmer => {
-                    const isEditing = editingRowId === farmer.id;
-                    const isSelected = selectedFarmerIds.includes(farmer.id);
-                    const isNewlyAdded = newlyAddedFarmerId === farmer.id;
-                    
-                    let rowBgClass = '';
-                    if (isNewlyAdded) {
-                        rowBgClass = 'bg-green-200';
-                    } else if (isEditing) {
-                        rowBgClass = 'bg-yellow-50';
-                    } else if (isSelected) {
-                        rowBgClass = 'bg-green-50';
-                    }
-
-                    return (
-                        <tr key={farmer.id} className={`transition-colors duration-1000 ${rowBgClass}`}>
-                            <td className="px-6 py-4 whitespace-nowrap">
+             {canDelete && selectedFarmerIds.length > 0 && (
+                <div className="p-4 bg-yellow-50 border-b border-yellow-200 flex justify-between items-center">
+                    <p className="text-sm font-semibold text-yellow-800">
+                        {selectedFarmerIds.length} farmer(s) selected
+                    </p>
+                    <button
+                        onClick={onDeleteSelected}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold text-sm flex items-center gap-2"
+                        title={`Delete ${selectedFarmerIds.length} selected farmer(s)`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                         </svg>
+                        Delete Selected
+                    </button>
+                </div>
+            )}
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3">
                                 <input
                                     type="checkbox"
                                     className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                    checked={isSelected}
-                                    onChange={(e) => onSelectionChange(farmer.id, e.target.checked)}
-                                    aria-label={`Select farmer ${farmer.fullName}`}
+                                    checked={allVisibleSelected}
+                                    onChange={(e) => onSelectAll(e.target.checked)}
+                                    aria-label="Select all farmers"
                                 />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {isEditing ? (
-                                    <input 
-                                        type="text"
-                                        value={editedFarmerData.fullName || ''}
-                                        onChange={e => setEditedFarmerData(d => ({ ...d, fullName: e.target.value }))}
-                                        className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-                                    />
-                                ) : (
-                                    farmer.fullName
-                                )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {isEditing ? (
-                                    <input 
-                                        type="text"
-                                        value={editedFarmerData.mobileNumber || ''}
-                                        onChange={e => setEditedFarmerData(d => ({ ...d, mobileNumber: e.target.value }))}
-                                        className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-                                    />
-                                ) : (
-                                    farmer.mobileNumber
-                                )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                {isEditing ? (
-                                    <select
-                                        value={editedFarmerData.status || ''}
-                                        onChange={e => setEditedFarmerData(d => ({ ...d, status: e.target.value as FarmerStatus }))}
-                                        className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-                                    >
-                                        {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                ) : (
-                                    <StatusBadge status={farmer.status as FarmerStatus} />
-                                )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {new Date(farmer.registrationDate).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
-                                {farmer.approvedExtent}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <div className="flex justify-center">
-                                    <span 
-                                        className={`h-3 w-3 rounded-full ${farmer.syncStatus === 'synced' ? 'bg-green-500' : 'bg-yellow-400'}`}
-                                        title={farmer.syncStatus === 'synced' ? 'Synced' : 'Pending Sync'}
-                                    >
-                                        <span className="sr-only">{farmer.syncStatus === 'synced' ? 'Synced' : 'Pending Sync'}</span>
-                                    </span>
-                                </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2">
-                               {isEditing ? (
-                                   <>
-                                       <button onClick={() => handleSaveClick(farmer)} className="text-green-600 hover:text-green-900">Save</button>
-                                       <button onClick={onCancelEditRow} className="text-gray-600 hover:text-gray-900">Cancel</button>
-                                   </>
-                               ) : (
-                                   <>
-                                       {canEdit && <button onClick={() => handleEditClick(farmer)} className="text-indigo-600 hover:text-indigo-900">Edit</button>}
-                                       <button onClick={() => onPrint(farmer)} className="text-green-600 hover:text-green-900">Print</button>
-                                       <button onClick={() => onExportToPdf(farmer)} className="text-blue-600 hover:text-blue-900">PDF</button>
-                                   </>
-                               )}
-                            </td>
+                            </th>
+                            <SortableHeader sortKey="farmerId">Hap ID</SortableHeader>
+                            <SortableHeader sortKey="fullName">Name</SortableHeader>
+                            <SortableHeader sortKey="village">Location</SortableHeader>
+                            <SortableHeader sortKey="mobileNumber">Mobile</SortableHeader>
+                            <SortableHeader sortKey="status">Status</SortableHeader>
+                            <SortableHeader sortKey="registrationDate">Reg. Date</SortableHeader>
+                            <SortableHeader sortKey="approvedExtent" className="text-center">Extent (Ac)</SortableHeader>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
-                    );
-                })}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                    {farmers.map(farmer => {
+                        const isEditing = editingRowId === farmer.id;
+                        const isSelected = selectedFarmerIds.includes(farmer.id);
+                        const isNewlyAdded = newlyAddedFarmerId === farmer.id;
+                        
+                        let rowBgClass = '';
+                        if (isNewlyAdded) {
+                            rowBgClass = 'bg-green-200';
+                        } else if (isEditing) {
+                            rowBgClass = 'bg-yellow-50';
+                        } else if (isSelected) {
+                            rowBgClass = 'bg-green-50';
+                        }
+
+                        return (
+                            <tr key={farmer.id} className={`transition-colors duration-1000 ${rowBgClass}`}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                        checked={isSelected}
+                                        onChange={(e) => onSelectionChange(farmer.id, e.target.checked)}
+                                        aria-label={`Select farmer ${farmer.fullName}`}
+                                    />
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {isEditing ? (
+                                        <input 
+                                            type="text"
+                                            value={editedFarmerData.fullName || ''}
+                                            onChange={e => setEditedFarmerData(d => ({ ...d, fullName: e.target.value }))}
+                                            className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
+                                        />
+                                    ) : (
+                                        <div className="flex items-center gap-3">
+                                            <span
+                                                className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${farmer.syncStatus === 'synced' ? 'bg-green-500' : 'bg-yellow-400'}`}
+                                                title={farmer.syncStatus === 'synced' ? 'Synced with server' : 'Pending - Saved locally'}
+                                            >
+                                                <span className="sr-only">{farmer.syncStatus === 'synced' ? 'Synced' : 'Pending Sync'}</span>
+                                            </span>
+                                            <span>{farmer.fullName}</span>
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {isEditing ? (
+                                        <input 
+                                            type="text"
+                                            value={editedFarmerData.mobileNumber || ''}
+                                            onChange={e => setEditedFarmerData(d => ({ ...d, mobileNumber: e.target.value }))}
+                                            className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
+                                        />
+                                    ) : (
+                                        farmer.mobileNumber
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    {isEditing ? (
+                                        <select
+                                            value={editedFarmerData.status || ''}
+                                            onChange={e => setEditedFarmerData(d => ({ ...d, status: e.target.value as FarmerStatus }))}
+                                            className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
+                                        >
+                                            {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                    ) : (
+                                        <StatusBadge status={farmer.status as FarmerStatus} />
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {new Date(farmer.registrationDate).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                    {farmer.approvedExtent}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2">
+                                {isEditing ? (
+                                    <>
+                                        <button onClick={() => handleSaveClick(farmer)} className="text-green-600 hover:text-green-900">Save</button>
+                                        <button onClick={onCancelEditRow} className="text-gray-600 hover:text-gray-900">Cancel</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        {canEdit && <button onClick={() => handleEditClick(farmer)} className="text-indigo-600 hover:text-indigo-900">Edit</button>}
+                                        <button onClick={() => onPrint(farmer)} className="text-green-600 hover:text-green-900">Print</button>
+                                        <button onClick={() => onExportToPdf(farmer)} className="text-blue-600 hover:text-blue-900">PDF</button>
+                                    </>
+                                )}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };
