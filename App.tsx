@@ -14,6 +14,7 @@ const LandingPage = lazy(() => import('./components/LandingPage'));
 const LoginScreen = lazy(() => import('./components/LoginScreen'));
 const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatusModal'));
 const SyncConfirmationModal = lazy(() => import('./components/SyncConfirmationModal'));
+const BulkImportModal = lazy(() => import('./components/BulkImportModal'));
 
 // Type declarations for CDN libraries
 declare const html2canvas: any;
@@ -313,6 +314,7 @@ const App: React.FC = () => {
   const [syncLoading, setSyncLoading] = useState(false);
   const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
   const [showSyncConfirmation, setShowSyncConfirmation] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [syncData, setSyncData] = useState<{ farmersToSync: FarmerModel[], url: string } | null>(null);
   const isOnline = useOnlineStatus();
   const [filters, setFilters] = useState<Filters>({
@@ -322,7 +324,6 @@ const App: React.FC = () => {
     village: '',
     status: '',
   });
-  const importFileRef = useRef<HTMLInputElement>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   const database = useDatabase();
@@ -515,6 +516,28 @@ const App: React.FC = () => {
     setShowForm(false);
     setEditingFarmer(null);
   };
+
+  const handleBulkImportSubmit = async (newFarmers: Farmer[]) => {
+    if (newFarmers.length === 0) {
+        alert("No valid farmer records to import.");
+        return;
+    }
+
+    try {
+        await database.write(async () => {
+            const preparedCreations = newFarmers.map(farmer => 
+                farmersCollection.prepareCreate(record => {
+                    Object.assign(record, farmer);
+                    record._raw.id = farmer.id;
+                })
+            );
+            await database.batch(...preparedCreations);
+        });
+    } catch (error) {
+        console.error("Error during bulk import database operation:", error);
+        alert(`Failed to save imported farmers to the database. Error: ${(error as Error).message}`);
+    }
+  };
   
   const handleSelectionChange = (farmerId: string, isSelected: boolean) => {
     setSelectedFarmerIds(prev => {
@@ -609,56 +632,6 @@ const App: React.FC = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     }, [filteredFarmers]);
-
-
-  const handleImportClick = () => {
-    importFileRef.current?.click();
-  };
-
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    // ... file reading logic ...
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // @ts-ignore
-    const XLSX = window.XLSX;
-    if (!XLSX) {
-      alert("Excel library not loaded!");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const json: any[] = XLSX.utils.sheet_to_json(worksheet);
-        
-        // ... validation logic ...
-        
-        database.write(async () => {
-          const newFarmers: Farmer[] = []; // Process json into valid Farmer objects
-          // ... processing logic from original function ...
-          const preparedCreations = newFarmers.map(farmer => 
-            farmersCollection.prepareCreate(record => {
-              Object.assign(record, farmer);
-              record._raw.id = farmer.id;
-            })
-          );
-          await database.batch(preparedCreations);
-          // ... alert logic ...
-        });
-
-      } catch (error) {
-        console.error("Error processing Excel file:", error);
-        alert("Failed to process the Excel file.");
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    if(event.target) event.target.value = '';
-  };
   
   const handleConfirmSync = useCallback(async () => {
     if (!syncData) return;
@@ -742,7 +715,7 @@ const App: React.FC = () => {
         onRegister={handleRegisterClick} 
         onExport={handleExportToExcel}
         onExportCsv={handleExportToCsv}
-        onImport={handleImportClick}
+        onImport={() => setShowImportModal(true)}
         onSync={handleOpenSyncConfirmation}
         onDeleteSelected={handleDeleteSelected}
         onBatchUpdate={() => setShowBatchUpdateModal(true)}
@@ -792,9 +765,14 @@ const App: React.FC = () => {
                 }}
             />
         )}
+        {showImportModal && (
+          <BulkImportModal
+              onClose={() => setShowImportModal(false)}
+              onSubmit={handleBulkImportSubmit}
+              existingFarmers={allFarmers}
+          />
+        )}
       </Suspense>
-      
-      <input type="file" ref={importFileRef} onChange={handleFileImport} style={{ display: 'none' }} accept=".xlsx, .xls" />
 
       <Suspense fallback={null}>
         {pdfExportFarmer && (

@@ -47,19 +47,21 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [mandals, setMandals] = useState<Mandal[]>([]);
   const [villages, setVillages] = useState<Village[]>([]);
-  const [localSearchQuery, setLocalSearchQuery] = useState('');
   
-  // Debounce search query to improve performance by delaying filter updates.
-  const debouncedSearchQuery = useDebounce(localSearchQuery, 500);
+  const debouncedSearchQuery = useDebounce(filters.searchQuery, 500);
 
+  // This single effect handles updating the parent component.
+  // It uses the debounced search query but immediate values for other filters.
   useEffect(() => {
-    onFilterChange(filters);
-  }, [filters, onFilterChange]);
-  
-  // Update the main filter state only when the debounced search query changes.
-  useEffect(() => {
-    setFilters(prev => ({ ...prev, searchQuery: debouncedSearchQuery }));
-  }, [debouncedSearchQuery]);
+    const newFiltersForParent = {
+      district: filters.district,
+      mandal: filters.mandal,
+      village: filters.village,
+      status: filters.status,
+      searchQuery: debouncedSearchQuery,
+    };
+    onFilterChange(newFiltersForParent);
+  }, [debouncedSearchQuery, filters.district, filters.mandal, filters.village, filters.status, onFilterChange]);
 
   // Effect to update mandals when district changes
   useEffect(() => {
@@ -82,13 +84,15 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     }
   }, [filters.district, filters.mandal]);
   
-  // Generic handler for simple filter changes that don't affect other dropdowns
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters(prev => ({ ...prev, searchQuery: e.target.value }));
+  };
+
   const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
   };
   
-  // Specific handler for district change to manage dependent dropdowns
   const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newDistrict = e.target.value;
     setFilters(prev => ({
@@ -99,7 +103,6 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     }));
   };
 
-  // Specific handler for mandal change to manage dependent dropdowns
   const handleMandalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newMandal = e.target.value;
       setFilters(prev => ({
@@ -111,7 +114,6 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
 
   const clearFilters = () => {
     setFilters(initialFilters);
-    setLocalSearchQuery('');
   };
 
   const inputClass = "w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";
@@ -126,8 +128,8 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                     type="text"
                     id="searchQuery"
                     name="searchQuery"
-                    value={localSearchQuery}
-                    onChange={(e) => setLocalSearchQuery(e.target.value)}
+                    value={filters.searchQuery}
+                    onChange={handleSearchChange}
                     placeholder="e.g. John Doe, H010124001, 987..."
                     className={inputClass}
                     title="Search by farmer's name, unique ID, or mobile number."
