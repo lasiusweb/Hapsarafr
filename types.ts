@@ -1,4 +1,3 @@
-
 export enum PlantationMethod {
   Square = 'Square',
   Triangle = 'Triangle',
@@ -93,7 +92,7 @@ export interface Farmer {
   village: string;
 
   // Sync status
-  syncStatus: 'synced' | 'pending';
+  syncStatus: 'synced' | 'pending' | 'pending_delete';
 }
 
 export interface Village {

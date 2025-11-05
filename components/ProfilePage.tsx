@@ -5,7 +5,7 @@ import AvatarSelectionModal from './AvatarSelectionModal';
 interface ProfilePageProps {
     currentUser: User;
     groups: Group[];
-    onSave: (updatedUser: User) => void;
+    onSave: (updatedUser: User) => Promise<void>;
     onBack: () => void;
 }
 
@@ -16,8 +16,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, 
     
     const userGroup = groups.find(g => g.id === currentUser.groupId);
 
-    const handleSave = () => {
-        onSave({
+    const handleSave = async () => {
+        await onSave({
             ...currentUser,
             name,
             avatar,

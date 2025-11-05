@@ -59,6 +59,8 @@ export class FarmerModel extends Model {
   update!: (recordUpdater?: (record: this) => void | Promise<void>) => Promise<void>;
   prepareUpdate!: (recordUpdater?: (record: this) => void) => this;
   prepareDestroyPermanently!: () => this;
+  destroyPermanently!: () => Promise<void>;
+
 
   @field('fullName') fullName!: string;
   @field('fatherHusbandName') fatherHusbandName!: string;
@@ -89,7 +91,7 @@ export class FarmerModel extends Model {
   @field('district') district!: string;
   @field('mandal') mandal!: string;
   @field('village') village!: string;
-  @field('syncStatus') syncStatus!: 'synced' | 'pending';
+  @field('syncStatus') syncStatus!: 'synced' | 'pending' | 'pending_delete';
 }
 
 // 3. Create the Database Adapter

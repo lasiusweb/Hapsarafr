@@ -7,11 +7,11 @@ interface AdminPageProps {
     users: User[];
     groups: Group[];
     currentUser: User;
-    onSaveUsers: (updatedUsers: User[]) => void;
-    onSaveGroups: (updatedGroups: Group[]) => void;
+    onSaveUsers: (updatedUsers: User[]) => Promise<void>;
+    onSaveGroups: (updatedGroups: Group[]) => Promise<void>;
     onBack: () => void;
     invitations: Invitation[];
-    onInviteUser: (email: string, groupId: string) => string;
+    onInviteUser: (email: string, groupId: string) => Promise<string>;
 }
 
 const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, invitations, onInviteUser }) => {
@@ -33,9 +33,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
         setEditedUsers(prevUsers => prevUsers.map(u => u.id === userId ? { ...u, groupId: newGroupId } : u));
     };
 
-    const handleSaveChanges = () => {
-        onSaveUsers(editedUsers);
-        onSaveGroups(editedGroups);
+    const handleSaveChanges = async () => {
+        await Promise.all([
+            onSaveUsers(editedUsers),
+            onSaveGroups(editedGroups)
+        ]);
         alert("Changes saved successfully!");
     };
     
@@ -77,15 +79,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
         }
     };
     
-    const handleInviteSubmit = (e: React.FormEvent) => {
+    const handleInviteSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inviteEmail || !inviteGroup) {
             alert("Please provide an email and select a group.");
             return;
         }
-        const code = onInviteUser(inviteEmail, inviteGroup);
-        setGeneratedCode(code);
-        setInviteEmail('');
+        const code = await onInviteUser(inviteEmail, inviteGroup);
+        if (code) {
+            setGeneratedCode(code);
+            setInviteEmail('');
+        }
     };
 
     const permissionCategories = useMemo(() => {
@@ -233,7 +237,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                                             <div key={category}>
                                                                 <p className="font-semibold text-gray-600 text-sm mb-2">{category}</p>
                                                                 <div className="space-y-2 pl-2">
-                                                                {/* FIX: The error "Property 'map' does not exist on type 'unknown'" is likely due to the TypeScript compiler having trouble inferring the type of `perms` from `Object.entries`. Explicitly casting `perms` to the expected array type resolves this issue. */}
                                                                 {(perms as any[]).map(p => (
                                                                     <label key={p.id} className="flex items-center">
                                                                         <input

@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 // Supabase client is passed as a prop, using 'any' as it's from a CDN.
 interface SupabaseLoginProps {
   supabase: any; 
+  onAcceptInvitationClick: () => void;
 }
 
-const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase }) => {
+const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase, onAcceptInvitationClick }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -60,7 +61,7 @@ const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase }) => {
                 <div className="text-center mb-8">
                     <div className="flex justify-center items-center gap-3 mb-2">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-                           <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
+                           <path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 00-1.09.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/>
                         </svg>
                         <h1 className="text-3xl font-bold text-gray-800">Hapsara</h1>
                     </div>
@@ -90,9 +91,18 @@ const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase }) => {
                     </button>
                 </form>
                  <div className="text-center mt-4">
-                    <button onClick={() => setIsSignUp(!isSignUp)} className="text-sm text-gray-600 hover:underline">
-                        {isSignUp ? 'Already have an account? Log In' : "Don't have an account? Sign Up"}
-                    </button>
+                    <p className="text-sm text-gray-500">
+                        {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                        <button onClick={() => setIsSignUp(!isSignUp)} className="font-semibold text-green-600 hover:underline">
+                           {isSignUp ? 'Log In' : "Sign Up"}
+                        </button>
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                        Have an invitation?{' '}
+                         <button onClick={onAcceptInvitationClick} className="font-semibold text-green-600 hover:underline">
+                           Accept it here
+                        </button>
+                    </p>
                 </div>
             </div>
              <footer className="mt-12 text-sm text-gray-500">
