@@ -6,6 +6,7 @@ import FilterBar, { Filters } from './components/FilterBar';
 // Lazily import components to enable code-splitting
 const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
 const PrintView = lazy(() => import('./components/PrintView'));
+const LandingPage = lazy(() => import('./components/LandingPage'));
 
 
 // Type declarations for CDN libraries
@@ -57,6 +58,7 @@ const useOnlineStatus = () => {
 const Header: React.FC<{
   onRegister: () => void;
   onExport: () => void;
+  onExportCsv: () => void;
   onImport: () => void;
   onSync: () => void;
   onDeleteSelected: () => void;
@@ -64,7 +66,7 @@ const Header: React.FC<{
   selectedCount: number;
   isOnline: boolean;
   pendingSyncCount: number;
-}> = ({ onRegister, onExport, onImport, onSync, onDeleteSelected, syncLoading, selectedCount, isOnline, pendingSyncCount }) => (
+}> = ({ onRegister, onExport, onExportCsv, onImport, onSync, onDeleteSelected, syncLoading, selectedCount, isOnline, pendingSyncCount }) => (
   <header className="bg-white shadow-md p-4 flex justify-between items-center">
     <div className="flex items-center gap-4">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
@@ -99,6 +101,12 @@ const Header: React.FC<{
         title={!isOnline ? "Syncing is disabled while offline" : (selectedCount === 0 ? "Select farmers to sync" : "Sync selected farmers to Google Sheets")}
       >
         {syncLoading ? 'Syncing...' : `Sync Selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+      </button>
+      <button onClick={onExportCsv} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition font-semibold flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" />
+        </svg>
+        Export to CSV
       </button>
       <button onClick={onExport} className="px-4 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 transition font-semibold flex items-center gap-2">
         Export to Excel
@@ -232,6 +240,7 @@ const ModalLoader: React.FC = () => (
 );
 
 const App: React.FC = () => {
+  const [isAppLaunched, setIsAppLaunched] = useState(false);
   const [farmers, setFarmers] = useLocalStorage<Farmer[]>('farmers', []);
   const [showForm, setShowForm] = useState(false);
   const [editingFarmer, setEditingFarmer] = useState<Farmer | null>(null);
@@ -438,6 +447,76 @@ const App: React.FC = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Farmers");
     XLSX.writeFile(workbook, "HapsaraFarmers.xlsx");
   }, [farmers, filteredFarmers]);
+
+    const handleExportToCsv = useCallback(() => {
+        const dataToExport = filteredFarmers;
+        if (dataToExport.length === 0) {
+            alert("No filtered data to export to CSV.");
+            return;
+        }
+
+        const getGeoName = (type: 'district' | 'mandal' | 'village', farmer: Farmer) => {
+            try {
+                if (type === 'district') return GEO_DATA.find(d => d.code === farmer.district)?.name || farmer.district;
+                const district = GEO_DATA.find(d => d.code === farmer.district);
+                if (type === 'mandal') return district?.mandals.find(m => m.code === farmer.mandal)?.name || farmer.mandal;
+                const mandal = district?.mandals.find(m => m.code === farmer.mandal);
+                if (type === 'village') return mandal?.villages.find(v => v.code === farmer.village)?.name || farmer.village;
+            } catch (e) {
+                return 'N/A';
+            }
+        };
+
+        const headers = [
+            'Farmer ID', 'Application ID', 'Full Name', 'Father/Husband Name', 'Mobile Number', 'Aadhaar Number',
+            'Gender', 'District', 'Mandal', 'Village', 'Address', 'Status', 'Registration Date',
+            'Applied Extent (Acres)', 'Approved Extent (Acres)', 'Number of Plants', 'Plantation Date',
+            'Synced to Sheets'
+        ];
+
+        const escapeCsvCell = (cellData: any): string => {
+            const stringData = String(cellData ?? '');
+            if (stringData.includes(',') || stringData.includes('"') || stringData.includes('\n')) {
+                return `"${stringData.replace(/"/g, '""')}"`;
+            }
+            return stringData;
+        };
+
+        const csvRows = dataToExport.map(farmer => [
+            farmer.farmerId,
+            farmer.applicationId,
+            farmer.fullName,
+            farmer.fatherHusbandName,
+            farmer.mobileNumber,
+            `'${farmer.aadhaarNumber}`,
+            farmer.gender,
+            getGeoName('district', farmer),
+            getGeoName('mandal', farmer),
+            getGeoName('village', farmer),
+            farmer.address,
+            farmer.status,
+            farmer.registrationDate,
+            farmer.appliedExtent,
+            farmer.approvedExtent,
+            farmer.numberOfPlants,
+            farmer.plantationDate,
+            farmer.syncedToSheets ? 'Yes' : 'No'
+        ].map(escapeCsvCell).join(','));
+
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "HapsaraFarmers_Filtered.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, [filteredFarmers]);
+
 
   const handleImportClick = () => {
     importFileRef.current?.click();
@@ -666,12 +745,21 @@ const App: React.FC = () => {
     }
 
   }, [webhookUrl, setWebhookUrl, farmers, setFarmers, selectedFarmerIds, isOnline]);
+  
+  if (!isAppLaunched) {
+      return (
+          <Suspense fallback={<div className="min-h-screen bg-gray-900" />}>
+              <LandingPage onLaunch={() => setIsAppLaunched(true)} />
+          </Suspense>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header 
         onRegister={handleRegisterClick} 
         onExport={handleExportToExcel}
+        onExportCsv={handleExportToCsv}
         onImport={handleImportClick}
         onSync={handleSyncToGoogleSheets}
         onDeleteSelected={handleDeleteSelected}

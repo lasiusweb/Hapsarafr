@@ -81,24 +81,32 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
       setVillages([]);
     }
   }, [filters.district, filters.mandal]);
-
-  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  
+  // Generic handler for simple filter changes that don't affect other dropdowns
+  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
   };
   
-  const handleGeoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFilters(prev => {
-        const newFilters = {...prev, [name]: value};
-        if (name === 'district') {
-            newFilters.mandal = '';
-            newFilters.village = '';
-        } else if (name === 'mandal') {
-            newFilters.village = '';
-        }
-        return newFilters;
-    });
+  // Specific handler for district change to manage dependent dropdowns
+  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newDistrict = e.target.value;
+    setFilters(prev => ({
+        ...prev,
+        district: newDistrict,
+        mandal: '', // Reset mandal
+        village: '', // Reset village
+    }));
+  };
+
+  // Specific handler for mandal change to manage dependent dropdowns
+  const handleMandalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newMandal = e.target.value;
+      setFilters(prev => ({
+          ...prev,
+          mandal: newMandal,
+          village: '', // Reset village
+      }));
   };
 
   const clearFilters = () => {
@@ -126,28 +134,28 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
             </div>
             <div>
                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select id="status" name="status" value={filters.status} onChange={handleSelectChange} className={inputClass} title="Filter farmers by their current registration status.">
+                <select id="status" name="status" value={filters.status} onChange={handleFilterChange} className={inputClass} title="Filter farmers by their current registration status.">
                     <option value="">All Statuses</option>
                     {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
             </div>
              <div>
                 <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
-                <select id="district" name="district" value={filters.district} onChange={handleGeoChange} className={inputClass} title="Filter farmers by their district.">
+                <select id="district" name="district" value={filters.district} onChange={handleDistrictChange} className={inputClass} title="Filter farmers by their district.">
                     <option value="">All Districts</option>
                     {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
                 </select>
             </div>
             <div>
                 <label htmlFor="mandal" className="block text-sm font-medium text-gray-700 mb-1">Mandal</label>
-                <select id="mandal" name="mandal" value={filters.mandal} onChange={handleGeoChange} className={inputClass} disabled={!filters.district} title="Filter farmers by their mandal. A district must be selected first.">
+                <select id="mandal" name="mandal" value={filters.mandal} onChange={handleMandalChange} className={inputClass} disabled={!filters.district} title="Filter farmers by their mandal. A district must be selected first.">
                     <option value="">All Mandals</option>
                     {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
                 </select>
             </div>
             <div>
                 <label htmlFor="village" className="block text-sm font-medium text-gray-700 mb-1">Village</label>
-                <select id="village" name="village" value={filters.village} onChange={handleGeoChange} className={inputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
+                <select id="village" name="village" value={filters.village} onChange={handleFilterChange} className={inputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
                     <option value="">All Villages</option>
                     {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
                 </select>

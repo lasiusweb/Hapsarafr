@@ -157,8 +157,32 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             newErrors.numberOfPlants = `Number of plants should be approx. ${Math.round(expectedPlants)} (57 per acre).`;
         }
 
-        if (formData.plantationDate && new Date(formData.plantationDate) < new Date(formData.registrationDate)) {
-             newErrors.plantationDate = "Plantation date cannot be before registration date.";
+        // Date Validations
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize for date-only comparison
+
+        let registrationDateObj: Date | null = null;
+        if (!formData.registrationDate) {
+            newErrors.registrationDate = "Registration date is required.";
+        } else {
+            registrationDateObj = new Date(formData.registrationDate);
+            if (isNaN(registrationDateObj.getTime())) {
+                newErrors.registrationDate = "Invalid registration date format.";
+                registrationDateObj = null; // Invalidate for later checks
+            } else if (registrationDateObj > today) {
+                newErrors.registrationDate = "Registration date cannot be in the future.";
+            }
+        }
+
+        if (formData.plantationDate) {
+            const plantationDateObj = new Date(formData.plantationDate);
+            if (isNaN(plantationDateObj.getTime())) {
+                newErrors.plantationDate = "Invalid plantation date format.";
+            } else if (plantationDateObj > today) {
+                newErrors.plantationDate = "Plantation date cannot be in the future.";
+            } else if (registrationDateObj && plantationDateObj < registrationDateObj) {
+                newErrors.plantationDate = "Plantation date cannot be before registration date.";
+            }
         }
         
         if (formData.numberOfPlants > 0 && ((Number(formData.mlrdPlants) || 0) + (Number(formData.fullCostPlants) || 0) > formData.numberOfPlants)) {
@@ -444,6 +468,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <FormLabel>Registration Date</FormLabel>
                                 <FormField>
                                     <input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={inputClass} disabled={!!initialData} />
+                                    <InputError message={errors.registrationDate} />
                                 </FormField>
                             </FormRow>
                         </section>
