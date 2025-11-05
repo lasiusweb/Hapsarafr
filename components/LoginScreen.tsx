@@ -1,12 +1,12 @@
 import React from 'react';
 import { User } from '../types';
-import { USERS } from '../data/userData';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
+  users: User[];
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
       <div className="text-center mb-8">
@@ -21,7 +21,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       </div>
 
       <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-        {USERS.map((user) => (
+        {users.map((user) => (
           <div
             key={user.id}
             onClick={() => onLogin(user)}

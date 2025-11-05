@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType, User, UserRole } from './types';
 import { GEO_DATA } from './data/geoData';
+import { USERS } from './data/userData';
 import FilterBar, { Filters } from './components/FilterBar';
 // FIX: Import FarmerList component to resolve 'Cannot find name' error.
 import FarmerList from './components/FarmerList';
@@ -12,12 +13,12 @@ import { FarmerModel } from './db';
 // Lazily import components to enable code-splitting
 const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
 const PrintView = lazy(() => import('./components/PrintView'));
-const RawDataView = lazy(() => import('./components/RawDataView'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const LoginScreen = lazy(() => import('./components/LoginScreen'));
 const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatusModal'));
 const SyncConfirmationModal = lazy(() => import('./components/SyncConfirmationModal'));
 const BulkImportModal = lazy(() => import('./components/BulkImportModal'));
+const ProfilePage = lazy(() => import('./components/ProfilePage'));
 
 // Type declarations for CDN libraries
 declare const html2canvas: any;
@@ -83,7 +84,7 @@ const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
 const useQueryCount = (query: Query<any>): number => {
     const [count, setCount] = useState(0);
     useEffect(() => {
-        const subscription = query.observeCount().subscribe(setCount);
+        const subscription = query.observe().subscribe(setCount);
         return () => subscription.unsubscribe();
     }, [query]);
     return count;
@@ -92,11 +93,11 @@ const useQueryCount = (query: Query<any>): number => {
 const Header: React.FC<{
   currentUser: User | null;
   onLogout: () => void;
+  onProfileClick: () => void;
   onRegister: () => void;
   onExport: () => void;
   onExportCsv: () => void;
   onImport: () => void;
-  onShowRawData: () => void;
   onSync: () => void;
   onDeleteSelected: () => void;
   onBatchUpdate: () => void;
@@ -104,7 +105,7 @@ const Header: React.FC<{
   selectedCount: number;
   isOnline: boolean;
   pendingSyncCount: number;
-}> = ({ currentUser, onLogout, onRegister, onExport, onExportCsv, onImport, onShowRawData, onSync, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount }) => {
+}> = ({ currentUser, onLogout, onProfileClick, onRegister, onExport, onExportCsv, onImport, onSync, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount }) => {
   const canRegister = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
   const canImportExport = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
   const canSync = currentUser?.role === UserRole.Admin || currentUser?.role === UserRole.DataEntry;
@@ -131,10 +132,10 @@ const Header: React.FC<{
       </div>
       <div className="flex items-center gap-4">
         {currentUser && (
-          <div className="text-right border-r pr-4">
+          <button onClick={onProfileClick} className="text-right border-r pr-4 hover:bg-gray-100 rounded-md p-2 transition">
             <p className="font-semibold text-gray-800">{currentUser.name}</p>
             <p className="text-xs text-gray-500">{currentUser.role}</p>
-          </div>
+          </button>
         )}
         <div className="flex gap-2">
           {canDelete && selectedCount > 0 && (
@@ -165,7 +166,6 @@ const Header: React.FC<{
               {syncLoading ? 'Syncing...' : `Sync Selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
             </button>
           )}
-          <button onClick={onShowRawData} className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition font-semibold">Raw Data</button>
           {canImportExport && (
             <>
               <button onClick={onExportCsv} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition font-semibold flex items-center gap-2">
@@ -196,12 +196,13 @@ const Header: React.FC<{
 
 const App: React.FC = () => {
   const [isAppLaunched, setIsAppLaunched] = useState(false);
+  const [users, setUsers] = useLocalStorage<User[]>('users', USERS);
   const [currentUser, setCurrentUser] = useLocalStorage<User | null>('currentUser', null);
+  const [view, setView] = useState<'dashboard' | 'profile'>('dashboard');
   const [showForm, setShowForm] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
   const [pdfExportFarmer, setPdfExportFarmer] = useState<FarmerModel | null>(null);
-  const [showRawData, setShowRawData] = useState(false);
   const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
   const [backendApiUrl, setBackendApiUrl] = useLocalStorage<string>('backendApiUrl', '');
   const [syncLoading, setSyncLoading] = useState(false);
@@ -647,7 +648,17 @@ const App: React.FC = () => {
   }, [backendApiUrl, setBackendApiUrl, database, farmersCollection, selectedFarmerIds, isOnline]);
   
   const handleLogin = (user: User) => setCurrentUser(user);
-  const handleLogout = () => setCurrentUser(null);
+  const handleLogout = () => {
+      setCurrentUser(null);
+      setView('dashboard'); // Reset view on logout
+  };
+  
+  const handleUpdateUser = (updatedUser: User) => {
+      setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
+      setCurrentUser(updatedUser);
+      setView('dashboard');
+      setNotification({ message: 'Profile updated successfully!', type: 'success' });
+  };
 
   if (!isAppLaunched) {
       return (
@@ -660,21 +671,21 @@ const App: React.FC = () => {
   if (!currentUser) {
     return (
       <Suspense fallback={<ModalLoader />}>
-        <LoginScreen onLogin={handleLogin} />
+        <LoginScreen onLogin={handleLogin} users={users} />
       </Suspense>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
+  const renderDashboard = () => (
+    <>
       <Header 
         currentUser={currentUser}
         onLogout={handleLogout}
+        onProfileClick={() => setView('profile')}
         onRegister={handleRegisterClick} 
         onExport={handleExportToExcel}
         onExportCsv={handleExportToCsv}
         onImport={() => setShowImportModal(true)}
-        onShowRawData={() => setShowRawData(true)}
         onSync={handleOpenSyncConfirmation}
         onDeleteSelected={handleDeleteSelected}
         onBatchUpdate={() => setShowBatchUpdateModal(true)}
@@ -683,16 +694,6 @@ const App: React.FC = () => {
         isOnline={isOnline}
         pendingSyncCount={pendingSyncCount}
       />
-      
-      {notification && (
-        <div className={`fixed top-20 right-6 z-[100] px-6 py-4 rounded-lg shadow-lg text-white transition-transform transform-gpu animate-fade-in-down ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-            <div className="flex items-center">
-                <span className="font-semibold">{notification.message}</span>
-                <button onClick={() => setNotification(null)} className="ml-4 font-bold text-xl leading-none">&times;</button>
-            </div>
-        </div>
-      )}
-
       <main className="p-6">
         <FilterBar onFilterChange={setFilters} />
         <FarmerList 
@@ -713,6 +714,29 @@ const App: React.FC = () => {
             onHighlightComplete={() => setNewlyAddedFarmerId(null)}
         />
       </main>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {notification && (
+        <div className={`fixed top-5 right-6 z-[100] px-6 py-4 rounded-lg shadow-lg text-white transition-transform transform-gpu animate-fade-in-down ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+            <div className="flex items-center">
+                <span className="font-semibold">{notification.message}</span>
+                <button onClick={() => setNotification(null)} className="ml-4 font-bold text-xl leading-none">&times;</button>
+            </div>
+        </div>
+      )}
+
+      {view === 'dashboard' ? renderDashboard() : (
+        <Suspense fallback={<ModalLoader />}>
+            <ProfilePage 
+                currentUser={currentUser}
+                onSave={handleUpdateUser}
+                onBack={() => setView('dashboard')}
+            />
+        </Suspense>
+      )}
       
       <Suspense fallback={<ModalLoader />}>
         {showForm && (
@@ -721,9 +745,6 @@ const App: React.FC = () => {
               onCancel={() => { setShowForm(false); }} 
               existingFarmers={allFarmers}
           />
-        )}
-        {showRawData && (
-          <RawDataView farmers={allFarmers} onClose={() => setShowRawData(false)} />
         )}
         {showBatchUpdateModal && (
             <BatchUpdateStatusModal
