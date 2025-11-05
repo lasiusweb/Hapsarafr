@@ -233,7 +233,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         }
     };
     
-    const inputClass = "w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";
+    const inputClass = "w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";
+    const selectInputClass = `${inputClass} appearance-none pr-10`;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -276,11 +277,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                              <FormRow>
                                 <FormLabel required>Gender</FormLabel>
                                 <FormField>
-                                    <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
-                                        <option value="Male">Male</option>
-                                        <option value="Female">Female</option>
-                                        <option value="Other">Other</option>
-                                    </select>
+                                    <div className="relative">
+                                        <select name="gender" value={formData.gender} onChange={handleChange} className={selectInputClass}>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    </div>
                                 </FormField>
                             </FormRow>
                              <FormRow>
@@ -338,30 +344,45 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                              <FormRow>
                                  <FormLabel required>District</FormLabel>
                                  <FormField>
-                                     <select name="district" value={formData.district} onChange={handleGeoChange} className={inputClass} disabled={!!initialData}>
-                                         <option value="">-- Select District --</option>
-                                         {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
-                                     </select>
+                                     <div className="relative">
+                                         <select name="district" value={formData.district} onChange={handleGeoChange} className={selectInputClass} disabled={!!initialData}>
+                                             <option value="">-- Select District --</option>
+                                             {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+                                         </select>
+                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                         </div>
+                                     </div>
                                      <InputError message={errors.district}/>
                                  </FormField>
                              </FormRow>
                              <FormRow>
                                  <FormLabel required>Mandal</FormLabel>
                                  <FormField>
-                                     <select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={inputClass} disabled={!formData.district || !!initialData}>
-                                         <option value="">-- Select Mandal --</option>
-                                         {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
-                                     </select>
+                                     <div className="relative">
+                                         <select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={selectInputClass} disabled={!formData.district || !!initialData}>
+                                             <option value="">-- Select Mandal --</option>
+                                             {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                                         </select>
+                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                         </div>
+                                     </div>
                                       <InputError message={errors.mandal}/>
                                  </FormField>
                              </FormRow>
                              <FormRow>
                                  <FormLabel required>Village</FormLabel>
                                  <FormField>
-                                     <select name="village" value={formData.village} onChange={handleChange} className={inputClass} disabled={!formData.mandal || !!initialData}>
-                                         <option value="">-- Select Village --</option>
-                                         {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
-                                     </select>
+                                     <div className="relative">
+                                         <select name="village" value={formData.village} onChange={handleChange} className={selectInputClass} disabled={!formData.mandal || !!initialData}>
+                                             <option value="">-- Select Village --</option>
+                                             {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
+                                         </select>
+                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                         </div>
+                                     </div>
                                       <InputError message={errors.village}/>
                                  </FormField>
                              </FormRow>
@@ -418,17 +439,27 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                              <FormRow>
                                 <FormLabel>Method of Plantation</FormLabel>
                                 <FormField>
-                                    <select name="methodOfPlantation" value={formData.methodOfPlantation} onChange={handleChange} className={inputClass}>
-                                        {Object.values(PlantationMethod).map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
+                                    <div className="relative">
+                                        <select name="methodOfPlantation" value={formData.methodOfPlantation} onChange={handleChange} className={selectInputClass}>
+                                            {Object.values(PlantationMethod).map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    </div>
                                 </FormField>
                             </FormRow>
                              <FormRow>
                                 <FormLabel>Plant Type</FormLabel>
                                 <FormField>
-                                    <select name="plantType" value={formData.plantType} onChange={handleChange} className={inputClass}>
-                                        {Object.values(PlantType).map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
+                                    <div className="relative">
+                                        <select name="plantType" value={formData.plantType} onChange={handleChange} className={selectInputClass}>
+                                            {Object.values(PlantType).map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    </div>
                                 </FormField>
                             </FormRow>
                              <FormRow>
@@ -459,9 +490,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                             <FormRow>
                                 <FormLabel>Current Status</FormLabel>
                                 <FormField>
-                                    <select name="status" value={formData.status} onChange={handleChange} className={inputClass}>
-                                        {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
+                                    <div className="relative">
+                                        <select name="status" value={formData.status} onChange={handleChange} className={selectInputClass}>
+                                            {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    </div>
                                 </FormField>
                             </FormRow>
                             <FormRow>

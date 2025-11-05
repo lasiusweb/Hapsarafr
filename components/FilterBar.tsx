@@ -114,7 +114,8 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
     setLocalSearchQuery('');
   };
 
-  const inputClass = "w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition bg-white";
+  const inputClass = "w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";
+  const selectInputClass = `${inputClass} appearance-none pr-10`;
 
   return (
     <div className="bg-white shadow-md rounded-lg p-4 mb-6">
@@ -134,31 +135,51 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
             </div>
             <div>
                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select id="status" name="status" value={filters.status} onChange={handleFilterChange} className={inputClass} title="Filter farmers by their current registration status.">
-                    <option value="">All Statuses</option>
-                    {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <div className="relative">
+                    <select id="status" name="status" value={filters.status} onChange={handleFilterChange} className={selectInputClass} title="Filter farmers by their current registration status.">
+                        <option value="">All Statuses</option>
+                        {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
             </div>
              <div>
                 <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
-                <select id="district" name="district" value={filters.district} onChange={handleDistrictChange} className={inputClass} title="Filter farmers by their district.">
-                    <option value="">All Districts</option>
-                    {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
-                </select>
+                 <div className="relative">
+                    <select id="district" name="district" value={filters.district} onChange={handleDistrictChange} className={selectInputClass} title="Filter farmers by their district.">
+                        <option value="">All Districts</option>
+                        {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
             </div>
             <div>
                 <label htmlFor="mandal" className="block text-sm font-medium text-gray-700 mb-1">Mandal</label>
-                <select id="mandal" name="mandal" value={filters.mandal} onChange={handleMandalChange} className={inputClass} disabled={!filters.district} title="Filter farmers by their mandal. A district must be selected first.">
-                    <option value="">All Mandals</option>
-                    {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
-                </select>
+                 <div className="relative">
+                    <select id="mandal" name="mandal" value={filters.mandal} onChange={handleMandalChange} className={selectInputClass} disabled={!filters.district} title="Filter farmers by their mandal. A district must be selected first.">
+                        <option value="">All Mandals</option>
+                        {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
             </div>
             <div>
                 <label htmlFor="village" className="block text-sm font-medium text-gray-700 mb-1">Village</label>
-                <select id="village" name="village" value={filters.village} onChange={handleFilterChange} className={inputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
-                    <option value="">All Villages</option>
-                    {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
-                </select>
+                <div className="relative">
+                    <select id="village" name="village" value={filters.village} onChange={handleFilterChange} className={selectInputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
+                        <option value="">All Villages</option>
+                        {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
             </div>
             <div className="flex items-end">
                 <button onClick={clearFilters} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition font-semibold" title="Reset all search and filter criteria to their default values.">
