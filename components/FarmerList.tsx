@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Farmer, FarmerStatus, User } from '../types';
 import { FarmerModel } from '../db';
@@ -147,6 +146,82 @@ const FarmerList: React.FC<FarmerListProps> = ({
     const totalPages = Math.ceil(totalRecords / rowsPerPage);
     const startRecord = Math.min((currentPage - 1) * rowsPerPage + 1, totalRecords);
     const endRecord = Math.min(currentPage * rowsPerPage, totalRecords);
+    
+    const PaginationControls = () => {
+        const pageNumbers = [];
+        const maxPagesToShow = 7; // Show up to 7 page items (e.g., 1 ... 4 5 6 ... 10)
+        
+        if (totalPages <= maxPagesToShow) {
+            for (let i = 1; i <= totalPages; i++) {
+                pageNumbers.push(i);
+            }
+        } else {
+            pageNumbers.push(1); // Always show first page
+            if (currentPage > 3) {
+                pageNumbers.push('...');
+            }
+            
+            let start = Math.max(2, currentPage - 1);
+            let end = Math.min(totalPages - 1, currentPage + 1);
+
+            if (currentPage <= 3) {
+                start = 2;
+                end = 4;
+            } else if (currentPage >= totalPages - 2) {
+                start = totalPages - 3;
+                end = totalPages - 1;
+            }
+
+            for (let i = start; i <= end; i++) {
+                pageNumbers.push(i);
+            }
+
+            if (currentPage < totalPages - 2) {
+                pageNumbers.push('...');
+            }
+            pageNumbers.push(totalPages); // Always show last page
+        }
+        
+        const pageButtonClass = "px-3 py-1.5 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold";
+        const activePageClass = "bg-green-600 text-white border border-green-600";
+        const inactivePageClass = "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300";
+        const ellipsisClass = "px-2 py-1.5 text-sm text-gray-500";
+
+        return (
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`${pageButtonClass} ${inactivePageClass}`}
+                >
+                    Previous
+                </button>
+                <div className="hidden sm:flex items-center gap-1">
+                    {pageNumbers.map((page, index) =>
+                        typeof page === 'number' ? (
+                            <button
+                                key={`${page}-${index}`}
+                                onClick={() => onPageChange(page)}
+                                className={`${pageButtonClass} ${currentPage === page ? activePageClass : inactivePageClass}`}
+                            >
+                                {page}
+                            </button>
+                        ) : (
+                            <span key={`ellipsis-${index}`} className={ellipsisClass}>...</span>
+                        )
+                    )}
+                </div>
+                <button
+                    onClick={() => onPageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className={`${pageButtonClass} ${inactivePageClass}`}
+                >
+                    Next
+                </button>
+            </div>
+        )
+    }
+
 
     return (
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
@@ -309,7 +384,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
                 </table>
             </div>
             <div className="p-4 border-t flex flex-col md:flex-row justify-between items-center gap-4">
-                <div>
+                <div className="flex-1 text-center md:text-left">
                     <label htmlFor="rowsPerPage" className="text-sm text-gray-600 mr-2">Rows per page:</label>
                     <select
                         id="rowsPerPage"
@@ -324,25 +399,12 @@ const FarmerList: React.FC<FarmerListProps> = ({
                     </select>
                 </div>
 
-                <span className="text-sm text-gray-600">
+                <div className="flex-1 hidden md:block text-center text-sm text-gray-600">
                     Showing {totalRecords > 0 ? startRecord : 0}-{endRecord} of {totalRecords}
-                </span>
+                </div>
 
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => onPageChange(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold"
-                    >
-                        Previous
-                    </button>
-                    <button
-                        onClick={() => onPageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages || totalPages === 0}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold"
-                    >
-                        Next
-                    </button>
+                <div className="flex-1 flex justify-center md:justify-end">
+                    <PaginationControls />
                 </div>
             </div>
         </div>
