@@ -196,6 +196,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
                             <SortableHeader sortKey="fullName">Name</SortableHeader>
                             <SortableHeader sortKey="village">Location</SortableHeader>
                             <SortableHeader sortKey="status">Status</SortableHeader>
+                            <SortableHeader sortKey="registrationDate">Reg. Date</SortableHeader>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -238,7 +239,6 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                         />
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            {/*// FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.*/}
                                             {farmer.syncStatusLocal === 'synced' ? (
                                                 <div title="Synced with server" className="flex-shrink-0">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
@@ -270,6 +270,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                         <StatusBadge status={farmer.status as FarmerStatus} />
                                     )}
                                 </td>
+                                 <td data-label="Reg. Date" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(farmer.registrationDate).toLocaleDateString()}</td>
                                  <td data-label="Created" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     <div>{getUserName(farmer.createdBy)}</div>
                                     <div className="text-xs text-gray-400" title={new Date(farmer.createdAt).toLocaleString()}>{new Date(farmer.createdAt).toLocaleDateString()}</div>
@@ -294,7 +295,6 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                 </td>
                                 {/* Hidden data for responsive view */}
                                 <td data-label="Mobile" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{farmer.mobileNumber}</td>
-                                <td data-label="Reg. Date" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(farmer.registrationDate).toLocaleDateString()}</td>
                                 <td data-label="Extent (Ac)" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center md:text-right">{farmer.approvedExtent}</td>
                             </tr>
                         );

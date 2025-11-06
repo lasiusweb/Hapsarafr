@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import { GEO_DATA } from '../data/geoData';
@@ -188,8 +189,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         methodOfPlantation: PlantationMethod.Square,
                         plantType: PlantType.Imported,
                         plantationDate: '',
-// FIX: Add missing mlrdPlants and fullCostPlants properties to resolve TypeScript error.
-// These fields are not in the import template, so they are initialized to 0.
                         mlrdPlants: 0,
                         fullCostPlants: 0,
                         proposedYear: '2024-25',

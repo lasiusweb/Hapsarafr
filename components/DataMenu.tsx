@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Permission } from '../types';
 
@@ -139,5 +140,4 @@ const DataMenu: React.FC<DataMenuProps> = ({
     );
 };
 
-// FIX: Add missing default export
 export default DataMenu;

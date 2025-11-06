@@ -1,4 +1,4 @@
-// FIX: Add missing SubscriptionTier import to be used in the PLANS constant.
+
 import { SubscriptionTier } from '../types';
 
 export const PRICING_MODEL = {
@@ -15,7 +15,6 @@ export const PRICING_MODEL = {
     ]
 };
 
-// FIX: Define and export the PLANS constant to resolve the import error in SubscriptionPage.tsx.
 export const PLANS = [
   {
     name: 'Free',

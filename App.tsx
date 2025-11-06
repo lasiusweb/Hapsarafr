@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { Farmer, FarmerStatus, User, Group, Permission, Invitation } from './types';
 import { GEO_DATA } from './data/geoData';
@@ -329,7 +330,6 @@ const Header: React.FC<{
   );
 };
 
-// FIX: Add a helper function to convert FarmerModel to a plain Farmer object.
 const modelToPlain = (f: FarmerModel | null): Farmer | null => {
     if (!f) return null;
     return {
@@ -405,10 +405,9 @@ const App: React.FC = () => {
   const database = useDatabase();
   const farmersCollection = database.get<FarmerModel>('farmers');
   
-  const allFarmers = useQuery(farmersCollection.query(Q.where('syncStatus', Q.notEq('pending_delete'))));
-  const pendingSyncCount = useQuery(farmersCollection.query(Q.where('syncStatus', Q.oneOf(['pending', 'pending_delete'])))).length;
+  const allFarmers = useQuery(farmersCollection.query(Q.where('syncStatusLocal', Q.notEq('pending_delete'))));
+  const pendingSyncCount = useQuery(farmersCollection.query(Q.where('syncStatusLocal', Q.oneOf(['pending', 'pending_delete'])))).length;
   
-  // FIX: Create a memoized plain object version of the farmers for components that expect the `Farmer[]` type.
   const allFarmersPlain: Farmer[] = useMemo(() => allFarmers.map(f => modelToPlain(f)!), [allFarmers]);
   
   const currentUserPermissions = useMemo(() => {
@@ -456,8 +455,8 @@ const App: React.FC = () => {
             return;
         }
 
-        const pendingFarmers = await farmersCollection.query(Q.where('syncStatus', 'pending')).fetch();
-        const pendingDeleteFarmers = await farmersCollection.query(Q.where('syncStatus', 'pending_delete')).fetch();
+        const pendingFarmers = await farmersCollection.query(Q.where('syncStatusLocal', 'pending')).fetch();
+        const pendingDeleteFarmers = await farmersCollection.query(Q.where('syncStatusLocal', 'pending_delete')).fetch();
 
         if (pendingFarmers.length === 0 && pendingDeleteFarmers.length === 0) {
             if (isManual) setNotification({ message: 'Everything is up to date.', type: 'success' });
@@ -474,8 +473,8 @@ const App: React.FC = () => {
                 if (error) throw error;
                 await database.write(async () => {
                     const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { 
-// FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-rec.syncStatusLocal = 'synced'; }));
+                        rec.syncStatusLocal = 'synced'; 
+                    }));
                     await database.batch(...updates);
                 });
             }
@@ -518,20 +517,17 @@ rec.syncStatusLocal = 'synced'; }));
                       const remoteFarmerCamel = snakeToCamelCase(remoteFarmer);
                       const localFarmer = existingFarmers.find(f => f.id === remoteFarmerCamel.id);
                       if (localFarmer) {
-                          // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-if (localFarmer.syncStatusLocal === 'synced') {
+                          if (localFarmer.syncStatusLocal === 'synced') {
                              recordsToUpdate.push(
                                 localFarmer.prepareUpdate(record => {
-                                    // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
+                                    Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
                                 })
                             );
                           }
                       } else {
                           recordsToCreate.push(
                               farmersCollection.prepareCreate(record => {
-                                  // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
+                                  Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
                                   record._raw.id = remoteFarmerCamel.id;
                               })
                           );
@@ -576,15 +572,12 @@ Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
                     const existing = await collection.query(Q.where('id', newRecord.id)).fetch();
                     if (existing.length > 0) {
                         farmer = existing[0];
-                        // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-if (farmer.syncStatusLocal === 'synced') {
-                           // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-await farmer.update(rec => Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' }));
+                        if (farmer.syncStatusLocal === 'synced') {
+                           await farmer.update(rec => Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' }));
                         }
                     } else {
                        await collection.create(rec => {
-                           // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
+                           Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
                            rec._raw.id = newRecord.id;
                        });
                     }
@@ -684,7 +677,14 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
   };
   
   const handleLogout = async () => {
-      if (supabase) await supabase.auth.signOut();
+      if (supabase) {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+              setNotification({ message: `Logout failed: ${error.message}`, type: 'error' });
+          } else {
+              setNotification({ message: 'Logged out successfully.', type: 'success' });
+          }
+      }
       setCurrentUser(null);
       handleNavigate('dashboard');
   };
@@ -783,11 +783,6 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
   };
   
     const handleAcceptInvitation = async (code: string, userDetails: { name: string; avatar: string; password: string }) => {
-// FIX: The original code used snake_case (`group_id`, `email_for`) to access properties
-// on the `invitation` object, but the TypeScript type `Invitation` defines these
-// properties in camelCase (`groupId`, `emailFor`). This caused a TypeScript error.
-// The code is corrected to use the camelCase properties as defined in the type,
-// ensuring type safety and preventing runtime errors.
         if (!supabase) return;
         const invitation = invitations.find(inv => inv.id === code);
         if (!invitation) {
@@ -864,8 +859,7 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
     if (!currentUser) return;
     await database.write(async () => {
       await farmerToUpdate.update(record => {
-        // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-Object.assign(record, { ...updatedData, syncStatusLocal: 'pending', updatedBy: currentUser.id });
+        Object.assign(record, { ...updatedData, syncStatusLocal: 'pending', updatedBy: currentUser.id });
       });
     });
     setEditingRowId(null);
@@ -880,8 +874,7 @@ Object.assign(record, { ...updatedData, syncStatusLocal: 'pending', updatedBy: c
       const farmersToDelete = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
       const updates = farmersToDelete.map(farmer =>
         farmer.prepareUpdate(record => {
-          // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-record.syncStatusLocal = 'pending_delete';
+          record.syncStatusLocal = 'pending_delete';
         })
       );
       await database.batch(...updates);
@@ -898,8 +891,7 @@ record.syncStatusLocal = 'pending_delete';
       const updates = farmersToUpdate.map(farmer =>
         farmer.prepareUpdate(record => {
           record.status = newStatus;
-          // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
-record.syncStatusLocal = 'pending';
+          record.syncStatusLocal = 'pending';
           record.updatedBy = currentUser.id;
         })
       );
@@ -1240,7 +1232,6 @@ record.syncStatusLocal = 'pending';
             <RegistrationForm
                 onSubmit={handleRegistration}
                 onCancel={() => setShowForm(false)}
-// FIX: Pass the plain Farmer array instead of FarmerModel array to match component's prop type.
                 existingFarmers={allFarmersPlain}
             />
         </Suspense>
@@ -1266,7 +1257,6 @@ record.syncStatusLocal = 'pending';
 
       {showImportModal && (
           <Suspense fallback={<ModalLoader/>}>
-{/* FIX: Pass the plain Farmer array instead of FarmerModel array to match component's prop type. */}
               <BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allFarmersPlain} />
           </Suspense>
       )}
@@ -1286,10 +1276,8 @@ record.syncStatusLocal = 'pending';
       )}
 
       <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0">
-{/* FIX: Convert FarmerModel to plain Farmer object before passing to PrintView. */}
           {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={modelToPlain(pdfExportFarmer)} users={users} isForPdf={true} /></Suspense>}
       </div>
-{/* FIX: Convert FarmerModel to plain Farmer object before passing to PrintView. */}
       <PrintView farmer={modelToPlain(printingFarmer)} users={users} />
 
       {notification && (
