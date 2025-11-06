@@ -26,6 +26,7 @@ const UsageAnalyticsPage = lazy(() => import('./components/UsageAnalyticsPage'))
 const PrivacyModal = lazy(() => import('./components/PrivacyModal'));
 const HelpModal = lazy(() => import('./components/HelpModal'));
 const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
+const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -250,11 +251,12 @@ const Sidebar: React.FC<{
     onShowPrivacy: () => void;
     onShowHelp: () => void;
     onShowFeedback: () => void;
+    onShowChangelog: () => void;
     printQueueCount: number;
 }> = ({ 
     isOpen, isCollapsed, onToggleCollapse, currentUser, onLogout, onNavigate, currentView, permissions, 
     onImport, onExportExcel, onExportCsv, onViewRawData,
-    onShowPrivacy, onShowHelp, onShowFeedback, printQueueCount
+    onShowPrivacy, onShowHelp, onShowFeedback, onShowChangelog, printQueueCount
 }) => {
     
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -355,6 +357,7 @@ const Sidebar: React.FC<{
                                         <div className="border-t border-gray-600 my-1"></div>
                                         <button onClick={() => { onShowHelp(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Help</button>
                                         <button onClick={() => { onShowFeedback(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Feedback</button>
+                                        <button onClick={() => { onShowChangelog(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">What's New</button>
                                         <button onClick={() => { onShowPrivacy(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Privacy</button>
                                         <div className="border-t border-gray-600 my-1"></div>
                                         <button onClick={() => { onLogout(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-b-md">Logout</button>
@@ -462,6 +465,7 @@ const App: React.FC = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showChangelogModal, setShowChangelogModal] = useState(false);
   
   const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
   const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
@@ -1019,7 +1023,7 @@ const App: React.FC = () => {
         case 'APP':
             return (
                 <div className="flex h-screen bg-gray-100 font-sans">
-                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={currentRoute.view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} printQueueCount={printQueue.length} />
+                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={currentRoute.view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} onShowChangelog={() => setShowChangelogModal(true)} printQueueCount={printQueue.length} />
                     <div className="flex-1 flex flex-col overflow-hidden">
                         <Header onToggleSidebar={() => setIsMobileMenuOpen(m => !m)} currentView={currentRoute.view} onRegister={handleRegisterClick} onSync={() => handleFullSync()} syncLoading={syncLoading} pendingSyncCount={pendingSyncCount} isOnline={isOnline} permissions={currentUserPermissions} />
                         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
@@ -1036,7 +1040,7 @@ const App: React.FC = () => {
   return (
     <>
         {renderContent()}
-        {showForm && ( <Suspense fallback={<ModalLoader/>}> <RegistrationForm onSubmit={handleRegistration} onCancel={() => setShowForm(false)} existingFarmers={allFarmersPlain} /> </Suspense> )}
+        {showForm && ( <Suspense fallback={<ModalLoader/>}> <RegistrationForm mode="create" onSubmit={handleRegistration} onCancel={() => setShowForm(false)} existingFarmers={allFarmersPlain} /> </Suspense> )}
         {showRawDataView && ( <Suspense fallback={<ModalLoader/>}> <RawDataView farmers={allFarmers} onClose={() => setShowRawDataView(false)} /> </Suspense> )}
         {showBatchUpdateModal && ( <Suspense fallback={<ModalLoader/>}> <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleBatchUpdate} onCancel={() => setShowBatchUpdateModal(false)}/> </Suspense> )}
         {showImportModal && ( <Suspense fallback={<ModalLoader/>}> <BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allFarmersPlain} /> </Suspense> )}
@@ -1044,6 +1048,7 @@ const App: React.FC = () => {
         {showPrivacyModal && ( <Suspense fallback={<ModalLoader/>}> <PrivacyModal onClose={() => setShowPrivacyModal(false)} appContent={appContent} /> </Suspense> )}
         {showHelpModal && ( <Suspense fallback={<ModalLoader/>}> <HelpModal onClose={() => setShowHelpModal(false)} appContent={appContent} /> </Suspense> )}
         {showFeedbackModal && ( <Suspense fallback={<ModalLoader/>}> <FeedbackModal onClose={() => setShowFeedbackModal(false)} /> </Suspense> )}
+        {showChangelogModal && ( <Suspense fallback={<ModalLoader/>}><ChangelogModal onClose={() => setShowChangelogModal(false)} /></Suspense> )}
         <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0"> {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={modelToPlain(pdfExportFarmer)} users={users} isForPdf={true} /></Suspense>} </div>
         <PrintView farmer={modelToPlain(printingFarmer)} users={users} />
         {notification && ( 

@@ -8,6 +8,8 @@ interface RegistrationFormProps {
     onSubmit: (farmer: Farmer, photoFile?: File) => Promise<void>;
     onCancel: () => void;
     existingFarmers: Farmer[];
+    mode?: 'create' | 'edit';
+    existingFarmer?: Farmer | null;
 }
 
 const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -122,7 +124,7 @@ const FormField = ({ children }: FormFieldProps) => <div className="md:col-span-
 type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers }) => {
+const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null }) => {
     const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -139,6 +141,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const [showAiReview, setShowAiReview] = useState(false);
     
     const debouncedFormData = useDebounce(formData, 1000); // 1-second delay for auto-save
+
+    useEffect(() => {
+        if (mode === 'edit' && existingFarmer) {
+            const formStateFromFarmer: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = { ...initialFormData, ...existingFarmer };
+            setFormData(formStateFromFarmer);
+            if (existingFarmer.photo) {
+                setPhotoPreview(existingFarmer.photo);
+            }
+        }
+    }, [mode, existingFarmer]);
     
     const handleDismissError = (fieldName: keyof typeof errors) => {
         setErrors(prev => {
@@ -169,6 +181,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
 
     // Check for a saved draft when the component mounts
     useEffect(() => {
+        if (mode === 'edit') return;
         const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
         if (savedDraft) {
             try {
@@ -182,18 +195,18 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 localStorage.removeItem(DRAFT_STORAGE_KEY);
             }
         }
-    }, []);
+    }, [mode]);
 
-    // Effect to auto-save the form data to localStorage
+    // Effect to auto-save the form data to localStorage (only in create mode)
     useEffect(() => {
-        if (showConfirmation || hasDraft) return;
+        if (mode === 'edit' || showConfirmation || hasDraft) return;
         const isInitial = JSON.stringify(debouncedFormData) === JSON.stringify(initialFormData);
         if (!isInitial) {
             localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(debouncedFormData));
         } else {
             localStorage.removeItem(DRAFT_STORAGE_KEY);
         }
-    }, [debouncedFormData, showConfirmation, hasDraft]);
+    }, [debouncedFormData, showConfirmation, hasDraft, mode]);
     
     const districtsForSelect = useMemo(() => Object.entries(geoMap).map(([code, { name }]) => ({ code, name })), []);
 
@@ -389,25 +402,34 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (validate()) {
-            const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
-            const farmersInVillage = existingFarmers.filter(f => f.village === formData.village && f.mandal === formData.mandal && f.district === formData.district);
-            const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
-            const farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
-            const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
-            const applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
-            const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
             const now = new Date().toISOString();
+            let farmerData: Farmer;
 
-            const farmerData: Farmer = {
-                ...formData,
-                id: farmerId,
-                farmerId,
-                applicationId,
-                asoId,
-                createdAt: now,
-                updatedAt: now,
-            };
+            if (mode === 'create') {
+                const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
+                const farmersInVillage = existingFarmers.filter(f => f.village === formData.village && f.mandal === formData.mandal && f.district === formData.district);
+                const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
+                const farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
+                const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
+                const applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
+                const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
 
+                farmerData = {
+                    ...formData,
+                    id: farmerId,
+                    farmerId,
+                    applicationId,
+                    asoId,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+            } else { // mode === 'edit'
+                farmerData = {
+                    ...existingFarmer!,
+                    ...formData,
+                    updatedAt: now,
+                };
+            }
             setPreparedFarmerData(farmerData);
             setShowConfirmation(true);
         }
@@ -418,7 +440,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             setIsSubmitting(true);
             try {
                 await onSubmit(preparedFarmerData, photoFile);
-                localStorage.removeItem(DRAFT_STORAGE_KEY);
+                if (mode === 'create') {
+                    localStorage.removeItem(DRAFT_STORAGE_KEY);
+                }
                 setShowConfirmation(false);
                 setShowSuccess(true);
             } catch (error) {
@@ -440,7 +464,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     };
     
     const handleConfirmCancel = () => {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        if (mode === 'create') {
+            localStorage.removeItem(DRAFT_STORAGE_KEY);
+        }
         setShowCancelConfirmation(false);
         onCancel();
     };
@@ -489,9 +515,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                  <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-full overflow-y-auto">
                     <form onSubmit={handleSubmit} noValidate>
                         <div className="p-6">
-                            <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">New Farmer Registration</h2>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">{mode === 'create' ? 'New Farmer Registration' : 'Edit Farmer Details'}</h2>
                             
-                            {hasDraft && (
+                            {hasDraft && mode === 'create' && (
                                 <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-r-lg" role="alert">
                                     <p className="font-bold">Unsaved Draft Found</p>
                                     <p>Would you like to continue where you left off?</p>
@@ -506,7 +532,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <h3 className="text-lg font-semibold text-green-700 mb-4">1. Personal Details</h3>
                                 <FormRow><FormLabel required>Full Name</FormLabel><FormField><input type="text" name="fullName" value={formData.fullName} onChange={handleChange} className={getInputClass('fullName')} /><InputError message={errors.fullName} onDismiss={() => handleDismissError('fullName')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>Father/Husband Name</FormLabel><FormField><input type="text" name="fatherHusbandName" value={formData.fatherHusbandName} onChange={handleChange} className={getInputClass('fatherHusbandName')} /><InputError message={errors.fatherHusbandName} onDismiss={() => handleDismissError('fatherHusbandName')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Aadhaar Number</FormLabel><FormField><input type="text" name="aadhaarNumber" value={formData.aadhaarNumber} onChange={handleChange} className={getInputClass('aadhaarNumber')} maxLength={12} /><InputError message={errors.aadhaarNumber} onDismiss={() => handleDismissError('aadhaarNumber')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Aadhaar Number</FormLabel><FormField><input type="text" name="aadhaarNumber" value={formData.aadhaarNumber} onChange={handleChange} className={getInputClass('aadhaarNumber')} maxLength={12} disabled={mode === 'edit'} title={mode === 'edit' ? 'Aadhaar number cannot be changed.' : ''} /><InputError message={errors.aadhaarNumber} onDismiss={() => handleDismissError('aadhaarNumber')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>Mobile Number</FormLabel><FormField><input type="text" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} className={getInputClass('mobileNumber')} maxLength={10} /><InputError message={errors.mobileNumber} onDismiss={() => handleDismissError('mobileNumber')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>Gender</FormLabel><FormField><div className="relative"><select name="gender" value={formData.gender} onChange={handleChange} className={getSelectClass('gender')}><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
                                 <FormRow><FormLabel required>Address</FormLabel><FormField><textarea name="address" value={formData.address} onChange={handleChange} className={getInputClass('address')} rows={3}></textarea><InputError message={errors.address} onDismiss={() => handleDismissError('address')} /></FormField></FormRow>
@@ -533,9 +559,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                             
                             <section className="mt-6">
                                 <h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3>
-                                <FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')}><option value="">-- Select District --</option>{districtsForSelect.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
-                                <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district}><option value="">-- Select Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')}/></FormField></FormRow>
-                                <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleGeoChange} className={getSelectClass('village')} disabled={!formData.mandal}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
+                                <FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')} disabled={mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select District --</option>{districtsForSelect.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
+                                <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')}/></FormField></FormRow>
+                                <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleGeoChange} className={getSelectClass('village')} disabled={!formData.mandal || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
                             </section>
                             
                             <section className="mt-6">
@@ -597,7 +623,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
                                 Review with AI
                             </button>
-                            <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Register Farmer</button>
+                            <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">
+                                {mode === 'create' ? 'Register Farmer' : 'Save Changes'}
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -609,8 +637,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                         <div className="p-6">
-                            <h3 className="text-2xl font-bold text-gray-800 mb-4">Confirm Details</h3>
-                            <p className="text-gray-600 mb-6">Please review the information below before saving.</p>
+                            <h3 className="text-2xl font-bold text-gray-800 mb-4">{mode === 'create' ? 'Confirm Details' : 'Confirm Changes'}</h3>
+                            <p className="text-gray-600 mb-6">Please review the information below before {mode === 'create' ? 'saving' : 'updating'}.</p>
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Full Name:</span><span className="text-gray-900 font-medium">{preparedFarmerData.fullName}</span></div>
                                 <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Hap ID:</span><span className="text-gray-900 font-mono">{preparedFarmerData.farmerId}</span></div>
@@ -630,7 +658,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                         <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
                             <button type="button" onClick={handleCancelConfirmation} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition" disabled={isSubmitting}>Go Back & Edit</button>
                             <button type="button" onClick={handleConfirmSubmit} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold disabled:bg-green-400 disabled:cursor-wait" disabled={isSubmitting}>
-                                {isSubmitting ? 'Saving...' : 'Confirm & Save'}
+                                {isSubmitting ? (mode === 'create' ? 'Saving...' : 'Updating...') : (mode === 'create' ? 'Confirm & Save' : 'Confirm & Update')}
                             </button>
                         </div>
                     </div>
@@ -644,21 +672,23 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-800 mt-4">Registration Successful!</h3>
+                    <h3 className="text-2xl font-bold text-gray-800 mt-4">{mode === 'create' ? 'Registration Successful!' : 'Update Successful!'}</h3>
                     <p className="text-gray-600 mt-2">
-                        Farmer <span className="font-semibold">{preparedFarmerData.fullName}</span> has been successfully registered.
+                        Farmer <span className="font-semibold">{preparedFarmerData.fullName}</span> has been successfully {mode === 'create' ? 'registered' : 'updated'}.
                     </p>
                     <p className="text-gray-600 mt-1">
                         Hap ID: <span className="font-mono bg-gray-100 p-1 rounded">{preparedFarmerData.farmerId}</span>
                     </p>
                     <div className="mt-8 flex gap-4 justify-center">
-                        <button
-                            type="button"
-                            onClick={handleRegisterAnother}
-                            className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold"
-                        >
-                            Register Another Farmer
-                        </button>
+                        {mode === 'create' && (
+                            <button
+                                type="button"
+                                onClick={handleRegisterAnother}
+                                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold"
+                            >
+                                Register Another Farmer
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={onCancel}
@@ -671,7 +701,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             )}
             
             {showCancelConfirmation && (
-                <ConfirmationModal isOpen={showCancelConfirmation} title="Discard Changes?" message={<><p>Are you sure you want to discard your unsaved changes?</p><p className="mt-2 text-sm text-yellow-700 bg-yellow-50 p-2 rounded-md font-semibold">This action will also clear your saved draft.</p></>} onConfirm={handleConfirmCancel} onCancel={handleAbortCancel} confirmText="Discard" confirmButtonClass="bg-red-600 hover:bg-red-700"/>
+                <ConfirmationModal isOpen={showCancelConfirmation} title="Discard Changes?" message={<><p>Are you sure you want to discard your unsaved changes?</p>{mode === 'create' && <p className="mt-2 text-sm text-yellow-700 bg-yellow-50 p-2 rounded-md font-semibold">This action will also clear your saved draft.</p>}</>} onConfirm={handleConfirmCancel} onCancel={handleAbortCancel} confirmText="Discard" confirmButtonClass="bg-red-600 hover:bg-red-700"/>
             )}
         </div>
     );
