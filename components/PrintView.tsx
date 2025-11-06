@@ -1,15 +1,16 @@
 import React, { useEffect, useRef } from 'react';
-import { Farmer } from '../types';
+import { Farmer, User } from '../types';
 
 declare var JsBarcode: any;
 declare var QRCode: any;
 
 interface PrintViewProps {
   farmer: Farmer | null;
+  users: User[];
   isForPdf?: boolean;
 }
 
-const PrintView: React.FC<PrintViewProps> = ({ farmer, isForPdf = false }) => {
+const PrintView: React.FC<PrintViewProps> = ({ farmer, users, isForPdf = false }) => {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const qrCodeRef = useRef<HTMLCanvasElement>(null);
 
@@ -40,6 +41,8 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, isForPdf = false }) => {
   }, [farmer]);
 
   if (!farmer) return null;
+  
+  const registeredByName = users.find(u => u.id === farmer.createdBy)?.name || 'System';
 
   const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <tr className="border-b border-gray-300">
@@ -74,6 +77,7 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, isForPdf = false }) => {
               <DetailRow label="Address" value={farmer.address} />
               <DetailRow label="PPB/ROFR ID" value={farmer.ppbRofrId} />
               <DetailRow label="Registration Date" value={new Date(farmer.registrationDate).toLocaleDateString()} />
+              <DetailRow label="Registered By" value={registeredByName} />
               <DetailRow label="Proposed Year" value={farmer.proposedYear} />
             </tbody>
           </table>

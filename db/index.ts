@@ -42,6 +42,8 @@ export const mySchema = appSchema({
         { name: 'mandal', type: 'string', isIndexed: true },
         { name: 'village', type: 'string', isIndexed: true },
         { name: 'syncStatus', type: 'string', isIndexed: true },
+        { name: 'created_by', type: 'string', isOptional: true },
+        { name: 'updated_by', type: 'string', isOptional: true },
       ],
     }),
   ],
@@ -60,6 +62,8 @@ export class FarmerModel extends Model {
   prepareUpdate!: (recordUpdater?: (record: this) => void) => this;
   prepareDestroyPermanently!: () => this;
   destroyPermanently!: () => Promise<void>;
+  readonly createdAt!: Date;
+  readonly updatedAt!: Date;
 
 
   @field('fullName') fullName!: string;
@@ -92,6 +96,8 @@ export class FarmerModel extends Model {
   @field('mandal') mandal!: string;
   @field('village') village!: string;
   @field('syncStatus') syncStatus!: 'synced' | 'pending' | 'pending_delete';
+  @field('created_by') createdBy?: string;
+  @field('updated_by') updatedBy?: string;
 }
 
 // 3. Create the Database Adapter

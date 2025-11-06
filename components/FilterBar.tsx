@@ -52,14 +52,23 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   const debouncedSearchQuery = useDebounce(filters.searchQuery, 500);
 
   // This single effect handles updating the parent component.
-  // It uses the debounced search query but immediate values for other filters.
+  // It triggers immediately for dropdown/date changes, but debounces the text search.
   useEffect(() => {
     const newFiltersForParent = {
       ...filters,
       searchQuery: debouncedSearchQuery,
     };
     onFilterChange(newFiltersForParent);
-  }, [debouncedSearchQuery, filters, onFilterChange]);
+  }, [
+    debouncedSearchQuery,
+    filters.district,
+    filters.mandal,
+    filters.village,
+    filters.status,
+    filters.registrationDateFrom,
+    filters.registrationDateTo,
+    onFilterChange,
+  ]);
 
   // Derive mandals and villages directly from filters state to avoid chained useEffect updates.
   const mandals: Mandal[] = useMemo(() => {
@@ -164,6 +173,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
                 <div className="relative">
                     <select id="status" name="status" value={filters.status} onChange={handleInputChange} className={selectInputClass} title="Filter farmers by their current registration status.">
                         <option value="">All Statuses</option>
+                        {/* Dynamically generate options from the FarmerStatus enum to ensure all statuses are always included */}
                         {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">

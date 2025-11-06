@@ -22,7 +22,7 @@ const AdminPage = lazy(() => import('./components/AdminPage'));
 const ConfirmationModal = lazy(() => import('./components/ConfirmationModal'));
 const AcceptInvitation = lazy(() => import('./components/AcceptInvitation'));
 const SupabaseSettingsModal = lazy(() => import('./components/SupabaseSettingsModal'));
-const SupabaseFunctionCreator = lazy(() => import('./components/SupabaseFunctionCreator'));
+const SupabaseSetupGuide = lazy(() => import('./components/SupabaseSetupGuide'));
 const RawDataView = lazy(() => import('./components/RawDataView'));
 const BillingPage = lazy(() => import('./components/BillingPage'));
 const UsageAnalyticsPage = lazy(() => import('./components/UsageAnalyticsPage'));
@@ -34,6 +34,59 @@ declare const jspdf: any;
 
 const SUPABASE_URL = "https://dfqjwffrnzhmocaeqrmg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmcWp3ZmZybnpobW9jYWVxcm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjUxNjMsImV4cCI6MjA3Nzk0MTE2M30.6og6IkZDzNGO2dEdf5sAg8AKuYl85a9quSd5DD_dRSA";
+
+// Helper to convert object keys from snake_case to camelCase
+const snakeToCamelCase = (obj: any) => {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+    const newObj: {[key: string]: any} = {};
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const camelKey = key.replace(/_([a-z])/g, g => g[1].toUpperCase());
+            newObj[camelKey] = obj[key];
+        }
+    }
+    return newObj;
+};
+
+// Helper to explicitly map a FarmerModel to a snake_case object for the Supabase API
+const mapModelToApi = (farmer: FarmerModel) => ({
+    id: farmer.id,
+    full_name: farmer.fullName,
+    father_husband_name: farmer.fatherHusbandName,
+    aadhaar_number: farmer.aadhaarNumber,
+    mobile_number: farmer.mobileNumber,
+    gender: farmer.gender,
+    address: farmer.address,
+    ppb_rofr_id: farmer.ppbRofrId,
+    photo: farmer.photo,
+    bank_account_number: farmer.bankAccountNumber,
+    ifsc_code: farmer.ifscCode,
+    account_verified: farmer.accountVerified,
+    applied_extent: farmer.appliedExtent,
+    approved_extent: farmer.approvedExtent,
+    number_of_plants: farmer.numberOfPlants,
+    method_of_plantation: farmer.methodOfPlantation,
+    plant_type: farmer.plantType,
+    plantation_date: farmer.plantationDate,
+    mlrd_plants: farmer.mlrdPlants,
+    full_cost_plants: farmer.fullCostPlants,
+    application_id: farmer.applicationId,
+    farmer_id: farmer.farmerId,
+    proposed_year: farmer.proposedYear,
+    registration_date: farmer.registrationDate,
+    aso_id: farmer.asoId,
+    payment_utr_dd: farmer.paymentUtrDd,
+    status: farmer.status,
+    district: farmer.district,
+    mandal: farmer.mandal,
+    village: farmer.village,
+    sync_status: 'synced', // Always set to synced when pushing
+    created_by: farmer.createdBy,
+    updated_by: farmer.updatedBy,
+});
+
 
 const mapInvitationToCamelCase = (inv: any): Invitation => ({
     id: inv.id,
@@ -92,12 +145,13 @@ const Header: React.FC<{
   onViewRawData: () => void;
   onDeleteSelected: () => void;
   onBatchUpdate: () => void;
+  onSync: () => void;
   syncLoading: boolean;
   selectedCount: number;
   isOnline: boolean;
   pendingSyncCount: number;
   permissions: Set<Permission>;
-}> = ({ currentUser, onLogout, onProfileClick, onBillingClick, onUsageAnalyticsClick, onAdminClick, onSetupGuideClick, onRegister, onExport, onExportCsv, onImport, onViewRawData, onDeleteSelected, onBatchUpdate, syncLoading, selectedCount, isOnline, pendingSyncCount, permissions }) => {
+}> = ({ currentUser, onLogout, onProfileClick, onBillingClick, onUsageAnalyticsClick, onAdminClick, onSetupGuideClick, onRegister, onExport, onExportCsv, onImport, onViewRawData, onDeleteSelected, onBatchUpdate, onSync, syncLoading, selectedCount, isOnline, pendingSyncCount, permissions }) => {
   const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
   const canDelete = permissions.has(Permission.CAN_DELETE_FARMER);
   const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
@@ -147,6 +201,24 @@ const Header: React.FC<{
         )}
     </>
   );
+  
+  const SyncStatusIndicator: React.FC<{isMobile?: boolean}> = ({ isMobile = false }) => {
+      if (!syncLoading && pendingSyncCount === 0) return null;
+      
+      const baseClass = `flex items-center gap-1.5 text-sm font-semibold`;
+      const mobileClass = isMobile ? 'mt-2' : '';
+      const colorClass = syncLoading ? 'text-blue-600 animate-pulse' : 'text-yellow-700';
+      
+      return (
+          <div className={`${baseClass} ${mobileClass} ${colorClass}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M15.312 11.224a5.5 5.5 0 01-9.537 2.112l.14-.141a.5.5 0 01.707.707l-.141.141a6.5 6.5 0 0011.23-2.618.5.5 0 01-.48-.655z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M4.688 8.776a5.5 5.5 0 019.537-2.112l-.14.141a.5.5 0 01-.707-.707l.141-.141a6.5 6.5 0 00-11.23 2.618.5.5 0 01.48.655z" clipRule="evenodd" />
+              </svg>
+              <span>{syncLoading ? 'Syncing...' : `${pendingSyncCount} to Sync`}</span>
+          </div>
+      );
+  };
 
   return (
     <header className="bg-white shadow-md p-3 sm:p-4 relative" ref={headerRef}>
@@ -158,15 +230,32 @@ const Header: React.FC<{
                   <span className="hidden sm:inline">Hapsara Farmer Registration</span>
                   <span className="sm:hidden">Hapsara</span>
               </h1>
-              <div className="hidden sm:flex items-center gap-2 border-l pl-4 ml-2">
-                  <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
-                  <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
-                  {(pendingSyncCount > 0 || syncLoading) && (<span className={`text-sm font-semibold ${syncLoading ? 'text-blue-600 animate-pulse' : 'text-yellow-600'}`}>{syncLoading ? 'Syncing...' : `(${pendingSyncCount} pending)`}</span>)}
+              <div className="hidden sm:flex items-center gap-4 border-l pl-4 ml-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
+                    <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
+                  </div>
+                  <SyncStatusIndicator />
               </div>
           </div>
 
           {/* Right Side: Desktop Buttons & Profile */}
           <div className="hidden md:flex items-center gap-2">
+              {isOnline && (
+                <button 
+                  onClick={onSync}
+                  disabled={syncLoading} 
+                  className="relative px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait"
+                >
+                  {syncLoading ? 'Syncing...' : 'Sync Now'}
+                  {pendingSyncCount > 0 && !syncLoading && (
+                    <span className="absolute -top-2 -right-2 flex h-5 w-5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-5 w-5 bg-yellow-500 text-yellow-900 text-xs items-center justify-center">{pendingSyncCount}</span>
+                    </span>
+                  )}
+                </button>
+              )}
               {renderActionButtons(false)}
               {currentUser && (
                 <div className="relative">
@@ -213,10 +302,12 @@ const Header: React.FC<{
                                 <p className="text-xs text-gray-500">Pay-as-you-go Plan</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 sm:hidden">
-                          <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}></span>
-                          <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
-                          {(pendingSyncCount > 0 || syncLoading) && (<span className={`text-sm font-semibold ${syncLoading ? 'text-blue-600 animate-pulse' : 'text-yellow-600'}`}>{syncLoading ? 'Syncing...' : `(${pendingSyncCount} pending)`}</span>)}
+                        <div className="sm:hidden">
+                            <div className="flex items-center gap-2">
+                                <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}></span>
+                                <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
+                            </div>
+                            <SyncStatusIndicator isMobile={true} />
                         </div>
                     </div>
                 )}
@@ -257,13 +348,16 @@ const App: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [showRawDataView, setShowRawDataView] = useState(false);
-  const [showFunctionCreator, setShowFunctionCreator] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
   const isOnline = useOnlineStatus();
   const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const database = useDatabase();
   const farmersCollection = database.get<FarmerModel>('farmers');
@@ -294,6 +388,52 @@ const App: React.FC = () => {
       setShowSupabaseSettings(true);
     }
   }, []);
+
+    const handlePushSync = useCallback(async (isManual = false) => {
+        if (!supabase || !isOnline || syncLoading) {
+            if (isManual && !isOnline) setNotification({ message: 'Cannot sync while offline.', type: 'error' });
+            return;
+        }
+
+        const pendingFarmers = await farmersCollection.query(Q.where('syncStatus', 'pending')).fetch();
+        const pendingDeleteFarmers = await farmersCollection.query(Q.where('syncStatus', 'pending_delete')).fetch();
+
+        if (pendingFarmers.length === 0 && pendingDeleteFarmers.length === 0) {
+            if (isManual) setNotification({ message: 'Everything is up to date.', type: 'success' });
+            return;
+        }
+
+        setSyncLoading(true);
+        if (isManual) setNotification({ message: 'Syncing local changes...', type: 'success' });
+
+        try {
+            if (pendingFarmers.length > 0) {
+                const plainFarmers = pendingFarmers.map(mapModelToApi);
+                const { error } = await supabase.from('farmers').upsert(plainFarmers);
+                if (error) throw error;
+                await database.write(async () => {
+                    const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { rec.syncStatus = 'synced'; }));
+                    await database.batch(...updates);
+                });
+            }
+
+            if (pendingDeleteFarmers.length > 0) {
+                const idsToDelete = pendingDeleteFarmers.map(f => f.id);
+                const { error } = await supabase.from('farmers').delete().in('id', idsToDelete);
+                if (error) throw error;
+                await database.write(async () => {
+                    const deletions = pendingDeleteFarmers.map(f => f.prepareDestroyPermanently());
+                    await database.batch(...deletions);
+                });
+            }
+            if (isManual) setNotification({ message: 'Local changes synced successfully.', type: 'success' });
+        } catch (error: any) {
+            console.error('Push sync failed:', error);
+            if (isManual) setNotification({ message: `Sync failed: ${error.message}`, type: 'error' });
+        } finally {
+            setSyncLoading(false);
+        }
+    }, [supabase, isOnline, syncLoading, database, farmersCollection]);
   
   const handlePullSync = useCallback(async (isInitialSync = false) => {
       if (!supabase || !isOnline) {
@@ -312,21 +452,21 @@ const App: React.FC = () => {
                   const recordsToCreate: any[] = [];
 
                   for (const remoteFarmer of data) {
-                      const localFarmer = existingFarmers.find(f => f.id === remoteFarmer.id);
+                      const remoteFarmerCamel = snakeToCamelCase(remoteFarmer);
+                      const localFarmer = existingFarmers.find(f => f.id === remoteFarmerCamel.id);
                       if (localFarmer) {
-                          // Only update if remote is newer or local is synced (to avoid overwriting pending changes)
                           if (localFarmer.syncStatus === 'synced') {
                              recordsToUpdate.push(
                                 localFarmer.prepareUpdate(record => {
-                                    Object.assign(record, { ...remoteFarmer, syncStatus: 'synced' });
+                                    Object.assign(record, { ...remoteFarmerCamel, syncStatus: 'synced' });
                                 })
                             );
                           }
                       } else {
                           recordsToCreate.push(
                               farmersCollection.prepareCreate(record => {
-                                  Object.assign(record, { ...remoteFarmer, syncStatus: 'synced' });
-                                  record._raw.id = remoteFarmer.id;
+                                  Object.assign(record, { ...remoteFarmerCamel, syncStatus: 'synced' });
+                                  record._raw.id = remoteFarmerCamel.id;
                               })
                           );
                       }
@@ -351,40 +491,7 @@ const App: React.FC = () => {
     if (!supabase || !session) return;
     
     // 1. Background PUSH sync for pending changes
-    const syncInterval = setInterval(async () => {
-        if (!isOnline) return;
-
-        setSyncLoading(true);
-        try {
-            // Sync pending creations/updates
-            const pendingFarmers = await farmersCollection.query(Q.where('syncStatus', 'pending')).fetch();
-            if (pendingFarmers.length > 0) {
-                const plainFarmers = pendingFarmers.map(f => ({ ...f._raw, id: f.id }));
-                const { error } = await supabase.from('farmers').upsert(plainFarmers);
-                if (error) throw error;
-                await database.write(async () => {
-                    const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { rec.syncStatus = 'synced'; }));
-                    await database.batch(...updates);
-                });
-            }
-
-            // Sync pending deletions
-            const pendingDeleteFarmers = await farmersCollection.query(Q.where('syncStatus', 'pending_delete')).fetch();
-            if (pendingDeleteFarmers.length > 0) {
-                const idsToDelete = pendingDeleteFarmers.map(f => f.id);
-                const { error } = await supabase.from('farmers').delete().in('id', idsToDelete);
-                if (error) throw error;
-                await database.write(async () => {
-                    const deletions = pendingDeleteFarmers.map(f => f.prepareDestroyPermanently());
-                    await database.batch(...deletions);
-                });
-            }
-        } catch (error) {
-            console.error('Background sync failed:', error);
-        } finally {
-            setSyncLoading(false);
-        }
-    }, 30000); // Sync every 30 seconds
+    const syncInterval = setInterval(() => handlePushSync(false), 30000); // Sync every 30 seconds
 
     // 2. Real-time PULL subscription for changes from other clients
     const channel = supabase.channel('public:farmers');
@@ -393,26 +500,30 @@ const App: React.FC = () => {
         await database.write(async () => {
             const collection = database.get<FarmerModel>('farmers');
             let farmer;
+            const newRecord = payload.new ? snakeToCamelCase(payload.new) : null;
+            const oldRecordId = payload.old ? payload.old.id : null;
+            
             switch (payload.eventType) {
                 case 'INSERT':
                 case 'UPDATE':
-                    const existing = await collection.query(Q.where('id', payload.new.id)).fetch();
+                    if (!newRecord) return;
+                    const existing = await collection.query(Q.where('id', newRecord.id)).fetch();
                     if (existing.length > 0) {
                         farmer = existing[0];
-                        // Avoid overwriting local pending changes
                         if (farmer.syncStatus === 'synced') {
-                           await farmer.update(rec => Object.assign(rec, { ...payload.new, syncStatus: 'synced' }));
+                           await farmer.update(rec => Object.assign(rec, { ...newRecord, syncStatus: 'synced' }));
                         }
                     } else {
                        await collection.create(rec => {
-                           Object.assign(rec, { ...payload.new, syncStatus: 'synced' });
-                           rec._raw.id = payload.new.id;
+                           Object.assign(rec, { ...newRecord, syncStatus: 'synced' });
+                           rec._raw.id = newRecord.id;
                        });
                     }
                     break;
                 case 'DELETE':
+                    if (!oldRecordId) return;
                     try {
-                      farmer = await collection.find(payload.old.id);
+                      farmer = await collection.find(oldRecordId);
                       await farmer.destroyPermanently();
                     } catch (e) {
                       // Might have already been deleted, ignore
@@ -428,7 +539,7 @@ const App: React.FC = () => {
         supabase.removeChannel(channel);
     };
 
-  }, [supabase, session, isOnline, database, farmersCollection]);
+  }, [supabase, session, database, farmersCollection, handlePushSync]);
   
   useEffect(() => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -483,15 +594,19 @@ const App: React.FC = () => {
   }, [supabase, fetchUserProfile, handlePullSync]);
 
   useEffect(() => {
-    if (session && supabase && currentUserPermissions.has(Permission.CAN_MANAGE_USERS)) {
-        const fetchAdminData = async () => {
+    // Fetch all users for displaying names, not just for admins
+    if (session && supabase) {
+        const fetchAllUsers = async () => {
             const { data, error } = await supabase.from('profiles').select('*');
-            if (error) console.error('Error fetching users:', error);
-            else setUsers(data.map((d: any) => ({ id: d.id, name: d.full_name, avatar: d.avatar_url, groupId: d.group_id })) || []);
+            if (error) {
+                console.error('Error fetching users:', error);
+            } else {
+                setUsers(data.map((d: any) => ({ id: d.id, name: d.full_name, avatar: d.avatar_url, groupId: d.group_id })) || []);
+            }
         };
-        fetchAdminData();
+        fetchAllUsers();
     }
-  }, [session, supabase, currentUserPermissions]);
+  }, [session, supabase]);
 
   const handleSaveSupabaseSettings = (url: string, key: string) => {
     localStorage.setItem('supabaseUrl', url);
@@ -650,6 +765,7 @@ const App: React.FC = () => {
   };
 
   const handleRegistration = useCallback(async (farmer: Farmer, photoFile?: File) => {
+    if (!currentUser) return;
     let photoBase64 = '';
     if (photoFile) {
         photoBase64 = await new Promise((resolve, reject) => {
@@ -662,23 +778,29 @@ const App: React.FC = () => {
 
     await database.write(async () => {
       await farmersCollection.create(record => {
-        Object.assign(record, { ...farmer, photo: photoBase64 });
+        Object.assign(record, { 
+            ...farmer, 
+            photo: photoBase64,
+            createdBy: currentUser.id,
+            updatedBy: currentUser.id 
+        });
         record._raw.id = farmer.id; // Important for WatermelonDB
       });
     });
     setNewlyAddedFarmerId(farmer.id);
     setNotification({ message: `Farmer ${farmer.fullName} registered successfully with Hap ID: ${farmer.farmerId}.`, type: 'success' });
     setShowForm(false);
-  }, [database, farmersCollection]);
+  }, [database, farmersCollection, currentUser]);
 
   const handleSaveRow = useCallback(async (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => {
+    if (!currentUser) return;
     await database.write(async () => {
       await farmerToUpdate.update(record => {
-        Object.assign(record, { ...updatedData, syncStatus: 'pending' });
+        Object.assign(record, { ...updatedData, syncStatus: 'pending', updatedBy: currentUser.id });
       });
     });
     setEditingRowId(null);
-  }, [database]);
+  }, [database, currentUser]);
 
   const handleDeleteSelected = useCallback(() => {
     setShowDeleteConfirmation(true);
@@ -700,12 +822,14 @@ const App: React.FC = () => {
   }, [database, farmersCollection, selectedFarmerIds]);
 
   const handleBatchUpdate = useCallback(async (newStatus: FarmerStatus) => {
+    if (!currentUser) return;
     await database.write(async () => {
       const farmersToUpdate = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
       const updates = farmersToUpdate.map(farmer =>
         farmer.prepareUpdate(record => {
           record.status = newStatus;
           record.syncStatus = 'pending';
+          record.updatedBy = currentUser.id;
         })
       );
       await database.batch(...updates);
@@ -713,39 +837,26 @@ const App: React.FC = () => {
     setShowBatchUpdateModal(false);
     setSelectedFarmerIds([]);
     setNotification({ message: `${selectedFarmerIds.length} farmer(s) updated to "${newStatus}".`, type: 'success' });
-  }, [database, farmersCollection, selectedFarmerIds]);
+  }, [database, farmersCollection, selectedFarmerIds, currentUser]);
   
   const handleBulkImport = useCallback(async (newFarmers: Farmer[]) => {
+      if (!currentUser) return;
       await database.write(async () => {
           const creations = newFarmers.map(farmer => 
               farmersCollection.prepareCreate(record => {
-                  Object.assign(record, farmer);
+                  Object.assign(record, {
+                      ...farmer,
+                      createdBy: currentUser.id,
+                      updatedBy: currentUser.id,
+                  });
                   record._raw.id = farmer.id;
               })
           );
           await database.batch(...creations);
       });
       setNotification({ message: `${newFarmers.length} new farmers imported successfully.`, type: 'success'});
-  }, [database, farmersCollection]);
+  }, [database, farmersCollection, currentUser]);
 
-  const handleSelectionChange = useCallback((farmerId: string, isSelected: boolean) => {
-    setSelectedFarmerIds(prev => {
-      if (isSelected) {
-        return [...prev, farmerId];
-      } else {
-        return prev.filter(id => id !== farmerId);
-      }
-    });
-  }, []);
-
-  const handleSelectAll = useCallback((allSelected: boolean) => {
-    if (allSelected) {
-      setSelectedFarmerIds(filteredFarmers.map(f => f.id));
-    } else {
-      setSelectedFarmerIds([]);
-    }
-  }, [allFarmers]);
-  
   const handlePrint = (farmer: FarmerModel) => {
     setPrintingFarmer(farmer);
     setTimeout(() => {
@@ -800,6 +911,7 @@ const App: React.FC = () => {
   const handleFilterChange = useCallback((newFilters: Filters) => {
     setFilters(newFilters);
     setSelectedFarmerIds([]);
+    setCurrentPage(1);
   }, []);
 
   const handleSortRequest = useCallback((key: keyof Farmer | 'id') => {
@@ -808,9 +920,10 @@ const App: React.FC = () => {
         direction = 'descending';
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1);
   }, [sortConfig]);
 
-  const filteredFarmers = useMemo(() => {
+  const processedFarmers = useMemo(() => {
     let farmersData = [...allFarmers];
 
     if (filters.searchQuery) {
@@ -846,9 +959,46 @@ const App: React.FC = () => {
     return farmersData;
   }, [allFarmers, filters, sortConfig]);
 
+  useEffect(() => {
+    const totalPages = Math.ceil(processedFarmers.length / rowsPerPage);
+    if (currentPage > totalPages && totalPages > 0) {
+        setCurrentPage(totalPages);
+    }
+  }, [processedFarmers, currentPage, rowsPerPage]);
+
+  const paginatedFarmers = useMemo(() => {
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    return processedFarmers.slice(startIndex, startIndex + rowsPerPage);
+  }, [processedFarmers, currentPage, rowsPerPage]);
+
+  const handleSelectionChange = useCallback((farmerId: string, isSelected: boolean) => {
+    setSelectedFarmerIds(prev => {
+      if (isSelected) {
+        return [...prev, farmerId];
+      } else {
+        return prev.filter(id => id !== farmerId);
+      }
+    });
+  }, []);
+
+  const handleSelectAll = useCallback((allSelected: boolean) => {
+    if (allSelected) {
+      setSelectedFarmerIds(paginatedFarmers.map(f => f.id));
+    } else {
+      setSelectedFarmerIds([]);
+    }
+  }, [paginatedFarmers]);
+
+  const handlePageChange = (page: number) => setCurrentPage(page);
+
+  const handleRowsPerPageChange = (rows: number) => {
+      setRowsPerPage(rows);
+      setCurrentPage(1);
+  };
+
   const exportToExcel = () => {
     const { utils, writeFile } = (window as any).XLSX;
-    const dataToExport = filteredFarmers.map(f => {
+    const dataToExport = processedFarmers.map(f => {
         const district = GEO_DATA.find(d => d.code === f.district)?.name || f.district;
         const mandal = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.name || f.mandal;
         const village = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.villages.find(v => v.code === f.village)?.name || f.village;
@@ -877,15 +1027,29 @@ const App: React.FC = () => {
   };
 
   const exportToCsv = () => {
-    const { utils, writeFile } = (window as any).XLSX;
-    const dataToExport = filteredFarmers.map(f => ({
-        'Hap ID': f.farmerId, 'Application ID': f.applicationId, 'Full Name': f.fullName,
-        'Father/Husband Name': f.fatherHusbandName, 'Mobile Number': f.mobileNumber, 'Aadhaar Number': f.aadhaarNumber,
-        'Status': f.status, 'Registration Date': new Date(f.registrationDate).toLocaleDateString(),
-        'District': GEO_DATA.find(d => d.code === f.district)?.name || f.district,
-        'Mandal': GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.name || f.mandal,
-        'Village': GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.villages.find(v => v.code === f.village)?.name || f.village,
-    }));
+    const { utils } = (window as any).XLSX;
+    const dataToExport = processedFarmers.map(f => {
+        const district = GEO_DATA.find(d => d.code === f.district)?.name || f.district;
+        const mandal = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.name || f.mandal;
+        const village = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.villages.find(v => v.code === f.village)?.name || f.village;
+        
+        return {
+            'Hap ID': f.farmerId,
+            'Application ID': f.applicationId,
+            'Full Name': f.fullName,
+            'Father/Husband Name': f.fatherHusbandName,
+            'Mobile Number': f.mobileNumber,
+            'Aadhaar Number': f.aadhaarNumber,
+            'Status': f.status,
+            'Registration Date': new Date(f.registrationDate).toLocaleDateString(),
+            'District': district,
+            'Mandal': mandal,
+            'Village': village,
+            'Address': f.address,
+            'Approved Extent (Acres)': f.approvedExtent,
+            'Number of Plants': f.numberOfPlants,
+        };
+    });
     const ws = utils.json_to_sheet(dataToExport);
     const csv = utils.sheet_to_csv(ws);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -929,7 +1093,8 @@ const App: React.FC = () => {
                 <main className="p-4 sm:p-6">
                     <FilterBar onFilterChange={handleFilterChange} />
                     <FarmerList
-                        farmers={filteredFarmers}
+                        farmers={paginatedFarmers}
+                        users={users}
                         canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)}
                         canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)}
                         editingRowId={editingRowId}
@@ -946,6 +1111,11 @@ const App: React.FC = () => {
                         newlyAddedFarmerId={newlyAddedFarmerId}
                         onHighlightComplete={() => setNewlyAddedFarmerId(null)}
                         onDeleteSelected={handleDeleteSelected}
+                        totalRecords={processedFarmers.length}
+                        currentPage={currentPage}
+                        rowsPerPage={rowsPerPage}
+                        onPageChange={handlePageChange}
+                        onRowsPerPageChange={handleRowsPerPageChange}
                     />
                 </main>
             );
@@ -961,14 +1131,15 @@ const App: React.FC = () => {
         onBillingClick={() => setView('billing')}
         onUsageAnalyticsClick={() => setView('usage-analytics')}
         onAdminClick={() => setView('admin')}
-        onSetupGuideClick={() => setShowFunctionCreator(true)}
+        onSetupGuideClick={() => setShowSetupGuide(true)}
         onRegister={handleRegisterClick}
-        onExport={exportToExcel}
-        onExportCsv={exportToCsv}
+        onExport={() => exportToExcel()}
+        onExportCsv={() => exportToCsv()}
         onImport={() => setShowImportModal(true)}
         onViewRawData={() => setShowRawDataView(true)}
         onDeleteSelected={handleDeleteSelected}
         onBatchUpdate={() => setShowBatchUpdateModal(true)}
+        onSync={() => handlePushSync(true)}
         syncLoading={syncLoading}
         selectedCount={selectedFarmerIds.length}
         isOnline={isOnline}
@@ -994,9 +1165,9 @@ const App: React.FC = () => {
             </Suspense>
        )}
 
-       {showFunctionCreator && (
+       {showSetupGuide && (
         <Suspense fallback={<ModalLoader/>}>
-          <SupabaseFunctionCreator onClose={() => setShowFunctionCreator(false)} />
+          <SupabaseSetupGuide onClose={() => setShowSetupGuide(false)} />
         </Suspense>
        )}
       
@@ -1027,9 +1198,9 @@ const App: React.FC = () => {
       )}
 
       <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0">
-          {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={pdfExportFarmer} isForPdf={true} /></Suspense>}
+          {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={pdfExportFarmer} users={users} isForPdf={true} /></Suspense>}
       </div>
-      <PrintView farmer={printingFarmer} />
+      <PrintView farmer={printingFarmer} users={users} />
 
       {notification && (
         <div className={`fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>

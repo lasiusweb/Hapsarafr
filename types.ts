@@ -101,6 +101,10 @@ export interface Farmer {
 
   // Sync status
   syncStatus: 'synced' | 'pending' | 'pending_delete';
+  
+  // Audit fields
+  createdBy?: string; // User ID
+  updatedBy?: string; // User ID
 }
 
 export interface Village {

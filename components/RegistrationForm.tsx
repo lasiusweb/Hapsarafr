@@ -44,25 +44,45 @@ const initialFormData: Omit<Farmer, 'id'> = {
 
 const DRAFT_STORAGE_KEY = 'hapsara-farmer-registration-draft';
 
-// Helper function to get geo names from codes
+// --- Geo Data Optimization ---
+// Create a more efficient map-based structure for fast geo lookups
+interface VillageInfo { name: string; }
+interface MandalInfo { name: string; villages: Record<string, VillageInfo>; }
+interface DistrictInfo { name: string; mandals: Record<string, MandalInfo>; }
+
+const geoMap: Record<string, DistrictInfo> = GEO_DATA.reduce((distAcc, district) => {
+    distAcc[district.code] = {
+        name: district.name,
+        mandals: district.mandals.reduce((mandAcc, mandal) => {
+            mandAcc[mandal.code] = {
+                name: mandal.name,
+                villages: mandal.villages.reduce((villAcc, village) => {
+                    villAcc[village.code] = { name: village.name };
+                    return villAcc;
+                }, {} as Record<string, VillageInfo>),
+            };
+            return mandAcc;
+        }, {} as Record<string, MandalInfo>),
+    };
+    return distAcc;
+}, {} as Record<string, DistrictInfo>);
+
+// Helper function to get geo names from the optimized map
 const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { district: string; mandal?: string; village?: string }) => {
     try {
-        const districtData = GEO_DATA.find(d => d.code === codes.district);
-        if (type === 'district') {
-            return districtData?.name || codes.district;
-        }
-        if (!districtData) return codes[type] || 'N/A';
+        const district = geoMap[codes.district];
+        if (!district) return codes.district || 'N/A';
+        if (type === 'district') return district.name;
 
-        const mandalData = districtData.mandals.find(m => m.code === codes.mandal);
-        if (type === 'mandal') {
-            return mandalData?.name || codes.mandal;
-        }
-        if (!mandalData) return codes[type] || 'N/A';
-
-        if (type === 'village') {
-            const villageData = mandalData.villages.find(v => v.code === codes.village);
-            return villageData?.name || codes.village;
-        }
+        if (!codes.mandal) return 'N/A';
+        const mandal = district.mandals[codes.mandal];
+        if (!mandal) return codes.mandal || 'N/A';
+        if (type === 'mandal') return mandal.name;
+        
+        if (!codes.village) return 'N/A';
+        const village = mandal.villages[codes.village];
+        if (!village) return codes.village || 'N/A';
+        if (type === 'village') return village.name;
     } catch (e) {
         console.error("Error getting geo name:", e);
         return 'N/A';
@@ -166,18 +186,21 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             localStorage.removeItem(DRAFT_STORAGE_KEY);
         }
     }, [debouncedFormData, showConfirmation, hasDraft]);
+    
+    const districtsForSelect = useMemo(() => Object.entries(geoMap).map(([code, { name }]) => ({ code, name })), []);
 
     const mandals = useMemo(() => {
-        if (!formData.district) return [];
-        const selectedDistrict = GEO_DATA.find(d => d.code === formData.district);
-        return selectedDistrict?.mandals || [];
+        if (!formData.district || !geoMap[formData.district]) return [];
+        const mandalData = geoMap[formData.district].mandals;
+        // Convert back to array for dropdown rendering
+        return Object.entries(mandalData).map(([code, { name }]) => ({ code, name, villages: [] as Village[] }));
     }, [formData.district]);
 
     const villages = useMemo(() => {
-        if (!formData.district || !formData.mandal) return [];
-        const selectedDistrict = GEO_DATA.find(d => d.code === formData.district);
-        const selectedMandal = selectedDistrict?.mandals.find(m => m.code === formData.mandal);
-        return selectedMandal?.villages || [];
+        if (!formData.district || !formData.mandal || !geoMap[formData.district]?.mandals[formData.mandal]) return [];
+        const villageData = geoMap[formData.district].mandals[formData.mandal].villages;
+        // Convert back to array for dropdown rendering
+        return Object.entries(villageData).map(([code, { name }]) => ({ code, name }));
     }, [formData.district, formData.mandal]);
 
     const handleGeoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -301,9 +324,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         }
         if (formData.plantationDate) {
             const plantationDateObj = new Date(formData.plantationDate);
-            if (isNaN(plantationDateObj.getTime())) newErrors.plantationDate = "Invalid plantation date format.";
-            else if (plantationDateObj > today) newErrors.plantationDate = "Plantation date cannot be in the future.";
-            else if (registrationDateObj && plantationDateObj < registrationDateObj) newErrors.plantationDate = "Plantation date cannot be before the registration date.";
+            if (isNaN(plantationDateObj.getTime())) {
+                newErrors.plantationDate = "Invalid plantation date format.";
+            } else if (plantationDateObj > today) {
+                newErrors.plantationDate = "Plantation date cannot be in the future.";
+            } else if (registrationDateObj && plantationDateObj < registrationDateObj) {
+                newErrors.plantationDate = "Plantation date cannot be before the registration date.";
+            }
         }
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -431,7 +458,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                         
                         <section className="mt-6">
                             <h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3>
-                            <FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')}><option value="">-- Select District --</option>{GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
+                            <FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')}><option value="">-- Select District --</option>{districtsForSelect.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
                             <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district}><option value="">-- Select Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')}/></FormField></FormRow>
                             <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleGeoChange} className={getSelectClass('village')} disabled={!formData.mandal}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
                         </section>
@@ -489,7 +516,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                     <span className="font-semibold text-gray-600">Location:</span>
                                     <span className="text-gray-900 text-right">
                                         {getGeoName('village', { district: preparedFarmerData.district, mandal: preparedFarmerData.mandal, village: preparedFarmerData.village })},<br/>
-                                        {getGeoName('mandal', { district: preparedFarmerData.district, mandal: preparedFarmerData.mandal })}
+                                        {getGeoName('mandal', { district: preparedFarmerData.district, mandal: preparedFarmerData.mandal })},<br/>
+                                        {getGeoName('district', { district: preparedFarmerData.district })}
                                     </span>
                                 </div>
                                 <div className="flex justify-between pb-2"><span className="font-semibold text-gray-600">Approved Extent:</span><span className="text-gray-900">{preparedFarmerData.approvedExtent} Acres</span></div>

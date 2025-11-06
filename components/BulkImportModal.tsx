@@ -166,7 +166,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     
                     const asoId = `SO${regYear}${districtCode}${mandalCode}${Math.floor(100 + Math.random() * 900)}`;
 
-                    const farmer: Farmer = {
+                    const farmer: Omit<Farmer, 'createdBy' | 'updatedBy'> & { id: string } = {
                         id: farmerId,
                         farmerId: farmerId,
                         applicationId,
@@ -200,8 +200,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         syncStatus: 'pending',
                     };
                     
-                    newFarmers.push(farmer);
-                    allKnownFarmers.push(farmer);
+                    newFarmers.push(farmer as Farmer);
+                    allKnownFarmers.push(farmer as Farmer);
                     successfulCount++;
                 }
                 

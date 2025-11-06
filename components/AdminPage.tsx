@@ -15,7 +15,16 @@ interface AdminPageProps {
 }
 
 const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, invitations, onInviteUser }) => {
-    const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users');
+    const permissions = useMemo(() => {
+        const userGroup = groups.find(g => g.id === currentUser.groupId);
+        return new Set(userGroup?.permissions || []);
+    }, [currentUser.groupId, groups]);
+
+    const canManageUsers = permissions.has(Permission.CAN_MANAGE_USERS);
+    const canManageGroups = permissions.has(Permission.CAN_MANAGE_GROUPS);
+    const canInvite = permissions.has(Permission.CAN_INVITE_USERS);
+
+    const [activeTab, setActiveTab] = useState<'users' | 'groups'>(canManageUsers ? 'users' : 'groups');
     const [editedUsers, setEditedUsers] = useState<User[]>(users);
     const [editedGroups, setEditedGroups] = useState<Group[]>(groups);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(groups[0]?.id || null);
@@ -25,9 +34,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     const [generatedCode, setGeneratedCode] = useState<string | null>(null);
 
     const selectedGroup = useMemo(() => editedGroups.find(g => g.id === selectedGroupId) || null, [editedGroups, selectedGroupId]);
-    
-    const currentUserGroup = useMemo(() => groups.find(g => g.id === currentUser.groupId), [currentUser.groupId, groups]);
-    const canInvite = currentUserGroup?.permissions.includes(Permission.CAN_INVITE_USERS);
 
     const handleUserGroupChange = (userId: string, newGroupId: string) => {
         setEditedUsers(prevUsers => prevUsers.map(u => u.id === userId ? { ...u, groupId: newGroupId } : u));
@@ -121,12 +127,12 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                 
                 <div className="bg-white rounded-lg shadow-xl p-2">
                     <div className="flex border-b">
-                        <button onClick={() => setActiveTab('users')} className={`px-4 py-3 font-semibold ${activeTab === 'users' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>User Management</button>
-                        <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-semibold ${activeTab === 'groups' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>Group Management</button>
+                        {canManageUsers && <button onClick={() => setActiveTab('users')} className={`px-4 py-3 font-semibold ${activeTab === 'users' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>User Management</button>}
+                        {canManageGroups && <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-semibold ${activeTab === 'groups' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>Group Management</button>}
                     </div>
 
                     <div className="p-6">
-                        {activeTab === 'users' && (
+                        {activeTab === 'users' && canManageUsers && (
                             <div>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-200">
@@ -204,7 +210,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                 )}
                             </div>
                         )}
-                        {activeTab === 'groups' && (
+                        {activeTab === 'groups' && canManageGroups && (
                             <div className="flex gap-8">
                                 <div className="w-1/3">
                                     <div className="flex justify-between items-center mb-2">
@@ -268,7 +274,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                         )}
                     </div>
                      <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg mt-4">
-                         <button onClick={handleSaveChanges} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Save All Changes</button>
+                         {(canManageUsers || canManageGroups) && <button onClick={handleSaveChanges} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Save All Changes</button>}
                     </div>
                 </div>
             </div>
