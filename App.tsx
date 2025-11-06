@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { Farmer, FarmerStatus, User, Group, Permission, Invitation, AppContent, AuditLogEntry, DashboardStats } from './types';
+import { Farmer, FarmerStatus, User, Group, Permission, Invitation, AppContent, AuditLogEntry, DashboardStats, SubsidyPayment } from './types';
 import { GEO_DATA } from './data/geoData';
 import FilterBar, { Filters } from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
-import { Q, Query } from '@nozbe/watermelondb';
-import { FarmerModel } from './db';
+// FIX: Import Model from watermelondb to use as a generic constraint
+import { Q, Query, Model } from '@nozbe/watermelondb';
+import { FarmerModel, SubsidyPaymentModel } from './db';
 import { initializeSupabase } from './lib/supabase';
 
 // Lazily import components to enable code-splitting
@@ -30,6 +31,7 @@ const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'))
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const SubscriptionManagementPage = lazy(() => import('./components/SubscriptionManagementPage'));
 const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
+const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
 
 
 // Type declarations for CDN libraries
@@ -37,7 +39,7 @@ declare const html2canvas: any;
 declare const jspdf: any;
 
 // Helper to convert object keys from snake_case to camelCase
-const snakeToCamelCase = (obj: any) => {
+const snakeToCamelCase = (obj: any): any => {
     if (obj === null || typeof obj !== 'object') {
         return obj;
     }
@@ -73,6 +75,8 @@ const mapModelToApi = (farmer: FarmerModel) => ({
     plantation_date: farmer.plantationDate,
     mlrd_plants: farmer.mlrdPlants,
     full_cost_plants: farmer.fullCostPlants,
+    latitude: farmer.latitude,
+    longitude: farmer.longitude,
     application_id: farmer.applicationId,
     farmer_id: farmer.farmerId,
     proposed_year: farmer.proposedYear,
@@ -88,6 +92,18 @@ const mapModelToApi = (farmer: FarmerModel) => ({
     updated_by: farmer.updatedBy,
     created_at: farmer.createdAt,
     updated_at: farmer.updatedAt,
+});
+
+const mapPaymentToApi = (payment: SubsidyPaymentModel) => ({
+    id: payment.id,
+    farmer_id: payment.farmerId,
+    payment_date: payment.paymentDate,
+    amount: payment.amount,
+    utr_number: payment.utrNumber,
+    payment_stage: payment.paymentStage,
+    notes: payment.notes,
+    created_by: payment.createdBy,
+    created_at: new Date(payment.createdAt).toISOString(),
 });
 
 
@@ -124,7 +140,8 @@ const useOnlineStatus = () => {
 };
 
 // Custom hooks to observe WatermelonDB queries
-const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
+// FIX: Changed generic constraint from `T extends FarmerModel` to `T extends Model` to allow observing any model type.
+const useQuery = <T extends Model>(query: Query<T>): T[] => {
   const [data, setData] = useState<T[]>([]);
   useEffect(() => {
     const subscription = query.observe().subscribe(setData);
@@ -134,33 +151,38 @@ const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
 };
 
 type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue';
+type ParsedHash = 
+    | { view: View; params: {} }
+    | { view: 'farmer-details'; params: { farmerId: string } }
+    | { view: 'not-found', params: {} };
+
 
 // Helper function to get view from hash
-const getViewFromHash = (): View | 'not-found' => {
-    const hash = window.location.hash.replace(/^#\/?/, ''); // Removes # or #/
-    switch (hash) {
-        case 'farmer-directory':
-        case 'profile':
-        case 'admin':
-        case 'billing':
-        case 'usage-analytics':
-        case 'content-manager':
-        case 'subscription-management':
-        case 'print-queue':
-            return hash;
-        case '':
-        case 'dashboard':
-             return 'dashboard';
-        default:
-            return 'not-found';
+const parseHash = (): ParsedHash => {
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    const [path, id] = hash.split('/');
+    
+    if (path === 'farmer-details' && id) {
+        return { view: 'farmer-details', params: { farmerId: id } };
     }
+
+    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue'];
+    if (simpleViews.includes(path as View)) {
+        return { view: path as View, params: {} };
+    }
+
+    if (path === '' || path === 'dashboard') {
+        return { view: 'dashboard', params: {} };
+    }
+
+    return { view: 'not-found', params: {} };
 };
 
 type AppState = 'LANDING' | 'LOADING' | 'AUTH' | 'APP';
 
 const Header: React.FC<{
     onToggleSidebar: () => void;
-    currentView: View | 'not-found';
+    currentView: ParsedHash['view'];
     onRegister: () => void;
     onSync: () => void;
     syncLoading: boolean;
@@ -169,9 +191,10 @@ const Header: React.FC<{
     permissions: Set<Permission>;
 }> = ({ onToggleSidebar, currentView, onRegister, onSync, syncLoading, pendingSyncCount, isOnline, permissions }) => {
     const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
-    const viewTitles: Record<View | 'not-found', string> = {
+    const viewTitles: Record<ParsedHash['view'], string> = {
         dashboard: 'Dashboard',
         'farmer-directory': 'Farmer Directory',
+        'farmer-details': 'Farmer Details',
         profile: 'My Profile',
         admin: 'Admin Panel',
         billing: 'Billing & Usage',
@@ -217,8 +240,8 @@ const Sidebar: React.FC<{
     onToggleCollapse: () => void;
     currentUser: User | null;
     onLogout: () => void;
-    onNavigate: (view: View) => void;
-    currentView: View | 'not-found';
+    onNavigate: (path: string) => void;
+    currentView: ParsedHash['view'];
     permissions: Set<Permission>;
     onImport: () => void;
     onExportExcel: () => void;
@@ -387,6 +410,8 @@ const modelToPlain = (f: FarmerModel | null): Farmer | null => {
         plantationDate: f.plantationDate,
         mlrdPlants: f.mlrdPlants,
         fullCostPlants: f.fullCostPlants,
+        latitude: f.latitude,
+        longitude: f.longitude,
         applicationId: f.applicationId,
         farmerId: f.farmerId,
         proposedYear: f.proposedYear,
@@ -417,9 +442,8 @@ const App: React.FC = () => {
   const [appContent, setAppContent] = useState<Partial<AppContent> | null>(null);
   const [authView, setAuthView] = useState<'login' | 'signup' | 'accept-invitation'>('login');
   
-  const [view, setView] = useState<View | 'not-found'>(getViewFromHash());
+  const [currentRoute, setCurrentRoute] = useState<ParsedHash>(parseHash());
   const [showForm, setShowForm] = useState(false);
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
   const [pdfExportFarmer, setPdfExportFarmer] = useState<FarmerModel | null>(null);
   const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
@@ -443,14 +467,21 @@ const App: React.FC = () => {
   const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [displayedFarmers, setDisplayedFarmers] = useState<Farmer[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [isListLoading, setIsListLoading] = useState(true);
 
   const database = useDatabase();
   const farmersCollection = database.get<FarmerModel>('farmers');
+  const paymentsCollection = database.get<SubsidyPaymentModel>('subsidy_payments');
   
+  // Keep all farmers in memory for offline mode and other component dependencies.
   const allFarmers = useQuery(farmersCollection.query(Q.where('syncStatusLocal', Q.notEq('pending_delete'))));
-  const pendingSyncCount = useQuery(farmersCollection.query(Q.where('syncStatusLocal', Q.oneOf(['pending', 'pending_delete'])))).length;
-  
   const allFarmersPlain: Farmer[] = useMemo(() => allFarmers.map(f => modelToPlain(f)!), [allFarmers]);
+  
+  const pendingFarmersCount = useQuery(farmersCollection.query(Q.where('syncStatusLocal', Q.oneOf(['pending', 'pending_delete'])))).length;
+  const pendingPaymentsCount = useQuery(paymentsCollection.query(Q.where('syncStatusLocal', 'pending'))).length;
+  const pendingSyncCount = pendingFarmersCount + pendingPaymentsCount;
   
   const currentUserPermissions = useMemo(() => {
     if (!currentUser) return new Set<Permission>();
@@ -484,16 +515,17 @@ const App: React.FC = () => {
 
 
   // --- ROUTING ---
-  const handleNavigate = useCallback((targetView: View) => {
-      window.location.hash = targetView;
+  const handleNavigate = useCallback((path: string) => {
+      window.location.hash = path;
       setIsMobileMenuOpen(false);
   }, []);
 
   useEffect(() => {
     const handleHashChange = () => {
-        setView(getViewFromHash());
+        setCurrentRoute(parseHash());
     };
     window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // Initial check
     return () => {
         window.removeEventListener('hashchange', handleHashChange);
     };
@@ -506,16 +538,16 @@ const App: React.FC = () => {
     const canAccessAdmin = currentUserPermissions.has(Permission.CAN_MANAGE_USERS) || currentUserPermissions.has(Permission.CAN_MANAGE_GROUPS);
     const canAccessContentManager = currentUserPermissions.has(Permission.CAN_MANAGE_CONTENT);
     
-    if (view === 'admin' && !canAccessAdmin) {
+    if (currentRoute.view === 'admin' && !canAccessAdmin) {
         setNotification({ message: "You don't have permission to access the Admin Panel.", type: 'error' });
         handleNavigate('dashboard');
     }
-    if (view === 'content-manager' && !canAccessContentManager) {
+    if (currentRoute.view === 'content-manager' && !canAccessContentManager) {
         setNotification({ message: "You don't have permission to access the Content Manager.", type: 'error' });
         handleNavigate('dashboard');
     }
 
-  }, [view, session, appState, currentUserPermissions, handleNavigate]);
+  }, [currentRoute.view, session, appState, currentUserPermissions, handleNavigate]);
 
   // --- SUPABASE & AUTH ---
   useEffect(() => {
@@ -614,8 +646,9 @@ const App: React.FC = () => {
 
         const pendingFarmers = await farmersCollection.query(Q.where('syncStatusLocal', 'pending')).fetch();
         const pendingDeleteFarmers = await farmersCollection.query(Q.where('syncStatusLocal', 'pending_delete')).fetch();
+        const pendingPayments = await paymentsCollection.query(Q.where('syncStatusLocal', 'pending')).fetch();
 
-        if (pendingFarmers.length === 0 && pendingDeleteFarmers.length === 0) {
+        if (pendingFarmers.length === 0 && pendingDeleteFarmers.length === 0 && pendingPayments.length === 0) {
             if (isManual) setNotification({ message: 'Everything is up to date.', type: 'success' });
             return;
         }
@@ -624,18 +657,18 @@ const App: React.FC = () => {
         if (isManual) setNotification({ message: 'Syncing local changes...', type: 'info' });
 
         try {
+            // Push Farmer changes
             if (pendingFarmers.length > 0) {
                 const plainFarmers = pendingFarmers.map(mapModelToApi);
                 const { error } = await supabase.from('farmers').upsert(plainFarmers);
                 if (error) throw error;
                 await database.write(async () => {
-                    const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { 
-                        rec.syncStatusLocal = 'synced'; 
-                    }));
+                    const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { rec.syncStatusLocal = 'synced'; }));
                     await database.batch(...updates);
                 });
             }
 
+            // Push Farmer deletions
             if (pendingDeleteFarmers.length > 0) {
                 const idsToDelete = pendingDeleteFarmers.map(f => f.id);
                 const { error } = await supabase.from('farmers').delete().in('id', idsToDelete);
@@ -645,6 +678,19 @@ const App: React.FC = () => {
                     await database.batch(...deletions);
                 });
             }
+
+            // Push Payment changes
+            if (pendingPayments.length > 0) {
+                const plainPayments = pendingPayments.map(mapPaymentToApi);
+                const { error } = await supabase.from('subsidy_payments').upsert(plainPayments);
+                if (error) throw error;
+                await database.write(async () => {
+                    const updates = pendingPayments.map(p => p.prepareUpdate(rec => { rec.syncStatusLocal = 'synced'; }));
+                    await database.batch(...updates);
+                });
+            }
+
+
             if (isManual) setNotification({ message: 'Local changes synced successfully.', type: 'success' });
         } catch (error: any) {
             console.error('Push sync failed:', error);
@@ -652,7 +698,7 @@ const App: React.FC = () => {
         } finally {
             setSyncLoading(false);
         }
-    }, [supabase, isOnline, syncLoading, database, farmersCollection]);
+    }, [supabase, isOnline, syncLoading, database, farmersCollection, paymentsCollection]);
   
     const handleFullSync = useCallback(async () => {
         await handlePushSync(true);
@@ -670,6 +716,85 @@ const App: React.FC = () => {
     };
 
   }, [appState, supabase, session, database, farmersCollection, handlePushSync]);
+
+  // --- Farmer List Data Fetching (Server-side/Client-side) ---
+  useEffect(() => {
+    const fetchOrFilterData = async () => {
+        setIsListLoading(true);
+        setSelectedFarmerIds([]); // Clear selection on data change
+
+        // --- ONLINE: Fetch from Supabase ---
+        if (isOnline && supabase) {
+            try {
+                let query = supabase.from('farmers').select('*', { count: 'exact' });
+
+                if (filters.searchQuery) {
+                    const q = `%${filters.searchQuery}%`;
+                    query = query.or(`full_name.ilike.${q},farmer_id.ilike.${q},mobile_number.ilike.${q}`);
+                }
+                if (filters.district) query = query.eq('district', filters.district);
+                if (filters.mandal) query = query.eq('mandal', filters.mandal);
+                if (filters.village) query = query.eq('village', filters.village);
+                if (filters.status) query = query.eq('status', filters.status);
+                if (filters.registrationDateFrom) query = query.gte('registration_date', filters.registrationDateFrom);
+                if (filters.registrationDateTo) query = query.lte('registration_date', filters.registrationDateTo);
+
+                if (sortConfig) {
+                    const sortKeyMap: Record<string, string> = { 'farmerId': 'farmer_id', 'fullName': 'full_name', 'registrationDate': 'registration_date' };
+                    const dbKey = sortKeyMap[sortConfig.key] || sortConfig.key;
+                    query = query.order(dbKey, { ascending: sortConfig.direction === 'ascending' });
+                }
+
+                const startIndex = (currentPage - 1) * rowsPerPage;
+                query = query.range(startIndex, startIndex + rowsPerPage - 1);
+                
+                const { data, error, count } = await query;
+                if (error) throw error;
+                
+                const camelCaseData = data.map((item: any) => snakeToCamelCase(item) as Farmer);
+                setDisplayedFarmers(camelCaseData);
+                setTotalRecords(count ?? 0);
+
+            } catch (error: any) {
+                console.error("Failed to fetch farmers from Supabase:", error);
+                setNotification({ message: `Could not load data. Showing offline records.`, type: 'error' });
+                setDisplayedFarmers([]);
+                setTotalRecords(0);
+            } finally {
+                setIsListLoading(false);
+            }
+        } else {
+            // --- OFFLINE: Filter local data ---
+            let filtered = [...allFarmersPlain];
+            if (filters.searchQuery) {
+                const q = filters.searchQuery.toLowerCase();
+                filtered = filtered.filter(f => f.fullName.toLowerCase().includes(q) || f.farmerId.toLowerCase().includes(q) || f.mobileNumber.includes(q));
+            }
+            if (filters.district) filtered = filtered.filter(f => f.district === filters.district);
+            if (filters.mandal) filtered = filtered.filter(f => f.mandal === filters.mandal);
+            if (filters.village) filtered = filtered.filter(f => f.village === filters.village);
+            if (filters.status) filtered = filtered.filter(f => f.status === filters.status);
+            if (filters.registrationDateFrom) filtered = filtered.filter(f => new Date(f.registrationDate) >= new Date(filters.registrationDateFrom));
+            if (filters.registrationDateTo) filtered = filtered.filter(f => new Date(f.registrationDate) <= new Date(filters.registrationDateTo));
+            
+            if (sortConfig) {
+                filtered.sort((a, b) => {
+                    const aValue = a[sortConfig.key]; const bValue = b[sortConfig.key];
+                    if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+                    if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+                    return 0;
+                });
+            }
+            setTotalRecords(filtered.length);
+            const paginated = filtered.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+            setDisplayedFarmers(paginated);
+            setIsListLoading(false);
+        }
+    };
+    if (appState === 'APP') {
+        fetchOrFilterData();
+    }
+  }, [isOnline, supabase, filters, sortConfig, currentPage, rowsPerPage, allFarmersPlain, appState]);
   
   useEffect(() => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -808,12 +933,6 @@ const App: React.FC = () => {
     setNewlyAddedFarmerId(farmer.id);
   }, [database, farmersCollection, currentUser]);
 
-  const handleSaveRow = useCallback(async (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => {
-    if (!currentUser) return;
-    await database.write(async () => { await farmerToUpdate.update(record => { Object.assign(record, { ...updatedData, syncStatusLocal: 'pending', updatedBy: currentUser.id }); }); });
-    setEditingRowId(null);
-  }, [database, currentUser]);
-
   const handleDeleteSelected = useCallback(() => setShowDeleteConfirmation(true), []);
 
   const confirmDeleteSelected = useCallback(async () => {
@@ -833,8 +952,16 @@ const App: React.FC = () => {
       setNotification({ message: `${newFarmers.length} new farmers imported successfully.`, type: 'success'});
   }, [database, farmersCollection, currentUser]);
 
-  const handlePrint = (farmer: FarmerModel) => { setPrintingFarmer(farmer); setTimeout(() => { window.print(); setPrintingFarmer(null); }, 100); };
-  const handleExportToPdf = useCallback((farmer: FarmerModel) => setPdfExportFarmer(farmer), []);
+  const handlePrint = useCallback(async (farmerId: string) => {
+      const farmerToPrint = await database.get<FarmerModel>('farmers').find(farmerId);
+      setPrintingFarmer(farmerToPrint);
+      setTimeout(() => { window.print(); setPrintingFarmer(null); }, 100);
+  }, [database]);
+
+  const handleExportToPdf = useCallback(async (farmerId: string) => {
+      const farmerToExport = await database.get<FarmerModel>('farmers').find(farmerId);
+      setPdfExportFarmer(farmerToExport);
+  }, [database]);
   
   useEffect(() => {
     if (pdfExportFarmer && pdfContainerRef.current) {
@@ -849,60 +976,7 @@ const App: React.FC = () => {
   const handleSortRequest = useCallback((key: keyof Farmer | 'id') => { setSortConfig(s => ({ key, direction: s?.key === key && s.direction === 'ascending' ? 'descending' : 'ascending' })); setCurrentPage(1); }, []);
   const handlePageChange = (page: number) => setCurrentPage(page);
   const handleRowsPerPageChange = (rows: number) => { setRowsPerPage(rows); setCurrentPage(1); };
-
-  const filteredAndSortedFarmers = useMemo(() => {
-    let filtered = [...allFarmers];
-
-    // Apply filters
-    if (filters.searchQuery) {
-        const query = filters.searchQuery.toLowerCase();
-        filtered = filtered.filter(f =>
-            f.fullName.toLowerCase().includes(query) ||
-            f.farmerId.toLowerCase().includes(query) ||
-            f.mobileNumber.includes(query)
-        );
-    }
-    if (filters.district) {
-        filtered = filtered.filter(f => f.district === filters.district);
-        if (filters.mandal) {
-            filtered = filtered.filter(f => f.mandal === filters.mandal);
-            if (filters.village) {
-                filtered = filtered.filter(f => f.village === filters.village);
-            }
-        }
-    }
-    if (filters.status) {
-        filtered = filtered.filter(f => f.status === filters.status);
-    }
-    if (filters.registrationDateFrom) {
-        const fromDate = new Date(filters.registrationDateFrom);
-        filtered = filtered.filter(f => new Date(f.registrationDate) >= fromDate);
-    }
-    if (filters.registrationDateTo) {
-        const toDate = new Date(filters.registrationDateTo);
-        filtered = filtered.filter(f => new Date(f.registrationDate) <= toDate);
-    }
-
-    // Apply sorting
-    if (sortConfig) {
-        filtered.sort((a, b) => {
-            const aValue = a[sortConfig.key];
-            const bValue = b[sortConfig.key];
-            if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-            if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
-            return 0;
-        });
-    }
-
-    return filtered;
-  }, [allFarmers, filters, sortConfig]);
-
-  const paginatedFarmers = useMemo(() => {
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    return filteredAndSortedFarmers.slice(startIndex, startIndex + rowsPerPage);
-  }, [filteredAndSortedFarmers, currentPage, rowsPerPage]);
-
-
+  
   const exportToExcel = () => {
     const { utils, writeFile } = (window as any).XLSX; const dataToExport = allFarmers.map(f => ({ 'Hap ID': f.farmerId, 'Application ID': f.applicationId, 'Full Name': f.fullName, 'Father/Husband Name': f.fatherHusbandName, 'Mobile Number': f.mobileNumber, 'Aadhaar Number': f.aadhaarNumber, 'Status': f.status, 'Registration Date': new Date(f.registrationDate).toLocaleDateString(), District: GEO_DATA.find(d=>d.code===f.district)?.name||f.district, Mandal:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.name||f.mandal, Village:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.villages.find(v=>v.code===f.village)?.name||f.village, Address:f.address, 'Approved Extent (Acres)':f.approvedExtent, 'Number of Plants':f.numberOfPlants })); const ws = utils.json_to_sheet(dataToExport); const wb = utils.book_new(); utils.book_append_sheet(wb, ws, "Farmers"); writeFile(wb, "Hapsara_Farmers_Export.xlsx");
   };
@@ -914,19 +988,20 @@ const App: React.FC = () => {
     const canAccessAdmin = currentUserPermissions.has(Permission.CAN_MANAGE_USERS) || currentUserPermissions.has(Permission.CAN_MANAGE_GROUPS);
     const canAccessContentManager = currentUserPermissions.has(Permission.CAN_MANAGE_CONTENT);
 
-    if (view === 'not-found') {
+    if (currentRoute.view === 'not-found') {
         return <Suspense fallback={<ModalLoader/>}><NotFoundPage onBack={() => handleNavigate('dashboard')} /></Suspense>
     }
-    switch(view) {
+    switch(currentRoute.view) {
         case 'profile': return <Suspense fallback={<ModalLoader/>}><ProfilePage currentUser={currentUser!} groups={groups} onSave={handleSaveProfile} onBack={() => handleNavigate('dashboard')} /></Suspense>;
         case 'admin': if (!canAccessAdmin) return null; return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} /></Suspense>;
-        case 'billing': return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} onNavigate={handleNavigate as any} /></Suspense>
+        case 'billing': return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} onNavigate={(path) => handleNavigate(path)} /></Suspense>
         case 'usage-analytics': return <Suspense fallback={<ModalLoader/>}><UsageAnalyticsPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} supabase={supabase} /></Suspense>
         case 'content-manager': if (!canAccessContentManager) return null; return <Suspense fallback={<ModalLoader/>}><ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('dashboard')} /></Suspense>
         case 'subscription-management': return <Suspense fallback={<ModalLoader/>}><SubscriptionManagementPage currentUser={currentUser!} onBack={() => handleNavigate('billing')} /></Suspense>;
         case 'print-queue': return <Suspense fallback={<ModalLoader/>}><PrintQueuePage queuedFarmerIds={printQueue} users={users} onRemove={handleRemoveFromPrintQueue} onClear={handleClearPrintQueue} onBack={() => handleNavigate('farmer-directory')} database={database} /></Suspense>;
+        case 'farmer-details': return <Suspense fallback={<ModalLoader/>}><FarmerDetailsPage farmerId={currentRoute.params.farmerId} database={database} users={users} currentUser={currentUser!} onBack={() => handleNavigate('farmer-directory')} permissions={currentUserPermissions} setNotification={setNotification} /></Suspense>
         case 'farmer-directory':
-            return (<> <FilterBar onFilterChange={handleFilterChange} /> <FarmerList farmers={paginatedFarmers} users={users} canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)} canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)} editingRowId={editingRowId} onEditRow={setEditingRowId} onCancelEditRow={() => setEditingRowId(null)} onSaveRow={handleSaveRow} onPrint={handlePrint} onExportToPdf={handleExportToPdf} selectedFarmerIds={selectedFarmerIds} onSelectionChange={(id, selected) => setSelectedFarmerIds(p => selected ? [...p, id] : p.filter(i => i !== id))} onSelectAll={(all) => setSelectedFarmerIds(all ? paginatedFarmers.map(f => f.id) : [])} sortConfig={sortConfig} onRequestSort={handleSortRequest} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onBatchUpdate={() => setShowBatchUpdateModal(true)} onDeleteSelected={handleDeleteSelected} totalRecords={filteredAndSortedFarmers.length} currentPage={currentPage} rowsPerPage={rowsPerPage} onPageChange={handlePageChange} onRowsPerPageChange={handleRowsPerPageChange} isLoading={false} onAddToPrintQueue={handleAddToPrintQueue} /> </>);
+            return (<> <FilterBar onFilterChange={handleFilterChange} /> <FarmerList farmers={displayedFarmers} users={users} canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)} canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)} onPrint={handlePrint} onExportToPdf={handleExportToPdf} selectedFarmerIds={selectedFarmerIds} onSelectionChange={(id, selected) => setSelectedFarmerIds(p => selected ? [...p, id] : p.filter(i => i !== id))} onSelectAll={(all) => setSelectedFarmerIds(all ? displayedFarmers.map(f => f.id) : [])} sortConfig={sortConfig} onRequestSort={handleSortRequest} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onBatchUpdate={() => setShowBatchUpdateModal(true)} onDeleteSelected={handleDeleteSelected} totalRecords={totalRecords} currentPage={currentPage} rowsPerPage={rowsPerPage} onPageChange={handlePageChange} onRowsPerPageChange={handleRowsPerPageChange} isLoading={isListLoading} onAddToPrintQueue={handleAddToPrintQueue} onNavigate={handleNavigate} /> </>);
         case 'dashboard': default:
             return <Suspense fallback={<ModalLoader/>}><Dashboard supabase={supabase} /></Suspense>;
     }
@@ -944,9 +1019,9 @@ const App: React.FC = () => {
         case 'APP':
             return (
                 <div className="flex h-screen bg-gray-100 font-sans">
-                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} printQueueCount={printQueue.length} />
+                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={currentRoute.view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} printQueueCount={printQueue.length} />
                     <div className="flex-1 flex flex-col overflow-hidden">
-                        <Header onToggleSidebar={() => setIsMobileMenuOpen(m => !m)} currentView={view} onRegister={handleRegisterClick} onSync={() => handleFullSync()} syncLoading={syncLoading} pendingSyncCount={pendingSyncCount} isOnline={isOnline} permissions={currentUserPermissions} />
+                        <Header onToggleSidebar={() => setIsMobileMenuOpen(m => !m)} currentView={currentRoute.view} onRegister={handleRegisterClick} onSync={() => handleFullSync()} syncLoading={syncLoading} pendingSyncCount={pendingSyncCount} isOnline={isOnline} permissions={currentUserPermissions} />
                         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
                             {renderAppContent()}
                         </main>

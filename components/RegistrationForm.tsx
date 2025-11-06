@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Farmer, FarmerStatus, PlantationMethod, PlantType, Village, Mandal } from '../types';
 import { GEO_DATA } from '../data/geoData';
 import ConfirmationModal from './ConfirmationModal';
+import AiReviewModal from './AiReviewModal';
 
 interface RegistrationFormProps {
     onSubmit: (farmer: Farmer, photoFile?: File) => Promise<void>;
@@ -29,6 +30,8 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
     plantationDate: '',
     mlrdPlants: 0,
     fullCostPlants: 0,
+    latitude: undefined,
+    longitude: undefined,
     applicationId: '',
     farmerId: '',
     proposedYear: '2024-25',
@@ -131,6 +134,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const [hasDraft, setHasDraft] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+    const [locationError, setLocationError] = useState<string | null>(null);
+    const [showAiReview, setShowAiReview] = useState(false);
     
     const debouncedFormData = useDebounce(formData, 1000); // 1-second delay for auto-save
     
@@ -223,7 +229,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         const checked = type === 'checkbox' ? (e.target as HTMLInputElement).checked : undefined;
-        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+
+        if (type === 'number' && name in ['latitude', 'longitude']) {
+             setFormData(prev => ({ ...prev, [name]: value === '' ? undefined : parseFloat(value) }));
+        } else {
+             setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+        }
     };
     
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -262,6 +273,43 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         }
     };
     
+    const handleCaptureLocation = () => {
+        if (!navigator.geolocation) {
+            setLocationError("Geolocation is not supported by this browser.");
+            return;
+        }
+        setIsCapturingLocation(true);
+        setLocationError(null);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                }));
+                setIsCapturingLocation(false);
+            },
+            (error) => {
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        setLocationError("Permission to access location was denied.");
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        setLocationError("Location information is unavailable.");
+                        break;
+                    case error.TIMEOUT:
+                        setLocationError("The request to get user location timed out.");
+                        break;
+                    default:
+                        setLocationError("An unknown error occurred while getting location.");
+                        break;
+                }
+                setIsCapturingLocation(false);
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+    };
+
     const validate = useCallback(() => {
         const newErrors: Record<string, string> = {};
         if (!formData.fullName.trim()) newErrors.fullName = "Full Name is required.";
@@ -513,6 +561,24 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                     <FormLabel>Plantation Date</FormLabel>
                                     <FormField><input type="date" name="plantationDate" value={formData.plantationDate} onChange={handleChange} className={`${getInputClass('plantationDate')} disabled:bg-gray-100 disabled:cursor-not-allowed`} min={formData.registrationDate} disabled={!formData.registrationDate} title={!formData.registrationDate ? "Please select a registration date first" : ""} /><InputError message={errors.plantationDate} onDismiss={() => handleDismissError('plantationDate')} /></FormField>
                                 </FormRow>
+                                <FormRow>
+                                    <FormLabel>Geolocation</FormLabel>
+                                    <FormField>
+                                        <div className="flex flex-col sm:flex-row gap-4">
+                                            <input type="number" step="any" name="latitude" placeholder="Latitude" value={formData.latitude ?? ''} onChange={handleChange} className={`${getInputClass('latitude')} flex-1`} />
+                                            <input type="number" step="any" name="longitude" placeholder="Longitude" value={formData.longitude ?? ''} onChange={handleChange} className={`${getInputClass('longitude')} flex-1`} />
+                                            <button type="button" onClick={handleCaptureLocation} disabled={isCapturingLocation} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2 disabled:bg-blue-300">
+                                                {isCapturingLocation ? (
+                                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                ) : (
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
+                                                )}
+                                                <span>{isCapturingLocation ? 'Capturing...' : 'Capture'}</span>
+                                            </button>
+                                        </div>
+                                        {locationError && <p className="mt-2 text-sm text-red-600">{locationError}</p>}
+                                    </FormField>
+                                </FormRow>
                             </section>
                             
                              <section className="mt-6">
@@ -520,14 +586,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <FormRow><FormLabel>Current Status</FormLabel><FormField><div className="relative"><select name="status" value={formData.status} onChange={handleChange} className={getSelectClass('status')}>{Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
                             </section>
                         </div>
-                        <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
+                        <div className="bg-gray-100 p-4 flex justify-end items-center gap-4 rounded-b-lg">
                             <button type="button" onClick={handleCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Cancel</button>
+                            <button
+                                type="button"
+                                onClick={() => setShowAiReview(true)}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-semibold flex items-center gap-2"
+                                title="Use AI to check the form for potential errors or inconsistencies."
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
+                                Review with AI
+                            </button>
                             <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Register Farmer</button>
                         </div>
                     </form>
                 </div>
             )}
             
+            {showAiReview && <AiReviewModal farmerData={formData} onClose={() => setShowAiReview(false)} />}
+
             {showConfirmation && preparedFarmerData && (
                 <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">

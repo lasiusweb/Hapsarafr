@@ -120,6 +120,8 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, users, isForPdf = false }
               <DetailRow label="Plantation Method" value={farmer.methodOfPlantation} />
               <DetailRow label="Plants Type" value={farmer.plantType} />
               <DetailRow label="Plantation Date" value={new Date(farmer.plantationDate).toLocaleDateString()} />
+              <DetailRow label="Latitude" value={farmer.latitude || 'N/A'} />
+              <DetailRow label="Longitude" value={farmer.longitude || 'N/A'} />
             </tbody>
           </table>
         </div>

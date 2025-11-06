@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Farmer, FarmerStatus, User } from '../types';
-import { FarmerModel } from '../db';
 import { GEO_DATA } from '../data/geoData';
 
 interface FarmerListProps {
-    farmers: FarmerModel[];
+    farmers: Farmer[];
     users: User[];
     canEdit: boolean;
     canDelete: boolean;
-    editingRowId: string | null;
-    onEditRow: (farmerId: string) => void;
-    onCancelEditRow: () => void;
-    onSaveRow: (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => Promise<void>;
-    onPrint: (farmer: FarmerModel) => void;
-    onExportToPdf: (farmer: FarmerModel) => void;
+    onPrint: (farmerId: string) => void;
+    onExportToPdf: (farmerId: string) => void;
     selectedFarmerIds: string[];
     onSelectionChange: (farmerId: string, isSelected: boolean) => void;
     onSelectAll: (allSelected: boolean) => void;
@@ -30,16 +25,16 @@ interface FarmerListProps {
     onRowsPerPageChange: (rows: number) => void;
     isLoading: boolean;
     onAddToPrintQueue: (farmerIds: string[]) => void;
+    onNavigate: (path: string) => void;
 }
 
 const FarmerList: React.FC<FarmerListProps> = ({ 
-    farmers, users, canEdit, canDelete, editingRowId, onEditRow, onCancelEditRow, onSaveRow, 
+    farmers, users, canEdit, canDelete, 
     onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, 
     sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onBatchUpdate, onDeleteSelected,
-    totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange, isLoading, onAddToPrintQueue
+    totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange, isLoading, onAddToPrintQueue,
+    onNavigate
 }) => {
-    
-    const [editedFarmerData, setEditedFarmerData] = useState<Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>>({});
     
     useEffect(() => {
         if (newlyAddedFarmerId) {
@@ -51,27 +46,6 @@ const FarmerList: React.FC<FarmerListProps> = ({
         }
     }, [newlyAddedFarmerId, onHighlightComplete]);
 
-    const handleEditClick = (farmer: FarmerModel) => {
-        setEditedFarmerData({
-            fullName: farmer.fullName,
-            mobileNumber: farmer.mobileNumber,
-            status: farmer.status as FarmerStatus,
-        });
-        onEditRow(farmer.id);
-    };
-
-    const handleSaveClick = (farmer: FarmerModel) => {
-        // Basic validation
-        if (!editedFarmerData.fullName?.trim()) {
-            alert("Full Name cannot be empty.");
-            return;
-        }
-        if (editedFarmerData.mobileNumber && !/^[6-9]\d{9}$/.test(editedFarmerData.mobileNumber)) {
-            alert("Mobile number must be 10 digits and start with 6-9.");
-            return;
-        }
-        onSaveRow(farmer, editedFarmerData);
-    };
 
     const StatusBadge: React.FC<{status: FarmerStatus}> = ({ status }) => {
         const colors: Record<FarmerStatus, string> = {
@@ -83,7 +57,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
         return <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status]}`}>{status}</span>;
     };
 
-    const getGeoName = (type: 'district'|'mandal'|'village', farmer: FarmerModel) => {
+    const getGeoName = (type: 'district'|'mandal'|'village', farmer: Farmer) => {
         try {
             if(type === 'district') return GEO_DATA.find(d => d.code === farmer.district)?.name || farmer.district;
             const district = GEO_DATA.find(d => d.code === farmer.district);
@@ -101,7 +75,6 @@ const FarmerList: React.FC<FarmerListProps> = ({
         return user ? user.name : 'Unknown User';
     };
     
-    // Fix: Added isLoading prop to show a loading indicator.
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-64 bg-white shadow-md rounded-lg">
@@ -110,11 +83,11 @@ const FarmerList: React.FC<FarmerListProps> = ({
         );
     }
 
-    if (totalRecords === 0) {
+    if (totalRecords === 0 && !isLoading) {
         return (
             <div className="text-center py-20 text-gray-500 bg-white shadow-md rounded-lg">
                 <h2 className="text-2xl font-semibold">No Farmers Found</h2>
-                <p className="mt-2">Try adjusting your search criteria, or click "Register New Farmer" to add one.</p>
+                <p className="mt-2">Try adjusting your search criteria, or click "Register Farmer" to add one.</p>
             </div>
         );
     }
@@ -311,22 +284,14 @@ const FarmerList: React.FC<FarmerListProps> = ({
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200 md:divide-y-0">
                     {farmers.length > 0 ? farmers.map(farmer => {
-                        const isEditing = editingRowId === farmer.id;
                         const isSelected = selectedFarmerIds.includes(farmer.id);
                         const isNewlyAdded = newlyAddedFarmerId === farmer.id;
                         
-                        let rowBgClass = '';
-                        if (isNewlyAdded) {
-                            rowBgClass = 'bg-green-200';
-                        } else if (isEditing) {
-                            rowBgClass = 'bg-yellow-50';
-                        } else if (isSelected) {
-                            rowBgClass = 'bg-green-50';
-                        }
+                        let rowBgClass = isNewlyAdded ? 'bg-green-200' : isSelected ? 'bg-green-50' : '';
 
                         return (
-                            <tr key={farmer.id} className={`transition-colors duration-1000 ${rowBgClass}`}>
-                                <td data-label="" className="px-6 py-4 whitespace-nowrap td-checkbox">
+                            <tr key={farmer.id} onClick={() => onNavigate(`farmer-details/${farmer.id}`)} className={`transition-colors duration-1000 cursor-pointer hover:bg-gray-50 ${rowBgClass}`}>
+                                <td data-label="" className="px-6 py-4 whitespace-nowrap td-checkbox" onClick={e => e.stopPropagation()}>
                                     <input
                                         type="checkbox"
                                         className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
@@ -337,45 +302,26 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                 </td>
                                 <td data-label="Hap ID" className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
                                 <td data-label="Name" className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {isEditing ? (
-                                        <input 
-                                            type="text"
-                                            value={editedFarmerData.fullName || ''}
-                                            onChange={e => setEditedFarmerData(d => ({ ...d, fullName: e.target.value }))}
-                                            className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-                                        />
-                                    ) : (
-                                        <div className="flex items-center gap-2">
-                                            {farmer.syncStatusLocal === 'synced' ? (
-                                                <div title="Synced with server" className="flex-shrink-0">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                    </svg>
-                                                </div>
-                                            ) : (
-                                                <div title="Pending - Saved locally" className="flex-shrink-0">
-                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                                                    </svg>
-                                                </div>
-                                            )}
-                                            <span>{farmer.fullName}</span>
-                                        </div>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        {farmer.syncStatus === 'synced' ? (
+                                            <div title="Synced with server" className="flex-shrink-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        ) : (
+                                            <div title="Pending - Saved locally" className="flex-shrink-0">
+                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                        <span>{farmer.fullName}</span>
+                                    </div>
                                 </td>
                                 <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</td>
                                 <td data-label="Status" className="px-6 py-4 whitespace-nowrap text-sm">
-                                    {isEditing ? (
-                                        <select
-                                            value={editedFarmerData.status || ''}
-                                            onChange={e => setEditedFarmerData(d => ({ ...d, status: e.target.value as FarmerStatus }))}
-                                            className="w-full p-1 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-                                        >
-                                            {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                                        </select>
-                                    ) : (
-                                        <StatusBadge status={farmer.status as FarmerStatus} />
-                                    )}
+                                    <StatusBadge status={farmer.status as FarmerStatus} />
                                 </td>
                                  <td data-label="Reg. Date" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(farmer.registrationDate).toLocaleDateString()}</td>
                                  <td data-label="Created" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -386,19 +332,9 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                     <div>{getUserName(farmer.updatedBy)}</div>
                                     <div className="text-xs text-gray-400" title={new Date(farmer.updatedAt).toLocaleString()}>{new Date(farmer.updatedAt).toLocaleDateString()}</div>
                                 </td>
-                                <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2 td-actions">
-                                {isEditing ? (
-                                    <>
-                                        <button onClick={() => handleSaveClick(farmer)} className="text-green-600 hover:text-green-900">Save</button>
-                                        <button onClick={onCancelEditRow} className="text-gray-600 hover:text-gray-900">Cancel</button>
-                                    </>
-                                ) : (
-                                    <>
-                                        {canEdit && <button onClick={() => handleEditClick(farmer)} className="text-indigo-600 hover:text-indigo-900">Edit</button>}
-                                        <button onClick={() => onPrint(farmer)} className="text-green-600 hover:text-green-900">Print</button>
-                                        <button onClick={() => onExportToPdf(farmer)} className="text-blue-600 hover:text-blue-900">PDF</button>
-                                    </>
-                                )}
+                                <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2 td-actions" onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => onPrint(farmer.id)} className="text-green-600 hover:text-green-900">Print</button>
+                                    <button onClick={() => onExportToPdf(farmer.id)} className="text-blue-600 hover:text-blue-900">PDF</button>
                                 </td>
                                 {/* Hidden data for responsive view */}
                                 <td data-label="Mobile" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{farmer.mobileNumber}</td>

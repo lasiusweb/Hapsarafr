@@ -77,6 +77,8 @@ export interface Farmer {
   plantationDate: string;
   mlrdPlants: number;
   fullCostPlants: number;
+  latitude?: number;
+  longitude?: number;
 
   // Application Workflow
   applicationId: string;
@@ -101,6 +103,28 @@ export interface Farmer {
   createdAt: string;
   updatedAt: string;
 }
+
+export enum PaymentStage {
+    Year1 = 'Year 1 Subsidy',
+    Year2 = 'Year 2 Subsidy',
+    Year3 = 'Year 3 Subsidy',
+    Fertilizer = 'Fertilizer Support',
+    Other = 'Other',
+}
+
+export interface SubsidyPayment {
+    id: string;
+    farmerId: string;
+    paymentDate: string; // ISO string
+    amount: number;
+    utrNumber: string;
+    paymentStage: PaymentStage;
+    notes?: string;
+    createdBy: string; // User ID
+    createdAt: string; // ISO string
+    syncStatus: 'synced' | 'pending';
+}
+
 
 export interface Village {
   code: string;

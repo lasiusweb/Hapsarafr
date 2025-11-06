@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import { GEO_DATA } from '../data/geoData';
@@ -86,12 +87,12 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
         const headers = [
             'fullName', 'fatherHusbandName', 'aadhaarNumber', 'mobileNumber', 'gender',
             'address', 'ppbRofrId', 'bankAccountNumber', 'ifscCode', 'appliedExtent',
-            'district', 'mandal', 'village'
+            'district', 'mandal', 'village', 'latitude', 'longitude'
         ];
         const exampleRow = [
             'Jane Doe', 'John Doe', '123456789012', '9876543210', 'Female',
             '123 Main St, Anytown', 'PPB123', '987654321098', 'SBIN0001234', 5,
-            'Hanmakonda', 'Hanamkonda', 'Hanamkonda'
+            'Hanmakonda', 'Hanamkonda', 'Hanamkonda', '17.9689', '79.5941'
         ];
         
         const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
@@ -168,7 +169,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     
                     const asoId = `SO${regYear}${districtCode}${mandalCode}${Math.floor(100 + Math.random() * 900)}`;
 
-                    // Fix: Added missing createdAt and updatedAt fields to satisfy the Farmer type.
                     const farmer: Omit<Farmer, 'createdBy' | 'updatedBy'> & { id: string } = {
                         id: farmerId,
                         farmerId: farmerId,
@@ -193,6 +193,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         plantationDate: '',
                         mlrdPlants: 0,
                         fullCostPlants: 0,
+                        latitude: row.latitude ? Number(row.latitude) : undefined,
+                        longitude: row.longitude ? Number(row.longitude) : undefined,
                         proposedYear: '2024-25',
                         registrationDate: now.split('T')[0],
                         paymentUtrDd: '',

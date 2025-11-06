@@ -26,7 +26,7 @@ interface SupabaseSetupGuideProps {
 }
 
 const SupabaseSetupGuide: React.FC<SupabaseSetupGuideProps> = ({ onClose }) => {
-    const [activeTab, setActiveTab] = useState<'auth' | 'dashboard' | 'audit' | 'rls'>('auth');
+    const [activeTab, setActiveTab] = useState<'auth' | 'dashboard' | 'audit' | 'rls' | 'subsidy' | 'geo'>('auth');
     
     const authFunctionCode = `
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -229,6 +229,54 @@ USING (auth.uid() = id)
 WITH CHECK (auth.uid() = id);
     `;
 
+    const subsidyTableCode = `
+-- 1. Create the table to store subsidy payments
+CREATE TABLE public.subsidy_payments (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  farmer_id text NOT NULL REFERENCES public.farmers(id) ON DELETE CASCADE,
+  payment_date date NOT NULL,
+  amount numeric NOT NULL,
+  utr_number text,
+  payment_stage text NOT NULL,
+  notes text,
+  syncStatus text DEFAULT 'synced'::text,
+  created_by uuid REFERENCES public.profiles(id),
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+
+-- 2. Add comments for clarity
+COMMENT ON TABLE public.subsidy_payments IS 'Stores records of subsidy payments made to farmers.';
+    `;
+
+    const subsidyRlsPolicies = `
+-- 1. Enable RLS on the new table
+ALTER TABLE public.subsidy_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subsidy_payments FORCE ROW LEVEL SECURITY;
+
+-- 2. Drop existing policies to be safe
+DROP POLICY IF EXISTS "Allow all read access" ON public.subsidy_payments;
+DROP POLICY IF EXISTS "Allow insert for authorized users" ON public.subsidy_payments;
+
+-- 3. Create policies
+-- Authenticated users can see all payments (could be restricted further if needed)
+CREATE POLICY "Allow all read access"
+ON public.subsidy_payments FOR SELECT
+USING (auth.role() = 'authenticated');
+
+-- Users with CAN_EDIT_FARMER permission can add new payments
+CREATE POLICY "Allow insert for authorized users"
+ON public.subsidy_payments FOR INSERT
+WITH CHECK ('CAN_EDIT_FARMER' = ANY(public.get_user_permissions()));
+    `;
+
+    const geoFieldsCode = `
+-- Add latitude and longitude columns to the farmers table
+ALTER TABLE public.farmers
+ADD COLUMN IF NOT EXISTS latitude numeric,
+ADD COLUMN IF NOT EXISTS longitude numeric;
+`;
+
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[100]" onClick={onClose}>
             <div className="bg-gray-800 text-gray-300 rounded-lg shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -245,6 +293,8 @@ WITH CHECK (auth.uid() = id);
                         <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'dashboard' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>2. Dashboard Function</button>
                         <button onClick={() => setActiveTab('audit')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'audit' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>3. Audit Trail</button>
                         <button onClick={() => setActiveTab('rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>4. Security Policies (RLS)</button>
+                        <button onClick={() => setActiveTab('subsidy')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'subsidy' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>5. Subsidy Payments</button>
+                        <button onClick={() => setActiveTab('geo')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'geo' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>6. Geolocation Fields</button>
                     </div>
 
                     <div className="w-3/4 p-6 overflow-y-auto">
@@ -292,11 +342,29 @@ WITH CHECK (auth.uid() = id);
                                 <CodeBlock code={rlsProfilesPolicies} />
                             </div>
                         )}
+                        {activeTab === 'subsidy' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">Subsidy Payments Table & Security</h3>
+                                <p>This table stores individual payment records for each farmer. Run these scripts in order.</p>
+                                <p className="font-semibold">Step 1: Create the `subsidy_payments` table.</p>
+                                <CodeBlock code={subsidyTableCode} />
+                                <p className="font-semibold">Step 2: Apply RLS policies to the new table.</p>
+                                <CodeBlock code={subsidyRlsPolicies} />
+                            </div>
+                        )}
+                        {activeTab === 'geo' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">Geolocation Fields</h3>
+                                <p>This script adds the necessary columns to your `farmers` table to store GPS coordinates.</p>
+                                <CodeBlock code={geoFieldsCode} />
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 <div className="bg-gray-900 p-4 flex justify-end gap-4 rounded-b-lg flex-shrink-0">
                     <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition">Close</button>
+
                 </div>
             </div>
         </div>
