@@ -132,6 +132,20 @@ const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
 
 type View = 'dashboard' | 'profile' | 'admin' | 'billing' | 'usage-analytics';
 
+// Helper function to get view from hash
+const getViewFromHash = (): View => {
+    const hash = window.location.hash.replace(/^#\/?/, ''); // Removes # or #/
+    switch (hash) {
+        case 'profile':
+        case 'admin':
+        case 'billing':
+        case 'usage-analytics':
+            return hash;
+        default:
+            return 'dashboard';
+    }
+};
+
 const Header: React.FC<{
   currentUser: User | null;
   onLogout: () => void;
@@ -366,7 +380,7 @@ const App: React.FC = () => {
   const [showSupabaseSettings, setShowSupabaseSettings] = useState(false);
   const [authView, setAuthView] = useState<'login' | 'signup' | 'accept-invitation'>('login');
   
-  const [view, setView] = useState<View>('dashboard');
+  const [view, setView] = useState<View>(getViewFromHash());
   const [showForm, setShowForm] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
@@ -402,6 +416,21 @@ const App: React.FC = () => {
     const userGroup = groups.find(g => g.id === currentUser.groupId);
     return new Set(userGroup?.permissions || []);
   }, [currentUser, groups]);
+
+  // --- ROUTING ---
+  useEffect(() => {
+    const handleHashChange = () => {
+        setView(getViewFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+        window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  const handleNavigate = (targetView: View) => {
+      window.location.hash = targetView === 'dashboard' ? '' : `/${targetView}`;
+  };
 
   // --- SUPABASE & AUTH ---
   useEffect(() => {
@@ -657,7 +686,7 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
   const handleLogout = async () => {
       if (supabase) await supabase.auth.signOut();
       setCurrentUser(null);
-      setView('dashboard');
+      handleNavigate('dashboard');
   };
 
   const handleSignUp = async (name: string, email: string, password: string): Promise<string | null> => {
@@ -694,7 +723,7 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
       } else {
           setCurrentUser(updatedUser); // Optimistic update
           setNotification({ message: 'Profile updated successfully.', type: 'success' });
-          setView('dashboard');
+          handleNavigate('dashboard');
       }
   };
   
@@ -1122,13 +1151,13 @@ record.syncStatusLocal = 'pending';
   const renderView = () => {
     switch(view) {
         case 'profile':
-            return <Suspense fallback={<ModalLoader/>}><ProfilePage currentUser={currentUser!} groups={groups} onSave={handleSaveProfile} onBack={() => setView('dashboard')} /></Suspense>;
+            return <Suspense fallback={<ModalLoader/>}><ProfilePage currentUser={currentUser!} groups={groups} onSave={handleSaveProfile} onBack={() => handleNavigate('dashboard')} /></Suspense>;
         case 'admin':
-            return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => setView('dashboard')} /></Suspense>;
+            return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} /></Suspense>;
         case 'billing':
-            return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => setView('dashboard')} userCount={users.length} recordCount={allFarmers.length} /></Suspense>
+            return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} /></Suspense>
         case 'usage-analytics':
-            return <Suspense fallback={<ModalLoader/>}><UsageAnalyticsPage currentUser={currentUser!} onBack={() => setView('dashboard')} /></Suspense>
+            return <Suspense fallback={<ModalLoader/>}><UsageAnalyticsPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} /></Suspense>
         case 'dashboard':
         default:
             return (
@@ -1183,10 +1212,10 @@ record.syncStatusLocal = 'pending';
       <Header
         currentUser={currentUser}
         onLogout={handleLogout}
-        onProfileClick={() => setView('profile')}
-        onBillingClick={() => setView('billing')}
-        onUsageAnalyticsClick={() => setView('usage-analytics')}
-        onNavigate={setView}
+        onProfileClick={() => handleNavigate('profile')}
+        onBillingClick={() => handleNavigate('billing')}
+        onUsageAnalyticsClick={() => handleNavigate('usage-analytics')}
+        onNavigate={handleNavigate}
         currentView={view}
         onSetupGuideClick={() => setShowSetupGuide(true)}
         onRegister={handleRegisterClick}
