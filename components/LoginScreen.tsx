@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 // Supabase client is passed as a prop, using 'any' as it's from a CDN.
 interface SupabaseLoginProps {
   supabase: any; 
-  onSignUp: (name: string, email: string, password: string) => void;
+  onSignUp: (name: string, email: string, password: string) => Promise<string | null>;
   onAcceptInvitationClick: () => void;
 }
 
@@ -29,8 +29,12 @@ const LoginScreen: React.FC<SupabaseLoginProps> = ({ supabase, onSignUp, onAccep
                     setLoading(false);
                     return;
                 }
-                // Pass details to parent component to handle sign-up
-                onSignUp(name, email, password);
+                const signUpError = await onSignUp(name, email, password);
+                if (signUpError) {
+                    setError(signUpError);
+                } else {
+                    setMessage('Sign up successful! Please check your email for a confirmation link.');
+                }
             } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;

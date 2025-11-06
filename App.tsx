@@ -673,8 +673,8 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
       setView('dashboard');
   };
 
-  const handleSignUp = async (name: string, email: string, password: string) => {
-    if (!supabase) return;
+  const handleSignUp = async (name: string, email: string, password: string): Promise<string | null> => {
+    if (!supabase) return "Supabase client not available.";
 
     const { error } = await supabase.auth.signUp({ 
         email, 
@@ -688,10 +688,10 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
     });
 
     if (error) {
-        setNotification({ message: error.message, type: 'error' });
-    } else {
-        setNotification({ message: 'Sign up successful! Please check your email for a confirmation link.', type: 'success' });
+        return error.message;
     }
+    
+    return null;
   };
 
   const handleSaveProfile = async (updatedUser: User) => {
