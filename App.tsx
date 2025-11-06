@@ -676,14 +676,14 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
   const handleSignUp = async (name: string, email: string, password: string): Promise<string | null> => {
     if (!supabase) return "Supabase client not available.";
 
-    const { error } = await supabase.auth.signUp({ 
-        email, 
-        password, 
-        options: { 
-            data: { 
+    const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: {
                 full_name: name,
                 avatar_url: 'https://terrigen-cdn-dev.marvel.com/content/prod/1x/003cap_ons_crd_03.jpg', // Default avatar
-            } 
+            }
         }
     });
 
@@ -691,6 +691,7 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
         return error.message;
     }
     
+    // On success, return null to indicate no error. The LoginScreen will show a success message.
     return null;
   };
 
@@ -841,8 +842,6 @@ Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
       });
     });
     setNewlyAddedFarmerId(farmer.id);
-    setNotification({ message: `Farmer ${farmer.fullName} registered successfully with Hap ID: ${farmer.farmerId}.`, type: 'success' });
-    setShowForm(false);
   }, [database, farmersCollection, currentUser]);
 
   const handleSaveRow = useCallback(async (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => {

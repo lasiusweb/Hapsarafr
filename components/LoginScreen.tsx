@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 // Supabase client is passed as a prop, using 'any' as it's from a CDN.
