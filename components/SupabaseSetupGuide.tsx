@@ -220,27 +220,29 @@ END;
         title: "Create Authentication Trigger",
         content: (
             <>
-                <p>This trigger will automatically run the `handle_new_user` function every time a new user signs up. The most reliable way to create this trigger is by using the <strong className="text-gray-200">SQL Editor</strong>, as the Supabase UI sometimes hides the necessary `auth` schema.</p>
+                <p>The final backend step is to create a <strong className="text-gray-200">Trigger</strong>. This will automatically run the `handle_new_user` function you just created whenever a new user signs up in your application.</p>
+                <p className="mt-2">The most reliable way to create this is by using the <strong className="text-gray-200">SQL Editor</strong>, as the Supabase dashboard UI sometimes hides the required `auth` schema.</p>
                 
-                <div className="my-3 p-3 bg-blue-900/50 border border-blue-700 rounded-md text-blue-300 text-sm">
-                    <strong>Recommended Method: SQL Editor</strong>
-                    <p className="text-xs mt-1">Copy and run the following command in the SQL Editor. This directly targets the `auth.users` table.</p>
-                </div>
+                <h4 className="font-semibold mt-4 text-gray-200">1. Go to the SQL Editor</h4>
+                <p className="text-gray-400 text-sm">Navigate to the SQL Editor section in your Supabase project dashboard.</p>
+    
+                <h4 className="font-semibold mt-4 text-gray-200">2. Run the Trigger Creation Script</h4>
+                <p className="text-gray-400 text-sm">Copy the entire code block below, paste it into the SQL Editor, and click "Run".</p>
                 <CodeBlock code={`
+-- This trigger calls the 'handle_new_user' function
+-- after a new user is inserted into the 'auth.users' table.
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_new_user();
                 `} />
-
-                <h4 className="font-semibold mt-6 text-gray-200">Alternative Method (Via UI)</h4>
-                <p className="text-gray-400 text-sm">If you prefer the UI, you can try creating the trigger by navigating to <strong className="text-gray-200">Database &gt; Triggers</strong>. Note that the `auth.users` table may not be listed by default.</p>
-                <div className="mt-4 space-y-3">
-                    <p><strong>Name:</strong> <code className="bg-gray-700 px-1 rounded">on_auth_user_created</code></p>
-                    <p><strong>Table:</strong> Select <code className="bg-gray-700 px-1 rounded">users</code> in the <code className="bg-gray-700 px-1 rounded">auth</code> schema (if visible).</p>
-                    <p><strong>Events:</strong> Check only <code className="bg-gray-700 px-1 rounded">INSERT</code></p>
-                    <p><strong>Trigger type:</strong> <code className="bg-gray-700 px-1 rounded">AFTER</code></p>
-                    <p><strong>Function:</strong> Select <code className="bg-gray-700 px-1 rounded">handle_new_user</code></p>
+                
+                <h4 className="font-semibold mt-6 text-gray-200">Troubleshooting</h4>
+                <div className="my-3 p-3 bg-yellow-900/50 border border-yellow-700 rounded-md text-yellow-300 text-sm space-y-2">
+                    <p><strong>Error: function public.handle_new_user() does not exist</strong></p>
+                    <p className="text-xs">This means the function from <strong className="font-bold">Step 4</strong> was not created successfully. Please go back to Step 4 and ensure the function was created with the exact name `handle_new_user` and in the `public` schema.</p>
+                    <p><strong>Error: relation "auth.users" does not exist</strong></p>
+                    <p className="text-xs">This is a rare permission issue. Ensure you are running the query as a superuser (which is the default in the SQL Editor). If this persists, contact Supabase support.</p>
                 </div>
             </>
         )
