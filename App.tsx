@@ -130,13 +130,16 @@ const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
   return data;
 };
 
+type View = 'dashboard' | 'profile' | 'admin' | 'billing' | 'usage-analytics';
+
 const Header: React.FC<{
   currentUser: User | null;
   onLogout: () => void;
   onProfileClick: () => void;
   onBillingClick: () => void;
   onUsageAnalyticsClick: () => void;
-  onAdminClick: () => void;
+  onNavigate: (view: View) => void;
+  currentView: View;
   onSetupGuideClick: () => void;
   onRegister: () => void;
   onExport: () => void;
@@ -151,11 +154,16 @@ const Header: React.FC<{
   isOnline: boolean;
   pendingSyncCount: number;
   permissions: Set<Permission>;
-}> = ({ currentUser, onLogout, onProfileClick, onBillingClick, onUsageAnalyticsClick, onAdminClick, onSetupGuideClick, onRegister, onExport, onExportCsv, onImport, onViewRawData, onDeleteSelected, onBatchUpdate, onSync, syncLoading, selectedCount, isOnline, pendingSyncCount, permissions }) => {
+}> = ({
+    currentUser, onLogout, onProfileClick, onBillingClick, onUsageAnalyticsClick, onNavigate, currentView,
+    onSetupGuideClick, onRegister, onExport, onExportCsv, onImport, onViewRawData,
+    onDeleteSelected, onBatchUpdate, onSync, syncLoading, selectedCount, isOnline, pendingSyncCount, permissions
+}) => {
   const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
   const canDelete = permissions.has(Permission.CAN_DELETE_FARMER);
   const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
   const canManage = (permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS));
+  
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -176,38 +184,13 @@ const Header: React.FC<{
       setIsProfileMenuOpen(false);
       setIsMobileMenuOpen(false);
   };
-
-  const renderActionButtons = (isMobile = false) => (
-    <>
-        {canDelete && selectedCount > 0 && (
-            <button onClick={() => handleMenuAction(onDeleteSelected)} className={`w-full text-left px-4 py-2 rounded-md transition font-semibold flex items-center gap-2 ${isMobile ? 'text-red-600 hover:bg-red-50' : 'bg-red-600 text-white hover:bg-red-700'}`} title={`Delete ${selectedCount} selected farmer(s)`}>
-                {isMobile ? `Delete Selected (${selectedCount})` : `Delete (${selectedCount})`}
-            </button>
-        )}
-        {canEdit && selectedCount > 0 && (
-            <button onClick={() => handleMenuAction(onBatchUpdate)} className={`w-full text-left px-4 py-2 rounded-md transition font-semibold flex items-center gap-2 ${isMobile ? 'text-yellow-600 hover:bg-yellow-50' : 'bg-yellow-500 text-white hover:bg-yellow-600'}`} title={`Update status for ${selectedCount} selected farmer(s)`}>
-                {isMobile ? `Update Status (${selectedCount})` : `Update (${selectedCount})`}
-            </button>
-        )}
-        <DataMenu onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} onViewRawData={onViewRawData} permissions={permissions} isMobile={isMobile} onAction={handleMenuAction} />
-        {canRegister && (
-            <button onClick={() => handleMenuAction(onRegister)} className={`w-full text-left px-4 py-2 rounded-md transition font-semibold ${isMobile ? 'text-gray-700 hover:bg-gray-100' : 'bg-green-600 text-white hover:bg-green-700'}`}>Register Farmer</button>
-        )}
-        {canManage && (
-            <button onClick={() => handleMenuAction(onAdminClick)} className={`w-full text-left px-4 py-2 rounded-md transition font-semibold ${isMobile ? 'text-gray-700 hover:bg-gray-100' : 'bg-gray-700 text-white hover:bg-gray-800'}`}>Admin Panel</button>
-        )}
-        {canManage && (
-            <button onClick={() => handleMenuAction(onSetupGuideClick)} className={`w-full text-left px-4 py-2 rounded-md transition font-semibold ${isMobile ? 'text-gray-700 hover:bg-gray-100' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>Setup Guide</button>
-        )}
-    </>
-  );
   
   const SyncStatusIndicator: React.FC<{isMobile?: boolean}> = ({ isMobile = false }) => {
       if (!syncLoading && pendingSyncCount === 0) return null;
       
       const baseClass = `flex items-center gap-1.5 text-sm font-semibold`;
-      const mobileClass = isMobile ? 'mt-2' : '';
-      const colorClass = syncLoading ? 'text-blue-600 animate-pulse' : 'text-yellow-700';
+      const mobileClass = isMobile ? 'mt-2 text-yellow-700' : 'text-gray-600';
+      const colorClass = syncLoading ? 'text-blue-600 animate-pulse' : '';
       
       return (
           <div className={`${baseClass} ${mobileClass} ${colorClass}`}>
@@ -219,56 +202,72 @@ const Header: React.FC<{
           </div>
       );
   };
+  
+  const navLinkClasses = (targetView: string) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === targetView ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`;
 
   return (
     <header className="bg-white shadow-md p-3 sm:p-4 relative" ref={headerRef}>
         <div className="flex justify-between items-center">
-          {/* Left Side: Logo, Title, Status */}
+          {/* Left Side: Logo, Title, Desktop Nav */}
           <div className="flex items-center gap-2 sm:gap-4">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 sm:h-10 sm:w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 00-1.09.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
               <h1 className="text-xl md:text-2xl font-bold text-gray-800">
-                  <span className="hidden sm:inline">Hapsara Farmer Registration</span>
-                  <span className="sm:hidden">Hapsara</span>
+                  <span className="hidden sm:inline">Hapsara</span>
+                  <span className="sm:hidden">HFR</span>
               </h1>
-              <div className="hidden sm:flex items-center gap-4 border-l pl-4 ml-2">
+              
+              {/* Desktop Navigation Menu */}
+              <nav className="hidden md:flex items-baseline gap-2 ml-6">
+                  <button onClick={() => onNavigate('dashboard')} className={navLinkClasses('dashboard')}>Dashboard</button>
+                  <DataMenu onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} onViewRawData={onViewRawData} permissions={permissions} />
+                  {canManage && <button onClick={() => onNavigate('admin')} className={navLinkClasses('admin')}>Admin</button>}
+              </nav>
+          </div>
+
+          {/* Right Side: Actions, Status, Profile */}
+          <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2">
+                  {canDelete && selectedCount > 0 && (
+                      <button onClick={onDeleteSelected} className="px-4 py-2 rounded-md transition font-semibold flex items-center gap-2 bg-red-600 text-white hover:bg-red-700" title={`Delete ${selectedCount} selected farmer(s)`}>
+                          Delete ({selectedCount})
+                      </button>
+                  )}
+                  {canEdit && selectedCount > 0 && (
+                      <button onClick={onBatchUpdate} className="px-4 py-2 rounded-md transition font-semibold flex items-center gap-2 bg-yellow-500 text-white hover:bg-yellow-600" title={`Update status for ${selectedCount} selected farmer(s)`}>
+                          Update ({selectedCount})
+                      </button>
+                  )}
+              </div>
+              
+              <div className="hidden sm:flex items-center gap-4 border-l pl-2 ml-2">
                   <div className="flex items-center gap-2">
-                    <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
-                    <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
+                      <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
                   </div>
                   <SyncStatusIndicator />
               </div>
-          </div>
 
-          {/* Right Side: Desktop Buttons & Profile */}
-          <div className="hidden md:flex items-center gap-2">
               {isOnline && (
-                <button 
-                  onClick={onSync}
-                  disabled={syncLoading} 
-                  className="relative px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait"
-                >
-                  {syncLoading ? 'Syncing...' : 'Sync Now'}
+                <button onClick={onSync} disabled={syncLoading} className="relative px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait">
+                  {syncLoading ? 'Syncing...' : 'Sync'}
                   {pendingSyncCount > 0 && !syncLoading && (
-                    <span className="absolute -top-2 -right-2 flex h-5 w-5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-5 w-5 bg-yellow-500 text-yellow-900 text-xs items-center justify-center">{pendingSyncCount}</span>
-                    </span>
+                    <span className="absolute -top-2 -right-2 flex h-5 w-5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-5 w-5 bg-yellow-500 text-yellow-900 text-xs items-center justify-center">{pendingSyncCount}</span></span>
                   )}
                 </button>
               )}
-              {renderActionButtons(false)}
+              
+              {canRegister && (
+                  <button onClick={onRegister} className="hidden md:block px-4 py-2 rounded-md transition font-semibold bg-green-600 text-white hover:bg-green-700">Register Farmer</button>
+              )}
+
               {currentUser && (
                 <div className="relative">
-                    <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="flex items-center gap-3 hover:bg-gray-100 rounded-lg p-2 transition">
-                        <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-200" />
+                    <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="flex items-center gap-3 hover:bg-gray-100 rounded-lg p-1.5 transition">
+                        <img src={currentUser.avatar} alt="User Avatar" className="w-9 h-9 rounded-full border-2 border-gray-200" />
                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-500 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                     </button>
                     {isProfileMenuOpen && (
                         <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-                            <div className="p-2 border-b">
-                                <p className="font-semibold text-gray-800 text-sm truncate">{currentUser.name}</p>
-                                <p className="text-xs text-gray-500">Pay-as-you-go Plan</p>
-                            </div>
+                            <div className="p-2 border-b"><p className="font-semibold text-gray-800 text-sm truncate">{currentUser.name}</p><p className="text-xs text-gray-500">Pay-as-you-go Plan</p></div>
                             <div className="py-1" role="menu">
                                 <button onClick={() => handleMenuAction(onProfileClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Profile</button>
                                 <button onClick={() => handleMenuAction(onBillingClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Billing</button>
@@ -280,13 +279,13 @@ const Header: React.FC<{
                     )}
                 </div>
               )}
-          </div>
-          
-          {/* Mobile Hamburger Button */}
-          <div className="md:hidden">
-              <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
-              </button>
+
+              {/* Mobile Hamburger Button */}
+              <div className="md:hidden">
+                  <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                  </button>
+              </div>
           </div>
         </div>
         
@@ -295,31 +294,32 @@ const Header: React.FC<{
             <div className="absolute top-full left-0 w-full bg-white shadow-lg md:hidden z-40 animate-fade-in-down">
                  {currentUser && (
                     <div className="p-4 border-b">
-                         <div className="flex items-center gap-3 mb-4">
-                            <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-200" />
-                            <div>
-                                <p className="font-semibold text-gray-800 text-sm">{currentUser.name}</p>
-                                <p className="text-xs text-gray-500">Pay-as-you-go Plan</p>
-                            </div>
-                        </div>
-                        <div className="sm:hidden">
-                            <div className="flex items-center gap-2">
-                                <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}></span>
-                                <span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span>
-                            </div>
-                            <SyncStatusIndicator isMobile={true} />
-                        </div>
+                         <div className="flex items-center gap-3 mb-4"><img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-200" /><div><p className="font-semibold text-gray-800 text-sm">{currentUser.name}</p><p className="text-xs text-gray-500">Pay-as-you-go Plan</p></div></div>
+                         <div className="sm:hidden flex items-center gap-4"><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}></span><span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span></div><SyncStatusIndicator isMobile={true} /></div>
                     </div>
                 )}
-                <div className="p-2 space-y-1">
-                    {renderActionButtons(true)}
+                <nav className="p-2 space-y-1">
+                    <button onClick={() => handleMenuAction(() => onNavigate('dashboard'))} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md font-semibold">Dashboard</button>
+                    {canRegister && <button onClick={() => handleMenuAction(onRegister)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Register Farmer</button>}
+                    
+                    {selectedCount > 0 && <div className="border-t my-2"></div>}
+                    {canDelete && selectedCount > 0 && <button onClick={() => handleMenuAction(onDeleteSelected)} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md font-semibold">Delete Selected ({selectedCount})</button>}
+                    {canEdit && selectedCount > 0 && <button onClick={() => handleMenuAction(onBatchUpdate)} className="w-full text-left px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50 rounded-md font-semibold">Update Status ({selectedCount})</button>}
+
+                    <div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Data</p>
+                    <DataMenu permissions={permissions} isMobile={true} onAction={handleMenuAction} onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} onViewRawData={onViewRawData} />
+                    
+                    {canManage && (<><div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Admin</p>
+                    <button onClick={() => handleMenuAction(() => onNavigate('admin'))} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Admin Panel</button>
+                    <button onClick={() => handleMenuAction(onSetupGuideClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Setup Guide</button></>)}
+                    
                     <div className="border-t my-2"></div>
-                     <button onClick={() => handleMenuAction(onProfileClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md" role="menuitem">Profile</button>
-                     <button onClick={() => handleMenuAction(onBillingClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md" role="menuitem">Billing</button>
-                     <button onClick={() => handleMenuAction(onUsageAnalyticsClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md" role="menuitem">Usage Analytics</button>
+                    <button onClick={() => handleMenuAction(onProfileClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Profile</button>
+                    <button onClick={() => handleMenuAction(onBillingClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Billing</button>
+                    <button onClick={() => handleMenuAction(onUsageAnalyticsClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Usage</button>
                     <div className="border-t my-2"></div>
-                    <button onClick={() => handleMenuAction(onLogout)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md" role="menuitem">Logout</button>
-                </div>
+                    <button onClick={() => handleMenuAction(onLogout)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Logout</button>
+                </nav>
             </div>
         )}
     </header>
@@ -377,7 +377,7 @@ const App: React.FC = () => {
   const [showSupabaseSettings, setShowSupabaseSettings] = useState(false);
   const [authView, setAuthView] = useState<'login' | 'signup' | 'accept-invitation'>('login');
   
-  const [view, setView] = useState<'dashboard' | 'profile' | 'admin' | 'billing' | 'usage-analytics'>('dashboard');
+  const [view, setView] = useState<View>('dashboard');
   const [showForm, setShowForm] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
@@ -1197,7 +1197,8 @@ record.syncStatusLocal = 'pending';
         onProfileClick={() => setView('profile')}
         onBillingClick={() => setView('billing')}
         onUsageAnalyticsClick={() => setView('usage-analytics')}
-        onAdminClick={() => setView('admin')}
+        onNavigate={setView}
+        currentView={view}
         onSetupGuideClick={() => setShowSetupGuide(true)}
         onRegister={handleRegisterClick}
         onExport={() => exportToExcel()}
