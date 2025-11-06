@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import * as ReactDOM from 'react-dom/client';
-import { Farmer, User, Group, Permission } from './types';
+import { Farmer, User, Group, Permission, PaymentStage } from './types';
 import FilterBar, { Filters } from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
@@ -39,6 +39,8 @@ const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
 const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
 const SubsidyManagementPage = lazy(() => import('./components/SubsidyManagementPage'));
 const MapView = lazy(() => import('./components/MapView'));
+const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
+const ReportsPage = lazy(() => import('./components/ReportsPage'));
 
 
 // Type declarations for CDN libraries
@@ -55,6 +57,78 @@ const initialFilters: Filters = {
   registrationDateTo: '',
 };
 
+// --- New Alert System ---
+interface Alert {
+    id: string; // farmerId + stage
+    farmerId: string;
+    farmerName: string;
+    message: string;
+    timestamp: number;
+    read: boolean;
+}
+
+function timeAgo(timestamp: number): string {
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - timestamp) / 1000);
+    if (seconds < 60) return "Just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+}
+
+const AlertsPanel: React.FC<{
+    alerts: Alert[];
+    isOpen: boolean;
+    onClose: () => void;
+    onMarkAsRead: (id: string) => void;
+    onMarkAllAsRead: () => void;
+    onNavigate: (path: string) => void;
+}> = ({ alerts, isOpen, onClose, onMarkAsRead, onMarkAllAsRead, onNavigate }) => {
+    if (!isOpen) return null;
+    
+    const unreadAlerts = alerts.filter(a => !a.read);
+
+    const handleAlertClick = (alert: Alert) => {
+        onMarkAsRead(alert.id);
+        onNavigate(`farmer-details/${alert.farmerId}`);
+        onClose();
+    };
+    
+    return (
+        <div className="absolute top-16 right-4 z-50 w-full max-w-sm bg-white rounded-lg shadow-2xl border border-gray-200" onClick={e => e.stopPropagation()}>
+            <div className="p-3 border-b flex justify-between items-center">
+                <h3 className="font-semibold text-gray-800">Notifications</h3>
+                {unreadAlerts.length > 0 && <button onClick={onMarkAllAsRead} className="text-sm text-green-600 font-semibold hover:underline">Mark all as read</button>}
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+                {alerts.length === 0 ? (
+                    <div className="text-center p-8 text-gray-500">
+                        <p>No new notifications.</p>
+                    </div>
+                ) : (
+                    <ul className="divide-y divide-gray-100">
+                        {alerts.map(alert => (
+                            <li key={alert.id} onClick={() => handleAlertClick(alert)} className={`p-4 hover:bg-gray-50 cursor-pointer ${!alert.read ? 'bg-green-50' : ''}`}>
+                                <div className="flex items-start gap-3">
+                                    {!alert.read && <div className="mt-1.5 h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></div>}
+                                    <div className={alert.read ? 'pl-5' : ''}>
+                                        <p className="text-sm text-gray-700">{alert.message}</p>
+                                        <p className="text-xs text-gray-400 mt-1">{timeAgo(alert.timestamp)}</p>
+                                    </div>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
 // Custom hooks to observe WatermelonDB queries
 const useQuery = <T extends Model>(query: Query<T>): T[] => {
   const [data, setData] = useState<T[]>([]);
@@ -65,7 +139,7 @@ const useQuery = <T extends Model>(query: Query<T>): T[] => {
   return data;
 };
 
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports';
 type ParsedHash = 
     | { view: View; params: {} }
     | { view: 'farmer-details'; params: { farmerId: string } }
@@ -81,7 +155,7 @@ const parseHash = (): ParsedHash => {
         return { view: 'farmer-details', params: { farmerId: id } };
     }
 
-    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help'];
+    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports'];
     if (simpleViews.includes(path as View)) {
         return { view: path as View, params: {} };
     }
@@ -192,6 +266,10 @@ const App: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [pendingSyncCount, setPendingSyncCount] = useState(0);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+    // Alert System State
+    const [alerts, setAlerts] = useState<Alert[]>([]);
+    const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
     
     // WatermelonDB Queries - filter out soft-deleted records from the main view
     const farmersQuery = useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('syncStatus', Q.notEq('pending_delete'))), [database]);
@@ -205,6 +283,70 @@ const App: React.FC = () => {
         const sup = initializeSupabase();
         setSupabase(sup);
     }, []);
+
+    // Effect for Alert Generation
+    useEffect(() => {
+        const ALERT_STORAGE_KEY = 'hapsara-alerts';
+        const storedAlerts: Alert[] = JSON.parse(localStorage.getItem(ALERT_STORAGE_KEY) || '[]');
+        const newAlerts: Alert[] = [];
+        
+        const paymentsByFarmerId = new Map<string, SubsidyPaymentModel[]>();
+        allPayments.forEach(p => {
+            const list = paymentsByFarmerId.get(p.farmerId) || [];
+            list.push(p);
+            paymentsByFarmerId.set(p.farmerId, list);
+        });
+
+        allPlainFarmers.forEach(farmer => {
+            const farmerPayments = paymentsByFarmerId.get(farmer.id) || [];
+            const now = new Date();
+            const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+            const plantationDate = farmer.plantationDate ? new Date(farmer.plantationDate) : null;
+
+            const year1Payment = farmerPayments.find(p => p.paymentStage === PaymentStage.Year1);
+            const year2Payment = farmerPayments.find(p => p.paymentStage === PaymentStage.Year2);
+            const year3Payment = farmerPayments.find(p => p.paymentStage === PaymentStage.Year3);
+            
+            const isEligibleForYear2 = year1Payment && plantationDate && plantationDate <= oneYearAgo;
+            if (!year2Payment && isEligibleForYear2) {
+                const alertId = `${farmer.id}-${PaymentStage.Year2}`;
+                if (!storedAlerts.some(a => a.id === alertId) && !newAlerts.some(a => a.id === alertId)) {
+                    newAlerts.push({
+                        id: alertId,
+                        farmerId: farmer.id,
+                        farmerName: farmer.fullName,
+                        message: `${farmer.fullName} is now eligible for Year 2 Subsidy.`,
+                        timestamp: Date.now(),
+                        read: false,
+                    });
+                }
+            }
+
+            const isEligibleForYear3 = year2Payment && plantationDate && plantationDate <= twoYearsAgo;
+            if (!year3Payment && isEligibleForYear3) {
+                 const alertId = `${farmer.id}-${PaymentStage.Year3}`;
+                if (!storedAlerts.some(a => a.id === alertId) && !newAlerts.some(a => a.id === alertId)) {
+                    newAlerts.push({
+                        id: alertId,
+                        farmerId: farmer.id,
+                        farmerName: farmer.fullName,
+                        message: `${farmer.fullName} is now eligible for Year 3 Subsidy.`,
+                        timestamp: Date.now(),
+                        read: false,
+                    });
+                }
+            }
+        });
+
+        if (newAlerts.length > 0) {
+            const updatedAlerts = [...newAlerts, ...storedAlerts].sort((a,b) => b.timestamp - a.timestamp);
+            setAlerts(updatedAlerts);
+            localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(updatedAlerts));
+        } else {
+            setAlerts(storedAlerts.sort((a,b) => b.timestamp - a.timestamp));
+        }
+    }, [allPlainFarmers, allPayments]);
 
     // Effect to count pending sync items
     useEffect(() => {
@@ -447,6 +589,19 @@ const App: React.FC = () => {
     const handleSelectAll = (allSelected: boolean) => {
         setSelectedFarmerIds(allSelected ? paginatedFarmers.map(f => f.id) : []);
     };
+
+    // Alert Handlers
+    const handleMarkAsRead = (alertId: string) => {
+        const updatedAlerts = alerts.map(a => a.id === alertId ? { ...a, read: true } : a);
+        setAlerts(updatedAlerts);
+        localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
+    };
+
+    const handleMarkAllAsRead = () => {
+        const updatedAlerts = alerts.map(a => ({ ...a, read: true }));
+        setAlerts(updatedAlerts);
+        localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
+    };
     
     // --- Main Content Renderer ---
     const renderContent = () => {
@@ -508,6 +663,8 @@ const App: React.FC = () => {
                             database={database}
                             setNotification={setNotification}
                         />;
+            case 'reports':
+                return <ReportsPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
             case 'admin':
                 return <AdminPage 
                             users={users} 
@@ -540,6 +697,8 @@ const App: React.FC = () => {
                             appContent={null}
                             onBack={() => handleNavigate('dashboard')}
                         />;
+            case 'id-verification':
+                return <IdVerificationPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
             default:
                 return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
         }
@@ -578,10 +737,20 @@ const App: React.FC = () => {
                         pendingSyncCount={pendingSyncCount}
                         isOnline={isOnline}
                         permissions={permissions}
+                        unreadAlertsCount={alerts.filter(a => !a.read).length}
+                        onToggleAlertsPanel={() => setIsAlertsPanelOpen(p => !p)}
                     />
                     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
                        {renderContent()}
                     </main>
+                    <AlertsPanel
+                        alerts={alerts}
+                        isOpen={isAlertsPanelOpen}
+                        onClose={() => setIsAlertsPanelOpen(false)}
+                        onMarkAsRead={handleMarkAsRead}
+                        onMarkAllAsRead={handleMarkAllAsRead}
+                        onNavigate={handleNavigate}
+                    />
                 </div>
 
                 {isShowingRegistrationForm && (
@@ -631,7 +800,9 @@ const Header: React.FC<{
     pendingSyncCount: number;
     isOnline: boolean;
     permissions: Set<Permission>;
-}> = ({ onToggleSidebar, currentView, onRegister, onSync, syncLoading, pendingSyncCount, isOnline, permissions }) => {
+    unreadAlertsCount: number;
+    onToggleAlertsPanel: () => void;
+}> = ({ onToggleSidebar, currentView, onRegister, onSync, syncLoading, pendingSyncCount, isOnline, permissions, unreadAlertsCount, onToggleAlertsPanel }) => {
     const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
     const viewTitles: Record<ParsedHash['view'], string> = {
         dashboard: 'Dashboard',
@@ -647,6 +818,8 @@ const Header: React.FC<{
         'subsidy-management': 'Subsidy Management',
         'map-view': 'Farmer Map View',
         'help': 'Help & Support',
+        'id-verification': 'ID Verification Tool',
+        reports: 'Reports & Analytics',
         'not-found': 'Page Not Found',
     };
 
@@ -668,6 +841,12 @@ const Header: React.FC<{
                         )}
                     </button>
                 )}
+                 <button onClick={onToggleAlertsPanel} className="relative p-2 rounded-full hover:bg-gray-100 transition text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                    {unreadAlertsCount > 0 && (
+                        <span className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center text-xs rounded-full bg-red-500 text-white font-bold">{unreadAlertsCount > 9 ? '9+' : unreadAlertsCount}</span>
+                    )}
+                </button>
                 {canRegister && currentView === 'farmer-directory' && (
                     <button onClick={onRegister} className="flex items-center gap-2 px-4 py-2 rounded-md transition font-semibold bg-green-600 text-white hover:bg-green-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110 2h3V6a1 1 0 011-1z" clipRule="evenodd" /></svg>
