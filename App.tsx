@@ -1,17 +1,22 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { Farmer, FarmerStatus, User, Group, Permission, Invitation, AppContent, AuditLogEntry, DashboardStats, SubsidyPayment } from './types';
-import { GEO_DATA } from './data/geoData';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import * as ReactDOM from 'react-dom/client';
+import { Farmer, User, Group, Permission } from './types';
 import FilterBar, { Filters } from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
-// FIX: Import Model from watermelondb to use as a generic constraint
 import { Q, Query, Model } from '@nozbe/watermelondb';
 import { FarmerModel, SubsidyPaymentModel } from './db';
 import { initializeSupabase } from './lib/supabase';
+import { DEFAULT_GROUPS } from './data/permissionsData';
+import { AVATARS } from './data/avatars';
+import Sidebar from './components/Sidebar';
+import Notification from './components/Notification';
+import { synchronize } from './lib/sync';
+import { exportToExcel, exportToCsv } from './lib/export';
+import PrintView from './components/PrintView';
 
 // Lazily import components to enable code-splitting
 const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
-const PrintView = lazy(() => import('./components/PrintView'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const LoginScreen = lazy(() => import('./components/LoginScreen'));
 const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatusModal'));
@@ -24,8 +29,7 @@ const RawDataView = lazy(() => import('./components/RawDataView'));
 const BillingPage = lazy(() => import('./components/BillingPage'));
 const UsageAnalyticsPage = lazy(() => import('./components/UsageAnalyticsPage'));
 const PrivacyModal = lazy(() => import('./components/PrivacyModal'));
-const HelpModal = lazy(() => import('./components/HelpModal'));
-const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
+const HelpPage = lazy(() => import('./components/HelpPage'));
 const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
@@ -33,90 +37,61 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const SubscriptionManagementPage = lazy(() => import('./components/SubscriptionManagementPage'));
 const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
 const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
+const SubsidyManagementPage = lazy(() => import('./components/SubsidyManagementPage'));
+const MapView = lazy(() => import('./components/MapView'));
 
 
 // Type declarations for CDN libraries
 declare const html2canvas: any;
 declare const jspdf: any;
 
-// Helper to convert object keys from snake_case to camelCase
-const snakeToCamelCase = (obj: any): any => {
-    if (obj === null || typeof obj !== 'object') {
-        return obj;
-    }
-    const newObj: {[key: string]: any} = {};
-    for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const camelKey = key.replace(/_([a-z])/g, g => g[1].toUpperCase());
-            newObj[camelKey] = obj[key];
-        }
-    }
-    return newObj;
+const initialFilters: Filters = {
+  searchQuery: '',
+  district: '',
+  mandal: '',
+  village: '',
+  status: '',
+  registrationDateFrom: '',
+  registrationDateTo: '',
 };
 
-// Helper to explicitly map a FarmerModel to a snake_case object for the Supabase API
-const mapModelToApi = (farmer: FarmerModel) => ({
-    id: farmer.id,
-    full_name: farmer.fullName,
-    father_husband_name: farmer.fatherHusbandName,
-    aadhaar_number: farmer.aadhaarNumber,
-    mobile_number: farmer.mobileNumber,
-    gender: farmer.gender,
-    address: farmer.address,
-    ppb_rofr_id: farmer.ppbRofrId,
-    photo: farmer.photo,
-    bank_account_number: farmer.bankAccountNumber,
-    ifsc_code: farmer.ifscCode,
-    account_verified: farmer.accountVerified,
-    applied_extent: farmer.appliedExtent,
-    approved_extent: farmer.approvedExtent,
-    number_of_plants: farmer.numberOfPlants,
-    method_of_plantation: farmer.methodOfPlantation,
-    plant_type: farmer.plantType,
-    plantation_date: farmer.plantationDate,
-    mlrd_plants: farmer.mlrdPlants,
-    full_cost_plants: farmer.fullCostPlants,
-    latitude: farmer.latitude,
-    longitude: farmer.longitude,
-    application_id: farmer.applicationId,
-    farmer_id: farmer.farmerId,
-    proposed_year: farmer.proposedYear,
-    registration_date: farmer.registrationDate,
-    aso_id: farmer.asoId,
-    payment_utr_dd: farmer.paymentUtrDd,
-    status: farmer.status,
-    district: farmer.district,
-    mandal: farmer.mandal,
-    village: farmer.village,
-    sync_status: 'synced', // Always set to synced when pushing
-    created_by: farmer.createdBy,
-    updated_by: farmer.updatedBy,
-    created_at: farmer.createdAt,
-    updated_at: farmer.updatedAt,
-});
+// Custom hooks to observe WatermelonDB queries
+const useQuery = <T extends Model>(query: Query<T>): T[] => {
+  const [data, setData] = useState<T[]>([]);
+  useEffect(() => {
+    const subscription = query.observe().subscribe(setData);
+    return () => subscription.unsubscribe();
+  }, [query]);
+  return data;
+};
 
-const mapPaymentToApi = (payment: SubsidyPaymentModel) => ({
-    id: payment.id,
-    farmer_id: payment.farmerId,
-    payment_date: payment.paymentDate,
-    amount: payment.amount,
-    utr_number: payment.utrNumber,
-    payment_stage: payment.paymentStage,
-    notes: payment.notes,
-    created_by: payment.createdBy,
-    created_at: new Date(payment.createdAt).toISOString(),
-});
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help';
+type ParsedHash = 
+    | { view: View; params: {} }
+    | { view: 'farmer-details'; params: { farmerId: string } }
+    | { view: 'not-found', params: {} };
 
 
-const mapInvitationToCamelCase = (inv: any): Invitation => ({
-    id: inv.id,
-    groupId: inv.group_id,
-    emailFor: inv.email_for,
-    createdAt: inv.created_at,
-    expiresAt: inv.expires_at,
-    status: inv.status,
-    acceptedByUserId: inv.accepted_by_user_id,
-});
+// Helper function to get view from hash
+const parseHash = (): ParsedHash => {
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    const [path, id] = hash.split('/');
+    
+    if (path === 'farmer-details' && id) {
+        return { view: 'farmer-details', params: { farmerId: id } };
+    }
+
+    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help'];
+    if (simpleViews.includes(path as View)) {
+        return { view: path as View, params: {} };
+    }
+
+    if (path === '' || path === 'dashboard') {
+        return { view: 'dashboard', params: {} };
+    }
+
+    return { view: 'not-found', params: {} };
+};
 
 const ModalLoader: React.FC = () => (
     <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-[100]">
@@ -140,46 +115,512 @@ const useOnlineStatus = () => {
   return isOnline;
 };
 
-// Custom hooks to observe WatermelonDB queries
-// FIX: Changed generic constraint from `T extends FarmerModel` to `T extends Model` to allow observing any model type.
-const useQuery = <T extends Model>(query: Query<T>): T[] => {
-  const [data, setData] = useState<T[]>([]);
-  useEffect(() => {
-    const subscription = query.observe().subscribe(setData);
-    return () => subscription.unsubscribe();
-  }, [query]);
-  return data;
-};
+const farmerModelToPlain = (f: FarmerModel): Farmer => ({
+    id: f.id,
+    fullName: f.fullName,
+    fatherHusbandName: f.fatherHusbandName,
+    aadhaarNumber: f.aadhaarNumber,
+    mobileNumber: f.mobileNumber,
+    gender: f.gender,
+    address: f.address,
+    ppbRofrId: f.ppbRofrId,
+    photo: f.photo,
+    bankAccountNumber: f.bankAccountNumber,
+    ifscCode: f.ifscCode,
+    accountVerified: f.accountVerified,
+    appliedExtent: f.appliedExtent,
+    approvedExtent: f.approvedExtent,
+    numberOfPlants: f.numberOfPlants,
+    methodOfPlantation: f.methodOfPlantation,
+    plantType: f.plantType,
+    plantationDate: f.plantationDate,
+    mlrdPlants: f.mlrdPlants,
+    fullCostPlants: f.fullCostPlants,
+    latitude: f.latitude,
+    longitude: f.longitude,
+    applicationId: f.applicationId,
+    farmerId: f.farmerId,
+    proposedYear: f.proposedYear,
+    registrationDate: f.registrationDate,
+    asoId: f.asoId,
+    paymentUtrDd: f.paymentUtrDd,
+    status: f.status,
+    district: f.district,
+    mandal: f.mandal,
+    village: f.village,
+    syncStatus: f.syncStatusLocal,
+    createdBy: f.createdBy,
+    updatedBy: f.updatedBy,
+    createdAt: new Date(f.createdAt).toISOString(),
+    updatedAt: new Date(f.updatedAt).toISOString(),
+});
 
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue';
-type ParsedHash = 
-    | { view: View; params: {} }
-    | { view: 'farmer-details'; params: { farmerId: string } }
-    | { view: 'not-found', params: {} };
 
+const App: React.FC = () => {
+    const database = useDatabase();
+    const isOnline = useOnlineStatus();
+    const [appState, setAppState] = useState<string>('APP'); 
+    const [supabase, setSupabase] = useState<any | null>(null);
+    const [currentUser, setCurrentUser] = useState<User>({ id: 'user-1', name: 'Field Officer', groupId: 'group-data-entry', avatar: AVATARS[4]});
+    const [users, setUsers] = useState<User[]>([]);
+    const [groups, setGroups] = useState<Group[]>(DEFAULT_GROUPS);
+  
+    // UI State
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [currentHash, setCurrentHash] = useState(window.location.hash);
+    const [isShowingRegistrationForm, setIsShowingRegistrationForm] = useState(false);
+    const [editingFarmer, setEditingFarmer] = useState<Farmer | null>(null);
+  
+    // Modals visibility
+    const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
+    const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+    const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+    const [showRawDataView, setShowRawDataView] = useState(false);
+  
+    // Data and list state
+    const [filters, setFilters] = useState<Filters>(initialFilters);
+    const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id'; direction: 'ascending' | 'descending' } | null>({ key: 'createdAt', direction: 'descending' });
+    const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
+    const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(25);
+    const [printQueue, setPrintQueue] = useState<string[]>([]);
+    const [farmerForPrinting, setFarmerForPrinting] = useState<Farmer | null>(null);
 
-// Helper function to get view from hash
-const parseHash = (): ParsedHash => {
-    const hash = window.location.hash.replace(/^#\/?/, '');
-    const [path, id] = hash.split('/');
+    // Sync & Notification State
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [pendingSyncCount, setPendingSyncCount] = useState(0);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     
-    if (path === 'farmer-details' && id) {
-        return { view: 'farmer-details', params: { farmerId: id } };
-    }
+    // WatermelonDB Queries - filter out soft-deleted records from the main view
+    const farmersQuery = useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('syncStatus', Q.notEq('pending_delete'))), [database]);
+    const allFarmers = useQuery(farmersQuery);
+    const paymentsQuery = useMemo(() => database.get<SubsidyPaymentModel>('subsidy_payments').query(), [database]);
+    const allPayments = useQuery(paymentsQuery);
 
-    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue'];
-    if (simpleViews.includes(path as View)) {
-        return { view: path as View, params: {} };
-    }
+    const allPlainFarmers = useMemo(() => allFarmers.map(farmerModelToPlain), [allFarmers]);
 
-    if (path === '' || path === 'dashboard') {
-        return { view: 'dashboard', params: {} };
-    }
+    useEffect(() => {
+        const sup = initializeSupabase();
+        setSupabase(sup);
+    }, []);
 
-    return { view: 'not-found', params: {} };
+    // Effect to count pending sync items
+    useEffect(() => {
+        const farmersPendingQuery = database.collections.get('farmers').query(Q.where('syncStatus', Q.notEq('synced')));
+        const paymentsPendingQuery = database.collections.get('subsidy_payments').query(Q.where('syncStatus', Q.notEq('synced')));
+        
+        const farmerSub = farmersPendingQuery.observeCount().subscribe(farmerCount => {
+            paymentsPendingQuery.observeCount().subscribe(paymentCount => {
+                setPendingSyncCount(farmerCount + paymentCount);
+            });
+        });
+
+        return () => farmerSub.unsubscribe();
+    }, [database]);
+
+    const handleNavigate = (path: string) => {
+        window.location.hash = path;
+    };
+
+    const parsedHash = useMemo(() => parseHash(), [currentHash]);
+
+    useEffect(() => {
+      const handleHashChange = () => setCurrentHash(window.location.hash);
+      window.addEventListener('hashchange', handleHashChange);
+      return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
+
+    const permissions = useMemo(() => {
+        const userGroup = groups.find(g => g.id === currentUser?.groupId);
+        return new Set(userGroup?.permissions || []);
+    }, [currentUser, groups]);
+
+    const handleSaveFarmer = useCallback(async (farmerData: Farmer, photoFile?: File) => {
+        const farmersCollection = database.get<FarmerModel>('farmers');
+        let photoBase64 = farmerData.photo;
+
+        if (photoFile) {
+            photoBase64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(photoFile);
+            });
+        }
+        
+        await database.write(async () => {
+            if (editingFarmer) {
+                const farmerToUpdate = await farmersCollection.find(editingFarmer.id);
+                await farmerToUpdate.update(record => {
+                    const { id, createdAt, updatedAt, createdBy, ...updatableData } = farmerData;
+                    Object.assign(record, { ...updatableData, photo: photoBase64, syncStatusLocal: 'pending', updatedBy: currentUser?.id });
+                });
+            } else {
+                await farmersCollection.create(record => {
+                    Object.assign(record, { ...farmerData, photo: photoBase64, syncStatusLocal: 'pending', createdBy: currentUser?.id, updatedBy: currentUser?.id });
+                    record._raw.id = farmerData.id;
+                });
+                setNewlyAddedFarmerId(farmerData.id);
+            }
+        });
+
+        setIsShowingRegistrationForm(false);
+        setEditingFarmer(null);
+    }, [database, editingFarmer, currentUser]);
+
+    const handleEditFarmer = (farmer: Farmer) => {
+        setEditingFarmer(farmer);
+        setIsShowingRegistrationForm(true);
+    };
+
+    const handleSync = useCallback(async () => {
+        if (!isOnline) {
+            setNotification({ message: 'Cannot sync while offline.', type: 'error' });
+            return;
+        }
+        if (!supabase) {
+            setNotification({ message: 'Supabase connection not available.', type: 'error' });
+            return;
+        }
+        setIsSyncing(true);
+        setNotification({ message: 'Syncing data...', type: 'info' });
+        try {
+            const { pushed, deleted } = await synchronize(database, supabase);
+            setNotification({ message: `Sync complete! Pushed ${pushed} and deleted ${deleted} records.`, type: 'success' });
+        } catch (error: any) {
+            console.error("Sync failed:", error);
+            setNotification({ message: `Sync failed: ${error.message}`, type: 'error' });
+        } finally {
+            setIsSyncing(false);
+        }
+    }, [database, supabase, isOnline]);
+
+    const handleDeleteSelectedFarmers = () => {
+        if (selectedFarmerIds.length > 0) {
+            setShowDeleteConfirmation(true);
+        }
+    };
+
+    const confirmDelete = async () => {
+        await database.write(async () => {
+            const farmersToMark = await database.get<FarmerModel>('farmers').query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
+            for (const farmer of farmersToMark) {
+                await farmer.update(record => {
+                    record.syncStatusLocal = 'pending_delete';
+                });
+            }
+        });
+        setShowDeleteConfirmation(false);
+        setNotification({ message: `${selectedFarmerIds.length} farmer(s) marked for deletion.`, type: 'info' });
+        setSelectedFarmerIds([]);
+    };
+
+    const handlePrintFarmer = useCallback((farmerId: string) => {
+        const farmer = allPlainFarmers.find(f => f.id === farmerId);
+        if (farmer) {
+            setFarmerForPrinting(farmer);
+        }
+    }, [allPlainFarmers]);
+
+    useEffect(() => {
+        if (farmerForPrinting) {
+            const handleAfterPrint = () => {
+                setFarmerForPrinting(null);
+                window.removeEventListener('afterprint', handleAfterPrint);
+            };
+            window.addEventListener('afterprint', handleAfterPrint);
+            const timer = setTimeout(() => window.print(), 100);
+            return () => clearTimeout(timer);
+        }
+    }, [farmerForPrinting]);
+
+    const handleExportPdf = useCallback(async (farmerId: string) => {
+        const farmer = allPlainFarmers.find(f => f.id === farmerId);
+        if (!farmer) return;
+
+        setNotification({ message: `Generating PDF for ${farmer.fullName}...`, type: 'info' });
+        const container = document.getElementById('pdf-export-container');
+        if (!container) {
+            setNotification({ message: 'PDF container element not found.', type: 'error' });
+            return;
+        }
+
+        const root = ReactDOM.createRoot(container);
+        root.render(<PrintView farmer={farmer} users={users} isForPdf={true} />);
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        try {
+            const contentToCapture = container.firstElementChild as HTMLElement;
+            if (!contentToCapture) throw new Error("Rendered PDF content not found.");
+
+            const canvas = await html2canvas(contentToCapture, { scale: 2.5 });
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            
+            const { jsPDF } = jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const imgProps= pdf.getImageProperties(imgData);
+            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+            pdf.save(`${farmer.farmerId}_${farmer.fullName}.pdf`);
+            setNotification({ message: 'PDF downloaded successfully.', type: 'success' });
+        } catch (e: any) {
+            setNotification({ message: `Failed to generate PDF: ${e.message}`, type: 'error' });
+            console.error(e);
+        } finally {
+            root.unmount();
+        }
+    }, [allPlainFarmers, users]);
+    
+    // --- Data Processing for Farmer Directory ---
+    const processedFarmers = useMemo(() => {
+        let filtered = [...allPlainFarmers];
+
+        const query = filters.searchQuery.toLowerCase().trim();
+        if (query) {
+            filtered = filtered.filter(f => 
+                f.fullName.toLowerCase().includes(query) ||
+                f.farmerId.toLowerCase().includes(query) ||
+                f.mobileNumber.includes(query)
+            );
+        }
+        
+        if (filters.district) filtered = filtered.filter(f => f.district === filters.district);
+        if (filters.mandal) filtered = filtered.filter(f => f.mandal === filters.mandal);
+        if (filters.village) filtered = filtered.filter(f => f.village === filters.village);
+        if (filters.status) filtered = filtered.filter(f => f.status === filters.status);
+
+        if (filters.registrationDateFrom) {
+            const fromDate = new Date(filters.registrationDateFrom).getTime();
+            filtered = filtered.filter(f => new Date(f.registrationDate).getTime() >= fromDate);
+        }
+        if (filters.registrationDateTo) {
+            const toDate = new Date(filters.registrationDateTo).getTime();
+            filtered = filtered.filter(f => new Date(f.registrationDate).getTime() <= toDate);
+        }
+        
+        if (sortConfig) {
+            filtered.sort((a, b) => {
+                const aValue = a[sortConfig.key as keyof Farmer] as any;
+                const bValue = b[sortConfig.key as keyof Farmer] as any;
+                if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        return filtered;
+    }, [allPlainFarmers, filters, sortConfig]);
+    
+    const handleExportExcel = () => {
+        if (processedFarmers.length === 0) {
+            setNotification({ message: 'No farmers to export. Clear filters to export all data.', type: 'info' });
+            return;
+        }
+        exportToExcel(processedFarmers);
+        setNotification({ message: `Exporting ${processedFarmers.length} farmers to Excel.`, type: 'success' });
+    };
+
+    const handleExportCsv = () => {
+        if (processedFarmers.length === 0) {
+            setNotification({ message: 'No farmers to export. Clear filters to export all data.', type: 'info' });
+            return;
+        }
+        exportToCsv(processedFarmers);
+        setNotification({ message: `Exporting ${processedFarmers.length} farmers to CSV.`, type: 'success' });
+    };
+
+    const paginatedFarmers = useMemo(() => {
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        return processedFarmers.slice(startIndex, startIndex + rowsPerPage);
+    }, [processedFarmers, currentPage, rowsPerPage]);
+
+    const handleSelectFarmer = (farmerId: string, isSelected: boolean) => {
+        setSelectedFarmerIds(prev => isSelected ? [...prev, farmerId] : prev.filter(id => id !== farmerId));
+    };
+
+    const handleSelectAll = (allSelected: boolean) => {
+        setSelectedFarmerIds(allSelected ? paginatedFarmers.map(f => f.id) : []);
+    };
+    
+    // --- Main Content Renderer ---
+    const renderContent = () => {
+        switch (parsedHash.view) {
+            case 'dashboard':
+                return <Dashboard supabase={supabase} />;
+            case 'farmer-directory':
+                return (
+                    <>
+                        <FilterBar onFilterChange={setFilters} />
+                        <FarmerList
+                            farmers={paginatedFarmers}
+                            users={users}
+                            canEdit={permissions.has(Permission.CAN_EDIT_FARMER)}
+                            canDelete={permissions.has(Permission.CAN_DELETE_FARMER)}
+                            onPrint={handlePrintFarmer}
+                            onExportToPdf={handleExportPdf}
+                            selectedFarmerIds={selectedFarmerIds}
+                            onSelectionChange={handleSelectFarmer}
+                            onSelectAll={handleSelectAll}
+                            sortConfig={sortConfig}
+                            onRequestSort={(key) => {
+                                const direction = sortConfig?.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                setSortConfig({ key, direction });
+                            }}
+                            newlyAddedFarmerId={newlyAddedFarmerId}
+                            onHighlightComplete={() => setNewlyAddedFarmerId(null)}
+                            onBatchUpdate={() => setShowBatchUpdateModal(true)}
+                            onDeleteSelected={handleDeleteSelectedFarmers}
+                            totalRecords={processedFarmers.length}
+                            currentPage={currentPage}
+                            rowsPerPage={rowsPerPage}
+                            onPageChange={setCurrentPage}
+                            onRowsPerPageChange={setRowsPerPage}
+                            isLoading={false}
+                            onAddToPrintQueue={(ids) => setPrintQueue(q => [...new Set([...q, ...ids])])}
+                            onNavigate={handleNavigate}
+                        />
+                    </>
+                );
+             case 'farmer-details':
+                return <FarmerDetailsPage 
+                            farmerId={parsedHash.params.farmerId} 
+                            database={database}
+                            users={users}
+                            currentUser={currentUser}
+                            onBack={() => handleNavigate('farmer-directory')}
+                            permissions={permissions}
+                            setNotification={setNotification}
+                        />;
+            case 'map-view':
+                return <MapView farmers={allPlainFarmers} onNavigate={handleNavigate} />;
+            case 'subsidy-management':
+                 return <SubsidyManagementPage 
+                            farmers={allPlainFarmers}
+                            payments={allPayments}
+                            currentUser={currentUser}
+                            onBack={() => handleNavigate('dashboard')}
+                            database={database}
+                            setNotification={setNotification}
+                        />;
+            case 'admin':
+                return <AdminPage 
+                            users={users} 
+                            groups={groups} 
+                            currentUser={currentUser} 
+                            onSaveUsers={async (u) => setUsers(u)}
+                            onSaveGroups={async (g) => setGroups(g)}
+                            onBack={() => handleNavigate('dashboard')}
+                            invitations={[]}
+                            onInviteUser={async () => 'mock-code'}
+                        />;
+            case 'profile':
+                return <ProfilePage 
+                            currentUser={currentUser} 
+                            groups={groups} 
+                            onSave={async (u) => setCurrentUser(u)}
+                            onBack={() => handleNavigate('dashboard')} 
+                        />;
+            case 'print-queue':
+                return <PrintQueuePage
+                            queuedFarmerIds={printQueue}
+                            users={users}
+                            onRemove={(id) => setPrintQueue(q => q.filter(farmerId => farmerId !== id))}
+                            onClear={() => setPrintQueue([])}
+                            onBack={() => handleNavigate('farmer-directory')}
+                            database={database}
+                       />;
+            case 'help':
+                return <HelpPage 
+                            appContent={null}
+                            onBack={() => handleNavigate('dashboard')}
+                        />;
+            default:
+                return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
+        }
+    };
+
+    if (appState === 'LOADING') return <ModalLoader />;
+    
+    return (
+        <Suspense fallback={<ModalLoader />}>
+            {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
+            <div className="flex h-screen bg-gray-100">
+                <Sidebar
+                    isOpen={isSidebarOpen}
+                    isCollapsed={isSidebarCollapsed}
+                    onToggleCollapse={() => setIsSidebarCollapsed(c => !c)}
+                    currentUser={currentUser}
+                    onLogout={() => {}}
+                    onNavigate={handleNavigate}
+                    currentView={parsedHash.view as View}
+                    permissions={permissions}
+                    onImport={() => setShowBulkImportModal(true)}
+                    onExportExcel={handleExportExcel}
+                    onExportCsv={handleExportCsv}
+                    onViewRawData={() => setShowRawDataView(true)}
+                    onShowPrivacy={() => {}}
+                    onShowChangelog={() => {}}
+                    printQueueCount={printQueue.length}
+                />
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    <Header
+                        onToggleSidebar={() => setIsSidebarOpen(o => !o)}
+                        currentView={parsedHash.view}
+                        onRegister={() => { setEditingFarmer(null); setIsShowingRegistrationForm(true); }}
+                        onSync={handleSync}
+                        syncLoading={isSyncing}
+                        pendingSyncCount={pendingSyncCount}
+                        isOnline={isOnline}
+                        permissions={permissions}
+                    />
+                    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+                       {renderContent()}
+                    </main>
+                </div>
+
+                {isShowingRegistrationForm && (
+                     <RegistrationForm 
+                        onSubmit={handleSaveFarmer}
+                        onCancel={() => setIsShowingRegistrationForm(false)}
+                        existingFarmers={allPlainFarmers}
+                        mode={editingFarmer ? 'edit' : 'create'}
+                        existingFarmer={editingFarmer}
+                    />
+                )}
+                {showDeleteConfirmation && (
+                    <ConfirmationModal
+                        isOpen={showDeleteConfirmation}
+                        title={`Delete ${selectedFarmerIds.length} Farmer(s)?`}
+                        message={<>
+                            <p>Are you sure you want to delete the selected farmer(s)?</p>
+                            <p className="mt-2 text-sm text-yellow-700 bg-yellow-50 p-2 rounded-md font-semibold">
+                                This action will mark them for deletion. The records will be permanently removed after the next sync. This cannot be undone.
+                            </p>
+                        </>}
+                        onConfirm={confirmDelete}
+                        onCancel={() => setShowDeleteConfirmation(false)}
+                        confirmText="Yes, Delete"
+                        confirmButtonClass="bg-red-600 hover:bg-red-700"
+                    />
+                )}
+                {showRawDataView && (
+                    <RawDataView
+                        farmers={allFarmers}
+                        onClose={() => setShowRawDataView(false)}
+                    />
+                )}
+                {farmerForPrinting && <PrintView farmer={farmerForPrinting} users={users} />}
+                <div id="pdf-export-container" style={{ position: 'absolute', left: '-9999px', top: 0 }}></div>
+            </div>
+        </Suspense>
+    );
 };
-
-type AppState = 'LANDING' | 'LOADING' | 'AUTH' | 'APP';
 
 const Header: React.FC<{
     onToggleSidebar: () => void;
@@ -203,6 +644,9 @@ const Header: React.FC<{
         'content-manager': 'Content Manager',
         'subscription-management': 'Subscription Management',
         'print-queue': 'Print Queue',
+        'subsidy-management': 'Subsidy Management',
+        'map-view': 'Farmer Map View',
+        'help': 'Help & Support',
         'not-found': 'Page Not Found',
     };
 
@@ -220,7 +664,7 @@ const Header: React.FC<{
                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${syncLoading ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.885-.666A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566z" clipRule="evenodd" /></svg>
                         <span className="hidden md:inline">{syncLoading ? 'Syncing...' : 'Sync Now'}</span>
                         {pendingSyncCount > 0 && !syncLoading && (
-                            <span className="absolute -top-1 -right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-yellow-500 text-yellow-900 text-xs items-center justify-center font-bold">{pendingSyncCount}</span></span>
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-yellow-500 text-yellow-900 text-xs items-center justify-center font-bold">{pendingSyncCount > 9 ? '9+' : pendingSyncCount}</span></span>
                         )}
                     </button>
                 )}
@@ -233,835 +677,6 @@ const Header: React.FC<{
             </div>
         </header>
     );
-};
-
-const Sidebar: React.FC<{
-    isOpen: boolean;
-    isCollapsed: boolean;
-    onToggleCollapse: () => void;
-    currentUser: User | null;
-    onLogout: () => void;
-    onNavigate: (path: string) => void;
-    currentView: ParsedHash['view'];
-    permissions: Set<Permission>;
-    onImport: () => void;
-    onExportExcel: () => void;
-    onExportCsv: () => void;
-    onViewRawData: () => void;
-    onShowPrivacy: () => void;
-    onShowHelp: () => void;
-    onShowFeedback: () => void;
-    onShowChangelog: () => void;
-    printQueueCount: number;
-}> = ({ 
-    isOpen, isCollapsed, onToggleCollapse, currentUser, onLogout, onNavigate, currentView, permissions, 
-    onImport, onExportExcel, onExportCsv, onViewRawData,
-    onShowPrivacy, onShowHelp, onShowFeedback, onShowChangelog, printQueueCount
-}) => {
-    
-    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-    const canManageAdmin = permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS);
-    const canManageContent = permissions.has(Permission.CAN_MANAGE_CONTENT);
-    const canImport = permissions.has(Permission.CAN_IMPORT_DATA);
-    const canExport = permissions.has(Permission.CAN_EXPORT_DATA);
-
-    const NavItem: React.FC<{ icon: React.ReactNode; text: string; view: View; isSubItem?: boolean; badgeCount?: number; }> = ({ icon, text, view, isSubItem = false, badgeCount = 0 }) => {
-        const isActive = currentView === view;
-        return (
-            <li className="relative group">
-                <button
-                    onClick={() => onNavigate(view)}
-                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} ${isActive ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
-                >
-                    {icon}
-                    <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
-                    {badgeCount > 0 && !isCollapsed && <span className="ml-auto bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">{badgeCount}</span>}
-                </button>
-                 {isCollapsed && 
-                    <>
-                        {badgeCount > 0 && <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center text-xs rounded-full bg-green-600 text-white font-bold">{badgeCount > 9 ? '9+' : badgeCount}</span>}
-                        <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>
-                    </>
-                 }
-            </li>
-        );
-    };
-    
-     const DataNavItem: React.FC<{ icon: React.ReactNode; text: string; onClick: () => void; isSubItem?: boolean; }> = ({ icon, text, onClick, isSubItem = false }) => {
-        return (
-            <li className="relative group">
-                <button
-                    onClick={onClick}
-                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} text-gray-300 hover:bg-gray-700 hover:text-white`}
-                >
-                    {icon}
-                    <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
-                </button>
-                {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>}
-            </li>
-        );
-    };
-
-    const NavCategory: React.FC<{ text: string }> = ({ text }) => (
-        <li className="px-3 pt-4 pb-2">
-            <span className={`text-xs font-semibold text-gray-500 uppercase sidebar-category-text`}>{text}</span>
-        </li>
-    );
-
-    const sidebarClasses = `
-        bg-gray-800 text-white flex-shrink-0 flex flex-col z-40
-        ${isCollapsed ? 'sidebar-collapsed w-20' : 'w-64'}
-        hidden lg:flex sidebar
-    `;
-
-    return (
-        <>
-            {/* Desktop Sidebar */}
-            <nav className={sidebarClasses}>
-                <div className="flex items-center gap-2 p-4 border-b border-gray-700 flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
-                    <span className={`text-xl font-bold sidebar-item-text`}>Hapsara</span>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-2">
-                    <ul className="space-y-1">
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} text="Dashboard" view="dashboard" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>} text="Farmer Directory" view="farmer-directory" />
-                        {canManageAdmin && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Admin Panel" view="admin" />}
-                        {canManageContent && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>} text="Content Manager" view="content-manager" />}
-
-                        {(canImport || canExport || canManageAdmin) && <NavCategory text="Tools" />}
-                        {canImport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>} text="Import Data" onClick={onImport} />}
-                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} text="Export to Excel" onClick={onExportExcel} />}
-                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>} text="Export to CSV" onClick={onExportCsv} />}
-                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>} text="View Raw Data" onClick={onViewRawData} />}
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a1 1 0 11-2 0 1 1 0 012 0z" /></svg>} text="Print Queue" view="print-queue" badgeCount={printQueueCount} />
-                    </ul>
-                </div>
-                
-                <div className="mt-auto flex-shrink-0">
-                    <div className="p-2 border-t border-gray-700">
-                        <div className="relative">
-                            {isUserMenuOpen && (
-                                <div className={`
-                                    absolute z-50 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 bg-gray-700
-                                    ${isCollapsed
-                                        ? 'left-full bottom-2 ml-2 w-56' // Position to the side when collapsed
-                                        : 'bottom-full mb-2 w-full' // Position above when expanded
-                                    }
-                                `}>
-                                    <div className="py-1">
-                                        <button onClick={() => { onNavigate('profile'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-t-md">Settings</button>
-                                        <button onClick={() => { onNavigate('billing'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Billing</button>
-                                        <button onClick={() => { onNavigate('usage-analytics'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Usage</button>
-                                        <div className="border-t border-gray-600 my-1"></div>
-                                        <button onClick={() => { onShowHelp(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Help</button>
-                                        <button onClick={() => { onShowFeedback(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Feedback</button>
-                                        <button onClick={() => { onShowChangelog(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">What's New</button>
-                                        <button onClick={() => { onShowPrivacy(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Privacy</button>
-                                        <div className="border-t border-gray-600 my-1"></div>
-                                        <button onClick={() => { onLogout(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-b-md">Logout</button>
-                                    </div>
-                                </div>
-                            )}
-                             {currentUser && (
-                                <button onClick={() => setIsUserMenuOpen(o => !o)} className="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-700">
-                                    <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-600 flex-shrink-0" />
-                                    <div className={`ml-3 overflow-hidden sidebar-item-text`}>
-                                        <p className="font-semibold text-sm text-white whitespace-nowrap">{currentUser.name}</p>
-                                        <p className="text-xs text-gray-400 whitespace-nowrap capitalize">Usage-Based Plan</p>
-                                    </div>
-                                </button>
-                             )}
-                        </div>
-                    </div>
-                     <div className="p-2 border-t border-gray-700 relative group">
-                        <button onClick={onToggleCollapse} className="flex items-center justify-center w-full p-3 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white">
-                            {isCollapsed 
-                                ? <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg> 
-                                : <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
-                            }
-                        </button>
-                        {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Expand</div>}
-                    </div>
-                </div>
-            </nav>
-        </>
-    );
-};
-
-const modelToPlain = (f: FarmerModel | null): Farmer | null => {
-    if (!f) return null;
-    return {
-        id: f.id,
-        fullName: f.fullName,
-        fatherHusbandName: f.fatherHusbandName,
-        aadhaarNumber: f.aadhaarNumber,
-        mobileNumber: f.mobileNumber,
-        gender: f.gender,
-        address: f.address,
-        ppbRofrId: f.ppbRofrId,
-        photo: f.photo,
-        bankAccountNumber: f.bankAccountNumber,
-        ifscCode: f.ifscCode,
-        accountVerified: f.accountVerified,
-        appliedExtent: f.appliedExtent,
-        approvedExtent: f.approvedExtent,
-        numberOfPlants: f.numberOfPlants,
-        methodOfPlantation: f.methodOfPlantation,
-        plantType: f.plantType,
-        plantationDate: f.plantationDate,
-        mlrdPlants: f.mlrdPlants,
-        fullCostPlants: f.fullCostPlants,
-        latitude: f.latitude,
-        longitude: f.longitude,
-        applicationId: f.applicationId,
-        farmerId: f.farmerId,
-        proposedYear: f.proposedYear,
-        registrationDate: f.registrationDate,
-        asoId: f.asoId,
-        paymentUtrDd: f.paymentUtrDd,
-        status: f.status,
-        district: f.district,
-        mandal: f.mandal,
-        village: f.village,
-        syncStatus: f.syncStatusLocal,
-        createdBy: f.createdBy,
-        updatedBy: f.updatedBy,
-        createdAt: new Date(f.createdAt).toISOString(),
-        updatedAt: new Date(f.updatedAt).toISOString(),
-    };
-};
-
-const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>('LANDING');
-
-  const [supabase, setSupabase] = useState<any | null>(null);
-  const [session, setSession] = useState<any | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [appContent, setAppContent] = useState<Partial<AppContent> | null>(null);
-  const [authView, setAuthView] = useState<'login' | 'signup' | 'accept-invitation'>('login');
-  
-  const [currentRoute, setCurrentRoute] = useState<ParsedHash>(parseHash());
-  const [showForm, setShowForm] = useState(false);
-  const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
-  const [pdfExportFarmer, setPdfExportFarmer] = useState<FarmerModel | null>(null);
-  const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [showRawDataView, setShowRawDataView] = useState(false);
-  const isOnline = useOnlineStatus();
-  const pdfContainerRef = useRef<HTMLDivElement>(null);
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [showChangelogModal, setShowChangelogModal] = useState(false);
-  
-  const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [displayedFarmers, setDisplayedFarmers] = useState<Farmer[]>([]);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [isListLoading, setIsListLoading] = useState(true);
-
-  const database = useDatabase();
-  const farmersCollection = database.get<FarmerModel>('farmers');
-  const paymentsCollection = database.get<SubsidyPaymentModel>('subsidy_payments');
-  
-  // Keep all farmers in memory for offline mode and other component dependencies.
-  const allFarmers = useQuery(farmersCollection.query(Q.where('syncStatusLocal', Q.notEq('pending_delete'))));
-  const allFarmersPlain: Farmer[] = useMemo(() => allFarmers.map(f => modelToPlain(f)!), [allFarmers]);
-  
-  const pendingFarmersCount = useQuery(farmersCollection.query(Q.where('syncStatusLocal', Q.oneOf(['pending', 'pending_delete'])))).length;
-  const pendingPaymentsCount = useQuery(paymentsCollection.query(Q.where('syncStatusLocal', 'pending'))).length;
-  const pendingSyncCount = pendingFarmersCount + pendingPaymentsCount;
-  
-  const currentUserPermissions = useMemo(() => {
-    if (!currentUser) return new Set<Permission>();
-    const userGroup = groups.find(g => g.id === currentUser.groupId);
-    return new Set(userGroup?.permissions || []);
-  }, [currentUser, groups]);
-
-  // --- PRINT QUEUE ---
-  const [printQueue, setPrintQueue] = useState<string[]>([]);
-
-  const handleAddToPrintQueue = useCallback((farmerIds: string[]) => {
-      setPrintQueue(prev => {
-          const newIds = farmerIds.filter(id => !prev.includes(id));
-          if (newIds.length > 0) {
-              setNotification({ message: `${newIds.length} farmer(s) added to print queue.`, type: 'success'});
-          } else {
-              setNotification({ message: `Selected farmer(s) are already in the queue.`, type: 'info'});
-          }
-          return [...prev, ...newIds];
-      });
-  }, []);
-
-  const handleRemoveFromPrintQueue = useCallback((farmerId: string) => {
-      setPrintQueue(prev => prev.filter(id => id !== farmerId));
-  }, []);
-
-  const handleClearPrintQueue = useCallback(() => {
-      setPrintQueue([]);
-      setNotification({ message: 'Print queue cleared.', type: 'info' });
-  }, []);
-
-
-  // --- ROUTING ---
-  const handleNavigate = useCallback((path: string) => {
-      window.location.hash = path;
-      setIsMobileMenuOpen(false);
-  }, []);
-
-  useEffect(() => {
-    const handleHashChange = () => {
-        setCurrentRoute(parseHash());
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // Initial check
-    return () => {
-        window.removeEventListener('hashchange', handleHashChange);
-    };
-  }, []);
-  
-  // Secure routing by checking permissions on view change
-  useEffect(() => {
-    if (appState !== 'APP' || !session) return;
-    
-    const canAccessAdmin = currentUserPermissions.has(Permission.CAN_MANAGE_USERS) || currentUserPermissions.has(Permission.CAN_MANAGE_GROUPS);
-    const canAccessContentManager = currentUserPermissions.has(Permission.CAN_MANAGE_CONTENT);
-    
-    if (currentRoute.view === 'admin' && !canAccessAdmin) {
-        setNotification({ message: "You don't have permission to access the Admin Panel.", type: 'error' });
-        handleNavigate('dashboard');
-    }
-    if (currentRoute.view === 'content-manager' && !canAccessContentManager) {
-        setNotification({ message: "You don't have permission to access the Content Manager.", type: 'error' });
-        handleNavigate('dashboard');
-    }
-
-  }, [currentRoute.view, session, appState, currentUserPermissions, handleNavigate]);
-
-  // --- SUPABASE & AUTH ---
-  useEffect(() => {
-    const client = initializeSupabase();
-    setSupabase(client);
-  }, []);
-
-  const fetchUserProfile = useCallback(async (userId: string): Promise<User | null> => {
-    if (!supabase) return null;
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (error) {
-        console.error('Error fetching user profile:', error);
-        if (error.code === 'PGRST116') { // Not found, possibly due to replication delay
-            await new Promise(res => setTimeout(res, 1000));
-            const { data: retryData, error: retryError } = await supabase.from('profiles').select('*').eq('id', userId).single();
-            if (retryError) {
-                console.error('Retry fetching user profile failed:', retryError);
-                return null;
-            }
-            if (retryData) {
-                const userProfile = { id: retryData.id, name: retryData.full_name, avatar: retryData.avatar_url, groupId: retryData.group_id };
-                setCurrentUser(userProfile);
-                return userProfile;
-            }
-        }
-    } else if (data) {
-        const userProfile = { id: data.id, name: data.full_name, avatar: data.avatar_url, groupId: data.group_id };
-        setCurrentUser(userProfile);
-        return userProfile;
-    }
-    return null;
-  }, [supabase]);
-  
-    const fetchAppContent = useCallback(async () => {
-        if (!supabase) return;
-        const { data, error } = await supabase.from('app_content').select('key, value');
-        if (error) {
-            console.error("Error fetching app content:", error);
-            return;
-        }
-        if (data) {
-            const content = data.reduce((acc, { key, value }) => {
-                if (key === 'landing_page') {
-                    acc.landing_hero_title = value.hero_title;
-                    acc.landing_hero_subtitle = value.hero_subtitle;
-                    acc.landing_about_us = value.about_us;
-                } else if (key === 'privacy_policy') {
-                    acc.privacy_policy = value.content;
-                } else if (key === 'faqs') {
-                    acc.faqs = value.items;
-                }
-                return acc;
-            }, {} as Partial<AppContent>);
-            setAppContent(content);
-        }
-    }, [supabase]);
-
-
-    useEffect(() => {
-        if (appState !== 'LOADING' && appState !== 'AUTH') return;
-        if (!supabase) return;
-
-        const handleAuthSession = async (session: any | null) => {
-            setSession(session);
-            if (session) {
-                await fetchUserProfile(session.user.id);
-                await fetchAppContent();
-                setAppState('APP');
-            } else {
-                fetchAppContent(); // Also fetch content for landing page
-                setAppState('AUTH');
-                setCurrentUser(null);
-            }
-        };
-        
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            await handleAuthSession(session);
-        });
-
-        if (appState === 'LOADING') {
-            supabase.auth.getSession().then(({ data: { session } }) => {
-                handleAuthSession(session);
-            });
-        }
-        
-        return () => subscription.unsubscribe();
-
-    }, [appState, supabase, fetchUserProfile, fetchAppContent]);
-
-
-    const handlePushSync = useCallback(async (isManual = false) => {
-        if (!supabase || !isOnline || syncLoading) {
-            if (isManual && !isOnline) setNotification({ message: 'Cannot sync while offline.', type: 'error' });
-            return;
-        }
-
-        const pendingFarmers = await farmersCollection.query(Q.where('syncStatusLocal', 'pending')).fetch();
-        const pendingDeleteFarmers = await farmersCollection.query(Q.where('syncStatusLocal', 'pending_delete')).fetch();
-        const pendingPayments = await paymentsCollection.query(Q.where('syncStatusLocal', 'pending')).fetch();
-
-        if (pendingFarmers.length === 0 && pendingDeleteFarmers.length === 0 && pendingPayments.length === 0) {
-            if (isManual) setNotification({ message: 'Everything is up to date.', type: 'success' });
-            return;
-        }
-
-        setSyncLoading(true);
-        if (isManual) setNotification({ message: 'Syncing local changes...', type: 'info' });
-
-        try {
-            // Push Farmer changes
-            if (pendingFarmers.length > 0) {
-                const plainFarmers = pendingFarmers.map(mapModelToApi);
-                const { error } = await supabase.from('farmers').upsert(plainFarmers);
-                if (error) throw error;
-                await database.write(async () => {
-                    const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { rec.syncStatusLocal = 'synced'; }));
-                    await database.batch(...updates);
-                });
-            }
-
-            // Push Farmer deletions
-            if (pendingDeleteFarmers.length > 0) {
-                const idsToDelete = pendingDeleteFarmers.map(f => f.id);
-                const { error } = await supabase.from('farmers').delete().in('id', idsToDelete);
-                if (error) throw error;
-                await database.write(async () => {
-                    const deletions = pendingDeleteFarmers.map(f => f.prepareDestroyPermanently());
-                    await database.batch(...deletions);
-                });
-            }
-
-            // Push Payment changes
-            if (pendingPayments.length > 0) {
-                const plainPayments = pendingPayments.map(mapPaymentToApi);
-                const { error } = await supabase.from('subsidy_payments').upsert(plainPayments);
-                if (error) throw error;
-                await database.write(async () => {
-                    const updates = pendingPayments.map(p => p.prepareUpdate(rec => { rec.syncStatusLocal = 'synced'; }));
-                    await database.batch(...updates);
-                });
-            }
-
-
-            if (isManual) setNotification({ message: 'Local changes synced successfully.', type: 'success' });
-        } catch (error: any) {
-            console.error('Push sync failed:', error);
-            if (isManual) setNotification({ message: `Sync failed: ${error.message}`, type: 'error' });
-        } finally {
-            setSyncLoading(false);
-        }
-    }, [supabase, isOnline, syncLoading, database, farmersCollection, paymentsCollection]);
-  
-    const handleFullSync = useCallback(async () => {
-        await handlePushSync(true);
-    }, [handlePushSync]);
-
-
-  // --- Real-time and Background Sync ---
-  useEffect(() => {
-    if (appState !== 'APP' || !supabase || !session) return;
-    
-    const syncInterval = setInterval(() => handlePushSync(false), 30000);
-      
-    return () => {
-        clearInterval(syncInterval);
-    };
-
-  }, [appState, supabase, session, database, farmersCollection, handlePushSync]);
-
-  // --- Farmer List Data Fetching (Server-side/Client-side) ---
-  useEffect(() => {
-    const fetchOrFilterData = async () => {
-        setIsListLoading(true);
-        setSelectedFarmerIds([]); // Clear selection on data change
-
-        // --- ONLINE: Fetch from Supabase ---
-        if (isOnline && supabase) {
-            try {
-                let query = supabase.from('farmers').select('*', { count: 'exact' });
-
-                if (filters.searchQuery) {
-                    const q = `%${filters.searchQuery}%`;
-                    query = query.or(`full_name.ilike.${q},farmer_id.ilike.${q},mobile_number.ilike.${q}`);
-                }
-                if (filters.district) query = query.eq('district', filters.district);
-                if (filters.mandal) query = query.eq('mandal', filters.mandal);
-                if (filters.village) query = query.eq('village', filters.village);
-                if (filters.status) query = query.eq('status', filters.status);
-                if (filters.registrationDateFrom) query = query.gte('registration_date', filters.registrationDateFrom);
-                if (filters.registrationDateTo) query = query.lte('registration_date', filters.registrationDateTo);
-
-                if (sortConfig) {
-                    const sortKeyMap: Record<string, string> = { 'farmerId': 'farmer_id', 'fullName': 'full_name', 'registrationDate': 'registration_date' };
-                    const dbKey = sortKeyMap[sortConfig.key] || sortConfig.key;
-                    query = query.order(dbKey, { ascending: sortConfig.direction === 'ascending' });
-                }
-
-                const startIndex = (currentPage - 1) * rowsPerPage;
-                query = query.range(startIndex, startIndex + rowsPerPage - 1);
-                
-                const { data, error, count } = await query;
-                if (error) throw error;
-                
-                const camelCaseData = data.map((item: any) => snakeToCamelCase(item) as Farmer);
-                setDisplayedFarmers(camelCaseData);
-                setTotalRecords(count ?? 0);
-
-            } catch (error: any) {
-                console.error("Failed to fetch farmers from Supabase:", error);
-                setNotification({ message: `Could not load data. Showing offline records.`, type: 'error' });
-                setDisplayedFarmers([]);
-                setTotalRecords(0);
-            } finally {
-                setIsListLoading(false);
-            }
-        } else {
-            // --- OFFLINE: Filter local data ---
-            let filtered = [...allFarmersPlain];
-            if (filters.searchQuery) {
-                const q = filters.searchQuery.toLowerCase();
-                filtered = filtered.filter(f => f.fullName.toLowerCase().includes(q) || f.farmerId.toLowerCase().includes(q) || f.mobileNumber.includes(q));
-            }
-            if (filters.district) filtered = filtered.filter(f => f.district === filters.district);
-            if (filters.mandal) filtered = filtered.filter(f => f.mandal === filters.mandal);
-            if (filters.village) filtered = filtered.filter(f => f.village === filters.village);
-            if (filters.status) filtered = filtered.filter(f => f.status === filters.status);
-            if (filters.registrationDateFrom) filtered = filtered.filter(f => new Date(f.registrationDate) >= new Date(filters.registrationDateFrom));
-            if (filters.registrationDateTo) filtered = filtered.filter(f => new Date(f.registrationDate) <= new Date(filters.registrationDateTo));
-            
-            if (sortConfig) {
-                filtered.sort((a, b) => {
-                    const aValue = a[sortConfig.key]; const bValue = b[sortConfig.key];
-                    if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-                    if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
-                    return 0;
-                });
-            }
-            setTotalRecords(filtered.length);
-            const paginated = filtered.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
-            setDisplayedFarmers(paginated);
-            setIsListLoading(false);
-        }
-    };
-    if (appState === 'APP') {
-        fetchOrFilterData();
-    }
-  }, [isOnline, supabase, filters, sortConfig, currentPage, rowsPerPage, allFarmersPlain, appState]);
-  
-  useEffect(() => {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has('invitation')) {
-          setAuthView('accept-invitation');
-          window.history.replaceState({}, document.title, window.location.pathname);
-      }
-  }, []);
-
-  useEffect(() => {
-    if (!supabase) return;
-    const fetchPublicData = async () => {
-        const { data: groupsData, error: groupsError } = await supabase.from('groups').select('*');
-        if (groupsError) console.error('Error fetching groups:', groupsError); else setGroups(groupsData || []);
-        
-        const { data: invData, error: invError } = await supabase.from('invitations').select('*');
-        if (invError) console.error('Error fetching invitations:', invError); else setInvitations((invData || []).map(mapInvitationToCamelCase));
-    };
-    fetchPublicData();
-  }, [supabase]);
-  
-  useEffect(() => {
-    if (session && supabase) {
-        const fetchAllUsers = async () => {
-            const { data, error } = await supabase.from('profiles').select('*');
-            if (error) {
-                console.error('Error fetching users:', error);
-            } else {
-                setUsers(data.map((d: any) => ({ id: d.id, name: d.full_name, avatar: d.avatar_url, groupId: d.group_id })) || []);
-            }
-        };
-        fetchAllUsers();
-    }
-  }, [session, supabase]);
-  
-  const handleLogout = async () => {
-      if (supabase) {
-          await supabase.auth.signOut();
-      }
-      setCurrentUser(null);
-      setAppState('AUTH'); 
-      handleNavigate('dashboard');
-  };
-
-  const handleSignUp = async (name: string, email: string, password: string): Promise<string | null> => {
-    if (!supabase) return "Supabase client not available.";
-    const { error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { full_name: name, avatar_url: 'https://terrigen-cdn-dev.marvel.com/content/prod/1x/003cap_ons_crd_03.jpg' } }
-    });
-    return error ? error.message : null;
-  };
-
-  const handleSaveProfile = async (updatedUser: User) => {
-      if (!supabase || !currentUser) return;
-      const { error } = await supabase.from('profiles').update({ full_name: updatedUser.name, avatar_url: updatedUser.avatar }).eq('id', currentUser.id);
-      if (error) {
-          setNotification({ message: `Error updating profile: ${error.message}`, type: 'error' });
-      } else {
-          setCurrentUser(updatedUser);
-          setNotification({ message: 'Profile updated successfully.', type: 'success' });
-          handleNavigate('dashboard');
-      }
-  };
-  
-  const handleSaveGroups = async (updatedGroups: Group[]) => {
-      if (!supabase) return;
-      const { error } = await supabase.from('groups').upsert(updatedGroups);
-      if (error) {
-          setNotification({ message: `Error saving groups: ${error.message}`, type: 'error' });
-      } else {
-          setGroups(updatedGroups);
-          setNotification({ message: 'Groups and permissions saved successfully.', type: 'success' });
-      }
-  };
-
-  const handleSaveUsers = async (updatedUsers: User[]) => {
-      if (!supabase) return;
-      const updates = updatedUsers.filter(u => users.some(ou => ou.id === u.id && ou.groupId !== u.groupId)).map(u => ({ id: u.id, group_id: u.groupId }));
-      if (updates.length > 0) {
-        const { error } = await supabase.from('profiles').upsert(updates);
-        if (error) {
-            setNotification({ message: `Error updating user groups: ${error.message}`, type: 'error' });
-        } else {
-            setUsers(updatedUsers);
-            setNotification({ message: 'User groups updated successfully.', type: 'success' });
-        }
-      }
-  };
-  
-  const handleInviteUser = async (email: string, groupId: string): Promise<string> => {
-      if (!supabase) return '';
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-      const { data, error } = await supabase.from('invitations').insert({ email_for: email, group_id: groupId, expires_at: expiresAt.toISOString() }).select().single();
-      if (error) {
-          setNotification({ message: `Error creating invitation: ${error.message}`, type: 'error' });
-          return '';
-      } else {
-          const newInvitation = mapInvitationToCamelCase(data);
-          setInvitations(prev => [...prev, newInvitation]);
-          setNotification({ message: `Invitation created for ${email}.`, type: 'success' });
-          return newInvitation.id;
-      }
-  };
-  
-    const handleAcceptInvitation = async (code: string, userDetails: { name: string; avatar: string; password: string }) => {
-        if (!supabase) return;
-        const invitation = invitations.find(inv => inv.id === code);
-        if (!invitation) {
-            setNotification({ message: "Invalid invitation code.", type: 'error' });
-            return;
-        }
-        const { data, error } = await supabase.auth.signUp({
-            email: invitation.emailFor, password: userDetails.password,
-            options: { data: { full_name: userDetails.name, avatar_url: userDetails.avatar, group_id: invitation.groupId } },
-        });
-        if (error) {
-            setNotification({ message: `Registration failed: ${error.message}`, type: 'error' });
-        } else if (data.user) {
-            await supabase.from('invitations').update({ status: 'accepted', accepted_by_user_id: data.user.id }).eq('id', code);
-            setNotification({ message: "Registration successful! Please check your email to confirm, then log in.", type: 'success' });
-            setAuthView('login');
-        }
-    };
-
-  useEffect(() => { if (notification) { const timer = setTimeout(() => setNotification(null), 5000); return () => clearTimeout(timer); } }, [notification]);
-
-  const handleRegisterClick = () => {
-    setShowForm(true);
-  };
-
-  const handleRegistration = useCallback(async (farmer: Farmer, photoFile?: File) => {
-    if (!currentUser) return;
-    let photoBase64 = photoFile ? await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(photoFile); }) : '';
-    await database.write(async () => { await farmersCollection.create(record => { Object.assign(record, { ...farmer, photo: photoBase64, createdBy: currentUser.id, updatedBy: currentUser.id }); record._raw.id = farmer.id; }); });
-    setNewlyAddedFarmerId(farmer.id);
-  }, [database, farmersCollection, currentUser]);
-
-  const handleDeleteSelected = useCallback(() => setShowDeleteConfirmation(true), []);
-
-  const confirmDeleteSelected = useCallback(async () => {
-    await database.write(async () => { const farmersToDelete = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch(); await database.batch(...farmersToDelete.map(f => f.prepareUpdate(rec => { rec.syncStatusLocal = 'pending_delete'; }))); });
-    setShowDeleteConfirmation(false); setSelectedFarmerIds([]); setNotification({ message: `${selectedFarmerIds.length} farmer(s) marked for deletion.`, type: 'success' });
-  }, [database, farmersCollection, selectedFarmerIds]);
-
-  const handleBatchUpdate = useCallback(async (newStatus: FarmerStatus) => {
-    if (!currentUser) return;
-    await database.write(async () => { const farmersToUpdate = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch(); await database.batch(...farmersToUpdate.map(f => f.prepareUpdate(rec => { rec.status = newStatus; rec.syncStatusLocal = 'pending'; rec.updatedBy = currentUser.id; }))); });
-    setShowBatchUpdateModal(false); setSelectedFarmerIds([]); setNotification({ message: `${selectedFarmerIds.length} farmer(s) updated to "${newStatus}".`, type: 'success' });
-  }, [database, farmersCollection, selectedFarmerIds, currentUser]);
-  
-  const handleBulkImport = useCallback(async (newFarmers: Farmer[]) => {
-      if (!currentUser) return;
-      await database.write(async () => { await database.batch(...newFarmers.map(f => farmersCollection.prepareCreate(rec => { Object.assign(rec, { ...f, createdBy: currentUser.id, updatedBy: currentUser.id }); rec._raw.id = f.id; }))); });
-      setNotification({ message: `${newFarmers.length} new farmers imported successfully.`, type: 'success'});
-  }, [database, farmersCollection, currentUser]);
-
-  const handlePrint = useCallback(async (farmerId: string) => {
-      const farmerToPrint = await database.get<FarmerModel>('farmers').find(farmerId);
-      setPrintingFarmer(farmerToPrint);
-      setTimeout(() => { window.print(); setPrintingFarmer(null); }, 100);
-  }, [database]);
-
-  const handleExportToPdf = useCallback(async (farmerId: string) => {
-      const farmerToExport = await database.get<FarmerModel>('farmers').find(farmerId);
-      setPdfExportFarmer(farmerToExport);
-  }, [database]);
-  
-  useEffect(() => {
-    if (pdfExportFarmer && pdfContainerRef.current) {
-        const exportPdf = async () => {
-            const { jsPDF } = jspdf; const canvas = await html2canvas(pdfContainerRef.current as HTMLElement, { scale: 2 }); const imgData = canvas.toDataURL('image/png'); const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }); const pdfWidth = pdf.internal.pageSize.getWidth(); const imgProps = pdf.getImageProperties(imgData); const imgHeight = (imgProps.height * pdfWidth) / imgProps.width; let heightLeft = imgHeight, position = 0; pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight); heightLeft -= pdf.internal.pageSize.getHeight(); while (heightLeft >= 0) { position = heightLeft - imgHeight; pdf.addPage(); pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight); heightLeft -= pdf.internal.pageSize.getHeight(); } pdf.save(`Hapsara-Farmer-${pdfExportFarmer.farmerId}.pdf`); setPdfExportFarmer(null);
-        };
-        setTimeout(exportPdf, 100);
-    }
-}, [pdfExportFarmer]);
-
-  const handleFilterChange = useCallback((newFilters: Filters) => { setFilters(newFilters); setSelectedFarmerIds([]); setCurrentPage(1); }, []);
-  const handleSortRequest = useCallback((key: keyof Farmer | 'id') => { setSortConfig(s => ({ key, direction: s?.key === key && s.direction === 'ascending' ? 'descending' : 'ascending' })); setCurrentPage(1); }, []);
-  const handlePageChange = (page: number) => setCurrentPage(page);
-  const handleRowsPerPageChange = (rows: number) => { setRowsPerPage(rows); setCurrentPage(1); };
-  
-  const exportToExcel = () => {
-    const { utils, writeFile } = (window as any).XLSX; const dataToExport = allFarmers.map(f => ({ 'Hap ID': f.farmerId, 'Application ID': f.applicationId, 'Full Name': f.fullName, 'Father/Husband Name': f.fatherHusbandName, 'Mobile Number': f.mobileNumber, 'Aadhaar Number': f.aadhaarNumber, 'Status': f.status, 'Registration Date': new Date(f.registrationDate).toLocaleDateString(), District: GEO_DATA.find(d=>d.code===f.district)?.name||f.district, Mandal:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.name||f.mandal, Village:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.villages.find(v=>v.code===f.village)?.name||f.village, Address:f.address, 'Approved Extent (Acres)':f.approvedExtent, 'Number of Plants':f.numberOfPlants })); const ws = utils.json_to_sheet(dataToExport); const wb = utils.book_new(); utils.book_append_sheet(wb, ws, "Farmers"); writeFile(wb, "Hapsara_Farmers_Export.xlsx");
-  };
-  const exportToCsv = () => {
-    const { utils } = (window as any).XLSX; const dataToExport = allFarmers.map(f => ({ 'Hap ID': f.farmerId, 'Application ID': f.applicationId, 'Full Name': f.fullName, 'Father/Husband Name': f.fatherHusbandName, 'Mobile Number': f.mobileNumber, 'Aadhaar Number': f.aadhaarNumber, 'Status': f.status, 'Registration Date': new Date(f.registrationDate).toLocaleDateString(), District: GEO_DATA.find(d=>d.code===f.district)?.name||f.district, Mandal:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.name||f.mandal, Village:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.villages.find(v=>v.code===f.village)?.name||f.village, Address:f.address, 'Approved Extent (Acres)':f.approvedExtent, 'Number of Plants':f.numberOfPlants })); const ws = utils.json_to_sheet(dataToExport); const csv = utils.sheet_to_csv(ws); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); const url = URL.createObjectURL(blob); link.setAttribute("href", url); link.setAttribute("download", "Hapsara_Farmers_Export.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-  
-  const renderAppContent = () => {
-    const canAccessAdmin = currentUserPermissions.has(Permission.CAN_MANAGE_USERS) || currentUserPermissions.has(Permission.CAN_MANAGE_GROUPS);
-    const canAccessContentManager = currentUserPermissions.has(Permission.CAN_MANAGE_CONTENT);
-
-    if (currentRoute.view === 'not-found') {
-        return <Suspense fallback={<ModalLoader/>}><NotFoundPage onBack={() => handleNavigate('dashboard')} /></Suspense>
-    }
-    switch(currentRoute.view) {
-        case 'profile': return <Suspense fallback={<ModalLoader/>}><ProfilePage currentUser={currentUser!} groups={groups} onSave={handleSaveProfile} onBack={() => handleNavigate('dashboard')} /></Suspense>;
-        case 'admin': if (!canAccessAdmin) return null; return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} /></Suspense>;
-        case 'billing': return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} onNavigate={(path) => handleNavigate(path)} /></Suspense>
-        case 'usage-analytics': return <Suspense fallback={<ModalLoader/>}><UsageAnalyticsPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} supabase={supabase} /></Suspense>
-        case 'content-manager': if (!canAccessContentManager) return null; return <Suspense fallback={<ModalLoader/>}><ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('dashboard')} /></Suspense>
-        case 'subscription-management': return <Suspense fallback={<ModalLoader/>}><SubscriptionManagementPage currentUser={currentUser!} onBack={() => handleNavigate('billing')} /></Suspense>;
-        case 'print-queue': return <Suspense fallback={<ModalLoader/>}><PrintQueuePage queuedFarmerIds={printQueue} users={users} onRemove={handleRemoveFromPrintQueue} onClear={handleClearPrintQueue} onBack={() => handleNavigate('farmer-directory')} database={database} /></Suspense>;
-        case 'farmer-details': return <Suspense fallback={<ModalLoader/>}><FarmerDetailsPage farmerId={currentRoute.params.farmerId} database={database} users={users} currentUser={currentUser!} onBack={() => handleNavigate('farmer-directory')} permissions={currentUserPermissions} setNotification={setNotification} /></Suspense>
-        case 'farmer-directory':
-            return (<> <FilterBar onFilterChange={handleFilterChange} /> <FarmerList farmers={displayedFarmers} users={users} canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)} canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)} onPrint={handlePrint} onExportToPdf={handleExportToPdf} selectedFarmerIds={selectedFarmerIds} onSelectionChange={(id, selected) => setSelectedFarmerIds(p => selected ? [...p, id] : p.filter(i => i !== id))} onSelectAll={(all) => setSelectedFarmerIds(all ? displayedFarmers.map(f => f.id) : [])} sortConfig={sortConfig} onRequestSort={handleSortRequest} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onBatchUpdate={() => setShowBatchUpdateModal(true)} onDeleteSelected={handleDeleteSelected} totalRecords={totalRecords} currentPage={currentPage} rowsPerPage={rowsPerPage} onPageChange={handlePageChange} onRowsPerPageChange={handleRowsPerPageChange} isLoading={isListLoading} onAddToPrintQueue={handleAddToPrintQueue} onNavigate={handleNavigate} /> </>);
-        case 'dashboard': default:
-            return <Suspense fallback={<ModalLoader/>}><Dashboard supabase={supabase} /></Suspense>;
-    }
-  }
-
-  const renderContent = () => {
-    switch (appState) {
-        case 'LANDING':
-            return <Suspense fallback={<div></div>}><LandingPage onLaunch={() => setAppState('LOADING')} appContent={appContent} /></Suspense>;
-        case 'LOADING':
-            return <div className="fixed inset-0 bg-white flex items-center justify-center"><ModalLoader /></div>;
-        case 'AUTH':
-            if (authView === 'accept-invitation') return <Suspense fallback={<ModalLoader/>}><AcceptInvitation groups={groups} invitations={invitations} onAccept={handleAcceptInvitation} onBackToLogin={() => setAuthView('login')} /></Suspense>
-            return <Suspense fallback={<ModalLoader/>}><LoginScreen supabase={supabase} onSignUp={handleSignUp} onAcceptInvitationClick={() => setAuthView('accept-invitation')} /></Suspense>;
-        case 'APP':
-            return (
-                <div className="flex h-screen bg-gray-100 font-sans">
-                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={currentRoute.view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} onShowChangelog={() => setShowChangelogModal(true)} printQueueCount={printQueue.length} />
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <Header onToggleSidebar={() => setIsMobileMenuOpen(m => !m)} currentView={currentRoute.view} onRegister={handleRegisterClick} onSync={() => handleFullSync()} syncLoading={syncLoading} pendingSyncCount={pendingSyncCount} isOnline={isOnline} permissions={currentUserPermissions} />
-                        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
-                            {renderAppContent()}
-                        </main>
-                    </div>
-                </div>
-            );
-        default:
-            return <Suspense fallback={<div></div>}><LandingPage onLaunch={() => setAppState('LOADING')} appContent={appContent} /></Suspense>;
-    }
-  };
-
-  return (
-    <>
-        {renderContent()}
-        {showForm && ( <Suspense fallback={<ModalLoader/>}> <RegistrationForm mode="create" onSubmit={handleRegistration} onCancel={() => setShowForm(false)} existingFarmers={allFarmersPlain} /> </Suspense> )}
-        {showRawDataView && ( <Suspense fallback={<ModalLoader/>}> <RawDataView farmers={allFarmers} onClose={() => setShowRawDataView(false)} /> </Suspense> )}
-        {showBatchUpdateModal && ( <Suspense fallback={<ModalLoader/>}> <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleBatchUpdate} onCancel={() => setShowBatchUpdateModal(false)}/> </Suspense> )}
-        {showImportModal && ( <Suspense fallback={<ModalLoader/>}> <BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allFarmersPlain} /> </Suspense> )}
-        {showDeleteConfirmation && ( <Suspense fallback={<ModalLoader/>}> <ConfirmationModal isOpen={showDeleteConfirmation} title="Confirm Deletion" message={`Are you sure you want to delete ${selectedFarmerIds.length} farmer record(s)? This action cannot be undone.`} onConfirm={confirmDeleteSelected} onCancel={() => setShowDeleteConfirmation(false)} confirmText="Delete" confirmButtonClass="bg-red-600 hover:bg-red-700" /> </Suspense> )}
-        {showPrivacyModal && ( <Suspense fallback={<ModalLoader/>}> <PrivacyModal onClose={() => setShowPrivacyModal(false)} appContent={appContent} /> </Suspense> )}
-        {showHelpModal && ( <Suspense fallback={<ModalLoader/>}> <HelpModal onClose={() => setShowHelpModal(false)} appContent={appContent} /> </Suspense> )}
-        {showFeedbackModal && ( <Suspense fallback={<ModalLoader/>}> <FeedbackModal onClose={() => setShowFeedbackModal(false)} /> </Suspense> )}
-        {showChangelogModal && ( <Suspense fallback={<ModalLoader/>}><ChangelogModal onClose={() => setShowChangelogModal(false)} /></Suspense> )}
-        <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0"> {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={modelToPlain(pdfExportFarmer)} users={users} isForPdf={true} /></Suspense>} </div>
-        <PrintView farmer={modelToPlain(printingFarmer)} users={users} />
-        {notification && ( 
-            <div className={`fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white animate-fade-in-up
-                ${notification.type === 'success' ? 'bg-green-600' : ''}
-                ${notification.type === 'error' ? 'bg-red-600' : ''}
-                ${notification.type === 'info' ? 'bg-blue-600' : ''}
-            `}>
-                {notification.message}
-            </div> 
-        )}
-    </>
-  );
 };
 
 export default App;
