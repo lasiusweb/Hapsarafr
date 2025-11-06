@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { Farmer, FarmerStatus, User, Group, Permission, Invitation } from './types';
 import { GEO_DATA } from './data/geoData';
@@ -8,7 +9,6 @@ import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
 import { Q, Query } from '@nozbe/watermelondb';
 import { FarmerModel } from './db';
-import DataMenu from './components/DataMenu';
 import { initializeSupabase } from './lib/supabase';
 
 // Lazily import components to enable code-splitting
@@ -149,186 +149,174 @@ const getViewFromHash = (): View => {
 };
 
 const Header: React.FC<{
-  currentUser: User | null;
-  onLogout: () => void;
-  onProfileClick: () => void;
-  onBillingClick: () => void;
-  onUsageAnalyticsClick: () => void;
-  onNavigate: (view: View) => void;
-  currentView: View;
-  onSetupGuideClick: () => void;
-  onRegister: () => void;
-  onExport: () => void;
-  onExportCsv: () => void;
-  onImport: () => void;
-  onViewRawData: () => void;
-  onDeleteSelected: () => void;
-  onBatchUpdate: () => void;
-  onSync: () => void;
-  syncLoading: boolean;
-  selectedCount: number;
-  isOnline: boolean;
-  pendingSyncCount: number;
-  permissions: Set<Permission>;
-}> = ({
-    currentUser, onLogout, onProfileClick, onBillingClick, onUsageAnalyticsClick, onNavigate, currentView,
-    onSetupGuideClick, onRegister, onExport, onExportCsv, onImport, onViewRawData,
-    onDeleteSelected, onBatchUpdate, onSync, syncLoading, selectedCount, isOnline, pendingSyncCount, permissions
-}) => {
-  const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
-  const canDelete = permissions.has(Permission.CAN_DELETE_FARMER);
-  const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
-  const canManage = (permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS));
-  
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const headerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-        if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
-            setIsProfileMenuOpen(false);
-            setIsMenuOpen(false);
-        }
+    onToggleSidebar: () => void;
+    currentView: View;
+    onRegister: () => void;
+    onSync: () => void;
+    syncLoading: boolean;
+    pendingSyncCount: number;
+    isOnline: boolean;
+    permissions: Set<Permission>;
+}> = ({ onToggleSidebar, currentView, onRegister, onSync, syncLoading, pendingSyncCount, isOnline, permissions }) => {
+    const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
+    const viewTitles: Record<View, string> = {
+        dashboard: 'Farmer Dashboard',
+        profile: 'My Profile',
+        admin: 'Admin Panel',
+        billing: 'Billing & Usage',
+        'usage-analytics': 'Usage Analytics',
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
-  const handleMenuAction = (action: () => void) => {
-      action();
-      setIsProfileMenuOpen(false);
-      setIsMenuOpen(false);
-  };
-  
-  const SyncStatusIndicator: React.FC<{isMobile?: boolean}> = ({ isMobile = false }) => {
-      const baseClass = `flex items-center gap-1.5 text-xs font-semibold`;
-      const mobileClass = isMobile ? 'mt-2 text-yellow-700' : 'text-gray-600';
-      const colorClass = syncLoading ? 'text-blue-600 animate-pulse' : 'text-yellow-700';
-      
-      if (!syncLoading && pendingSyncCount === 0 && !isMobile) return null;
-      
-      return (
-          <div className={`${baseClass} ${mobileClass} ${colorClass}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M15.312 11.224a5.5 5.5 0 01-9.537 2.112l.14-.141a.5.5 0 01.707.707l-.141.141a6.5 6.5 0 0011.23-2.618.5.5 0 01-.48-.655z" clipRule="evenodd" />
-                  <path fillRule="evenodd" d="M4.688 8.776a5.5 5.5 0 019.537-2.112l-.14.141a.5.5 0 01-.707-.707l.141-.141a6.5 6.5 0 00-11.23 2.618.5.5 0 01.48.655z" clipRule="evenodd" />
-              </svg>
-              <span>{syncLoading ? 'Syncing...' : pendingSyncCount > 0 ? `${pendingSyncCount} Items to Sync` : 'Synced'}</span>
-          </div>
-      );
-  };
-
-  return (
-    <header className="bg-white shadow-md p-3 sm:p-4 relative z-50" ref={headerRef}>
-        <div className="flex justify-between items-center">
-          {/* Left Side: Logo, Title */}
-          <div className="flex items-center gap-2 sm:gap-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 sm:h-10 sm:w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-800">Hapsara</h1>
-          </div>
-
-          {/* Right Side: Actions, Status, Profile, Menu */}
-          <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-3">
-                  {(canDelete || canEdit) && selectedCount > 0 && (
-                      <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-lg">
-                        <span className="text-sm font-semibold text-gray-700 pl-2">{selectedCount} selected</span>
-                        {canEdit && <button onClick={onBatchUpdate} className="px-3 py-1 rounded-md transition text-sm font-semibold flex items-center gap-1.5 bg-yellow-400 text-yellow-900 hover:bg-yellow-500" title={`Update status for ${selectedCount} selected farmer(s)`}>Update</button>}
-                        {canDelete && <button onClick={onDeleteSelected} className="px-3 py-1 rounded-md transition text-sm font-semibold flex items-center gap-1.5 bg-red-500 text-white hover:bg-red-600" title={`Delete ${selectedCount} selected farmer(s)`}>Delete</button>}
-                      </div>
-                  )}
-              </div>
-              
-              <div className="hidden sm:flex items-center gap-3 border-l pl-3 ml-1">
-                  <div className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${isOnline ? 'bg-green-50' : 'bg-red-50'}`}>
-                      <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
-                      <span className={`text-sm font-semibold hidden lg:block ${isOnline ? 'text-green-800' : 'text-red-800'}`}>{isOnline ? 'Online' : 'Offline'}</span>
-                  </div>
-                  <SyncStatusIndicator />
-              </div>
-
-              {isOnline && (
-                <button onClick={onSync} disabled={syncLoading} className="relative hidden md:inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait">
-                  {syncLoading ? 'Syncing...' : 'Sync Now'}
-                  {pendingSyncCount > 0 && !syncLoading && (
-                    <span className="absolute -top-1 -right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-yellow-500 text-yellow-900 text-xs items-center justify-center font-bold">{pendingSyncCount}</span></span>
-                  )}
+    return (
+        <header className="bg-white shadow-sm p-4 flex justify-between items-center flex-shrink-0 z-20">
+            <div className="flex items-center gap-4">
+                <button onClick={onToggleSidebar} className="p-2 rounded-md hover:bg-gray-100 lg:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
                 </button>
-              )}
-              
-              {canRegister && (
-                  <button onClick={onRegister} className="hidden md:block px-4 py-2 rounded-md transition font-semibold bg-green-600 text-white hover:bg-green-700">Register Farmer</button>
-              )}
-
-              {currentUser && (
-                <div className="relative">
-                    <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="flex items-center gap-3 hover:bg-gray-100 rounded-lg p-1.5 transition">
-                        <img src={currentUser.avatar} alt="User Avatar" className="w-9 h-9 rounded-full border-2 border-gray-200" />
-                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-500 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                    </button>
-                    {isProfileMenuOpen && (
-                        <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-                            <div className="p-2 border-b"><p className="font-semibold text-gray-800 text-sm truncate">{currentUser.name}</p><p className="text-xs text-gray-500">Pay-as-you-go Plan</p></div>
-                            <div className="py-1" role="menu">
-                                <button onClick={() => handleMenuAction(onProfileClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Profile</button>
-                                <button onClick={() => handleMenuAction(onBillingClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Billing</button>
-                                <button onClick={() => handleMenuAction(onUsageAnalyticsClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Usage</button>
-                                <div className="border-t my-1"></div>
-                                <button onClick={() => handleMenuAction(onLogout)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Logout</button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-              )}
-
-              {/* Universal Hamburger Button */}
-              <div>
-                  <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
-                  </button>
-              </div>
-          </div>
-        </div>
-        
-        {/* Universal Menu Panel */}
-        {isMenuOpen && (
-            <div className="absolute top-full left-0 w-full bg-white shadow-lg z-40 animate-fade-in-down">
-                 {currentUser && (
-                    <div className="p-4 border-b">
-                         <div className="flex items-center gap-3 mb-4"><img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-200" /><div><p className="font-semibold text-gray-800 text-sm">{currentUser.name}</p><p className="text-xs text-gray-500">Pay-as-you-go Plan</p></div></div>
-                         <div className="sm:hidden flex items-center gap-4"><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`}></span><span className="text-sm font-medium text-gray-600">{isOnline ? 'Online' : 'Offline'}</span></div><SyncStatusIndicator isMobile={true} /></div>
-                    </div>
-                )}
-                <nav className="p-2 space-y-1">
-                    {canRegister && <button onClick={() => handleMenuAction(onRegister)} className="w-full text-left px-4 py-3 text-base font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md">Register New Farmer</button>}
-                    {isOnline && <button onClick={() => handleMenuAction(onSync)} disabled={syncLoading} className="w-full text-left px-4 py-3 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md mt-1">{syncLoading ? 'Syncing...' : 'Sync Now'}</button>}
-                    
-                    <div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Navigation</p>
-                    <button onClick={() => handleMenuAction(() => onNavigate('dashboard'))} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md font-semibold">Dashboard</button>
-                    
-                    {selectedCount > 0 && <div className="border-t my-2"></div>}
-                    {canDelete && selectedCount > 0 && <button onClick={() => handleMenuAction(onDeleteSelected)} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md font-semibold">Delete Selected ({selectedCount})</button>}
-                    {canEdit && selectedCount > 0 && <button onClick={() => handleMenuAction(onBatchUpdate)} className="w-full text-left px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50 rounded-md font-semibold">Update Status ({selectedCount})</button>}
-
-                    <div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Data</p>
-                    <DataMenu permissions={permissions} isMobile={true} onAction={handleMenuAction} onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} onViewRawData={onViewRawData} />
-                    
-                    {canManage && (<><div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Admin</p>
-                    <button onClick={() => handleMenuAction(() => onNavigate('admin'))} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Admin Panel</button>
-                    <button onClick={() => handleMenuAction(onSetupGuideClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Setup Guide</button></>)}
-                    
-                    <div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Account</p>
-                    <button onClick={() => handleMenuAction(onProfileClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Profile</button>
-                    <button onClick={() => handleMenuAction(onBillingClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Billing</button>
-                    <button onClick={() => handleMenuAction(onUsageAnalyticsClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Usage</button>
-                    <div className="border-t my-2"></div>
-                    <button onClick={() => handleMenuAction(onLogout)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Logout</button>
-                </nav>
+                <h1 className="text-xl font-bold text-gray-800 hidden sm:block">{viewTitles[currentView]}</h1>
             </div>
-        )}
-    </header>
-  );
+            <div className="flex items-center gap-4">
+                {isOnline && (
+                    <button onClick={onSync} disabled={syncLoading} className="relative flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait">
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${syncLoading ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.885-.666A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566z" clipRule="evenodd" /></svg>
+                        <span className="hidden md:inline">{syncLoading ? 'Syncing...' : 'Sync Now'}</span>
+                        {pendingSyncCount > 0 && !syncLoading && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-yellow-500 text-yellow-900 text-xs items-center justify-center font-bold">{pendingSyncCount}</span></span>
+                        )}
+                    </button>
+                )}
+                {canRegister && (
+                    <button onClick={onRegister} className="flex items-center gap-2 px-4 py-2 rounded-md transition font-semibold bg-green-600 text-white hover:bg-green-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                        <span className="hidden md:inline">Register Farmer</span>
+                    </button>
+                )}
+            </div>
+        </header>
+    );
+};
+
+const Sidebar: React.FC<{
+    isOpen: boolean;
+    isCollapsed: boolean;
+    onToggleCollapse: () => void;
+    currentUser: User | null;
+    onLogout: () => void;
+    onNavigate: (view: View) => void;
+    currentView: View;
+    permissions: Set<Permission>;
+    onImport: () => void;
+    onExportExcel: () => void;
+    onExportCsv: () => void;
+    onViewRawData: () => void;
+    onSetupGuideClick: () => void;
+}> = ({ isOpen, isCollapsed, onToggleCollapse, currentUser, onLogout, onNavigate, currentView, permissions, onImport, onExportExcel, onExportCsv, onViewRawData, onSetupGuideClick }) => {
+    
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const canManage = permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS);
+    const canImport = permissions.has(Permission.CAN_IMPORT_DATA);
+    const canExport = permissions.has(Permission.CAN_EXPORT_DATA);
+
+    const NavItem: React.FC<{ icon: React.ReactNode; text: string; view: View; isSubItem?: boolean; }> = ({ icon, text, view, isSubItem = false }) => {
+        const isActive = currentView === view;
+        return (
+            <li className="relative group">
+                <button
+                    onClick={() => onNavigate(view)}
+                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} ${isActive ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
+                >
+                    {icon}
+                    <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
+                </button>
+                 {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>}
+            </li>
+        );
+    };
+    
+     const DataNavItem: React.FC<{ icon: React.ReactNode; text: string; onClick: () => void; isSubItem?: boolean; }> = ({ icon, text, onClick, isSubItem = false }) => {
+        return (
+            <li className="relative group">
+                <button
+                    onClick={onClick}
+                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} text-gray-300 hover:bg-gray-700 hover:text-white`}
+                >
+                    {icon}
+                    <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
+                </button>
+                {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>}
+            </li>
+        );
+    };
+
+    const NavCategory: React.FC<{ text: string }> = ({ text }) => (
+        <li className="px-3 pt-4 pb-2">
+            <span className={`text-xs font-semibold text-gray-500 uppercase sidebar-category-text`}>{text}</span>
+        </li>
+    );
+
+    const sidebarClasses = `
+        bg-gray-800 text-white flex-shrink-0 flex flex-col z-40
+        ${isCollapsed ? 'sidebar-collapsed w-20' : 'w-64'}
+        hidden lg:flex sidebar
+    `;
+
+    return (
+        <>
+            {/* Desktop Sidebar */}
+            <nav className={sidebarClasses}>
+                <div className="flex items-center gap-2 p-4 border-b border-gray-700 flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
+                    <span className={`text-xl font-bold sidebar-item-text`}>Hapsara</span>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-2">
+                    <ul className="space-y-1">
+                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} text="Dashboard" view="dashboard" />
+                        {canManage && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Admin Panel" view="admin" />}
+
+                        {(canImport || canExport || canManage) && <NavCategory text="Tools" />}
+                        {canImport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>} text="Import Data" onClick={onImport} />}
+                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} text="Export to Excel" onClick={onExportExcel} />}
+                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>} text="Export to CSV" onClick={onExportCsv} />}
+                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>} text="View Raw Data" onClick={onViewRawData} />}
+                        {canManage && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 16v-2m8-8h-2m-16 0H2m16.657-6.657l-1.414-1.414m-11.314 11.314l-1.414-1.414m0-11.314l1.414 1.414m11.314 0l1.414 1.414M12 18a6 6 0 100-12 6 6 0 000 12z" /></svg>} text="Setup Guide" onClick={onSetupGuideClick} />}
+                    </ul>
+                </div>
+                
+                <div className="p-2 border-t border-gray-700 flex-shrink-0">
+                    <div className="relative">
+                        {isUserMenuOpen && (
+                            <div className={`absolute bottom-full mb-2 w-full bg-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 ${isCollapsed ? 'left-0' : ''}`}>
+                                <div className="py-1">
+                                    <button onClick={() => onNavigate('profile')} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-t-md">Profile</button>
+                                    <button onClick={() => onNavigate('billing')} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Billing</button>
+                                    <button onClick={() => onNavigate('usage-analytics')} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Usage</button>
+                                    <div className="border-t border-gray-600 my-1"></div>
+                                    <button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-b-md">Logout</button>
+                                </div>
+                            </div>
+                        )}
+                         {currentUser && (
+                            <button onClick={() => setIsUserMenuOpen(o => !o)} className="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-700">
+                                <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-600 flex-shrink-0" />
+                                <div className={`ml-3 overflow-hidden sidebar-item-text`}>
+                                    <p className="font-semibold text-sm text-white whitespace-nowrap">{currentUser.name}</p>
+                                    <p className="text-xs text-gray-400 whitespace-nowrap">Pay-as-you-go</p>
+                                </div>
+                            </button>
+                         )}
+                    </div>
+                    <button onClick={onToggleCollapse} className="flex items-center w-full text-left p-3 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white">
+                        {isCollapsed 
+                            ? <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg> 
+                            : <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
+                        }
+                        <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>Collapse</span>
+                    </button>
+                </div>
+            </nav>
+        </>
+    );
 };
 
 const modelToPlain = (f: FarmerModel | null): Farmer | null => {
@@ -399,6 +387,8 @@ const App: React.FC = () => {
   const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
@@ -430,6 +420,7 @@ const App: React.FC = () => {
 
   const handleNavigate = (targetView: View) => {
       window.location.hash = targetView === 'dashboard' ? '' : `/${targetView}`;
+      setIsMobileMenuOpen(false);
   };
 
   // --- SUPABASE & AUTH ---
@@ -1154,10 +1145,9 @@ const App: React.FC = () => {
         case 'dashboard':
         default:
             return (
-                <main className="p-4 sm:p-6">
+                <>
                     <div className="mb-6">
-                        <h1 className="text-3xl font-bold text-gray-800">Farmer Dashboard</h1>
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             <div className="bg-white p-6 rounded-lg shadow-md flex items-center gap-4">
                                 <div className="bg-green-100 p-3 rounded-full">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -1188,6 +1178,7 @@ const App: React.FC = () => {
                         onRequestSort={handleSortRequest}
                         newlyAddedFarmerId={newlyAddedFarmerId}
                         onHighlightComplete={() => setNewlyAddedFarmerId(null)}
+                        onBatchUpdate={() => setShowBatchUpdateModal(true)}
                         onDeleteSelected={handleDeleteSelected}
                         totalRecords={processedFarmers.length}
                         currentPage={currentPage}
@@ -1195,38 +1186,45 @@ const App: React.FC = () => {
                         onPageChange={handlePageChange}
                         onRowsPerPageChange={handleRowsPerPageChange}
                     />
-                </main>
+                </>
             );
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header
+    <div className="flex h-screen bg-gray-100 font-sans">
+      <Sidebar
+        isOpen={isMobileMenuOpen}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(c => !c)}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onProfileClick={() => handleNavigate('profile')}
-        onBillingClick={() => handleNavigate('billing')}
-        onUsageAnalyticsClick={() => handleNavigate('usage-analytics')}
         onNavigate={handleNavigate}
         currentView={view}
-        onSetupGuideClick={() => setShowSetupGuide(true)}
-        onRegister={handleRegisterClick}
-        onExport={() => exportToExcel()}
-        onExportCsv={() => exportToCsv()}
-        onImport={() => setShowImportModal(true)}
-        onViewRawData={() => setShowRawDataView(true)}
-        onDeleteSelected={handleDeleteSelected}
-        onBatchUpdate={() => setShowBatchUpdateModal(true)}
-        onSync={() => handlePushSync(true)}
-        syncLoading={syncLoading}
-        selectedCount={selectedFarmerIds.length}
-        isOnline={isOnline}
-        pendingSyncCount={pendingSyncCount}
         permissions={currentUserPermissions}
+        onImport={() => setShowImportModal(true)}
+        onExportExcel={exportToExcel}
+        onExportCsv={exportToCsv}
+        onViewRawData={() => setShowRawDataView(true)}
+        onSetupGuideClick={() => setShowSetupGuide(true)}
       />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+         <Header
+            onToggleSidebar={() => setIsMobileMenuOpen(m => !m)}
+            currentView={view}
+            onRegister={handleRegisterClick}
+            onSync={() => handlePushSync(true)}
+            syncLoading={syncLoading}
+            pendingSyncCount={pendingSyncCount}
+            isOnline={isOnline}
+            permissions={currentUserPermissions}
+          />
+          <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
+              {renderView()}
+          </main>
+      </div>
       
-      {renderView()}
 
       {showForm && (
         <Suspense fallback={<ModalLoader/>}>

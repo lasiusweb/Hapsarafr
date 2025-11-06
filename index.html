@@ -87,6 +87,25 @@
           display: none;
         }
       }
+      /* Sidebar transition styles */
+      .sidebar {
+        transition: width 0.3s ease-in-out;
+      }
+      .sidebar-overlay {
+        transition: transform 0.3s ease-in-out;
+      }
+      .sidebar-item-text, .sidebar-category-text {
+        transition: opacity 0.2s ease-in-out, transform 0.3s ease-in-out;
+      }
+      .sidebar-collapsed .sidebar-item-text, .sidebar-collapsed .sidebar-category-text {
+        opacity: 0;
+        transform: translateX(-10px);
+        pointer-events: none;
+      }
+       /* Simple tooltip for collapsed sidebar */
+      .group:hover .group-hover\:opacity-100 {
+        opacity: 1;
+      }
     </style>
   <script type="importmap">
 {

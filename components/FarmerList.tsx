@@ -21,6 +21,7 @@ interface FarmerListProps {
     onRequestSort: (key: keyof Farmer | 'id') => void;
     newlyAddedFarmerId: string | null;
     onHighlightComplete: () => void;
+    onBatchUpdate: () => void;
     onDeleteSelected: () => void;
     totalRecords: number;
     currentPage: number;
@@ -32,7 +33,7 @@ interface FarmerListProps {
 const FarmerList: React.FC<FarmerListProps> = ({ 
     farmers, users, canEdit, canDelete, editingRowId, onEditRow, onCancelEditRow, onSaveRow, 
     onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, 
-    sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onDeleteSelected,
+    sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onBatchUpdate, onDeleteSelected,
     totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange 
 }) => {
     
@@ -225,21 +226,33 @@ const FarmerList: React.FC<FarmerListProps> = ({
 
     return (
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
-             {canDelete && selectedFarmerIds.length > 0 && (
-                <div className="p-4 bg-yellow-50 border-b border-yellow-200 flex justify-between items-center">
-                    <p className="text-sm font-semibold text-yellow-800">
+             {selectedFarmerIds.length > 0 && (
+                <div className="p-4 bg-blue-50 border-b border-blue-200 flex justify-between items-center animate-fade-in-down">
+                    <p className="text-sm font-semibold text-blue-800">
                         {selectedFarmerIds.length} farmer(s) selected
                     </p>
-                    <button
-                        onClick={onDeleteSelected}
-                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold text-sm flex items-center gap-2"
-                        title={`Delete ${selectedFarmerIds.length} selected farmer(s)`}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                         </svg>
-                        Delete Selected
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {canEdit && (
+                            <button
+                                onClick={onBatchUpdate}
+                                className="px-3 py-1.5 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition font-semibold text-sm flex items-center gap-2"
+                                title={`Update status for ${selectedFarmerIds.length} selected farmer(s)`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                Update Status
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button
+                                onClick={onDeleteSelected}
+                                className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold text-sm flex items-center gap-2"
+                                title={`Delete ${selectedFarmerIds.length} selected farmer(s)`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                Delete Selected
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
              <div className="md:hidden px-4 pt-4">
