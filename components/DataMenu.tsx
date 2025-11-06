@@ -9,9 +9,13 @@ interface DataMenuProps {
     permissions: Set<Permission>;
     isMobile?: boolean;
     onAction?: (action: () => void) => void;
+    variant?: 'button' | 'nav';
 }
 
-const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCsv, onViewRawData, permissions, isMobile = false, onAction = (action) => action() }) => {
+const DataMenu: React.FC<DataMenuProps> = ({ 
+    onImport, onExportExcel, onExportCsv, onViewRawData, permissions, 
+    isMobile = false, onAction = (action) => action(), variant = 'button' 
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -33,7 +37,7 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
     }, []);
 
     const handleAction = (action: () => void) => {
-        action();
+        onAction(action);
         setIsOpen(false);
     };
     
@@ -42,13 +46,13 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
         return (
             <>
                 {canImport && (
-                    <button onClick={() => onAction(onImport)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Import from Excel</button>
+                    <button onClick={() => handleAction(onImport)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Import from Excel</button>
                 )}
                  {canExport && (
                     <>
-                        <button onClick={() => onAction(onViewRawData)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">View Raw Data</button>
-                        <button onClick={() => onAction(onExportExcel)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Export to Excel</button>
-                        <button onClick={() => onAction(onExportCsv)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Export to CSV</button>
+                        <button onClick={() => handleAction(onViewRawData)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">View Raw Data</button>
+                        <button onClick={() => handleAction(onExportExcel)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Export to Excel</button>
+                        <button onClick={() => handleAction(onExportCsv)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Export to CSV</button>
                     </>
                 )}
             </>
@@ -59,12 +63,17 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
     if (!canImport && !canExport) {
         return null;
     }
+    
+    const triggerClasses = variant === 'nav'
+        ? "inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+        : "px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition font-semibold flex items-center gap-2";
+
 
     return (
         <div className="relative" ref={menuRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition font-semibold flex items-center gap-2"
+                className={triggerClasses}
             >
                 Data
                 <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -73,7 +82,7 @@ const DataMenu: React.FC<DataMenuProps> = ({ onImport, onExportExcel, onExportCs
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                <div className="absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
                     <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
                         {canImport && (
                             <button

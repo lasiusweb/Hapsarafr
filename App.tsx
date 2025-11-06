@@ -186,11 +186,11 @@ const Header: React.FC<{
   };
   
   const SyncStatusIndicator: React.FC<{isMobile?: boolean}> = ({ isMobile = false }) => {
-      if (!syncLoading && pendingSyncCount === 0) return null;
-      
-      const baseClass = `flex items-center gap-1.5 text-sm font-semibold`;
+      const baseClass = `flex items-center gap-1.5 text-xs font-semibold`;
       const mobileClass = isMobile ? 'mt-2 text-yellow-700' : 'text-gray-600';
-      const colorClass = syncLoading ? 'text-blue-600 animate-pulse' : '';
+      const colorClass = syncLoading ? 'text-blue-600 animate-pulse' : 'text-yellow-700';
+      
+      if (!syncLoading && pendingSyncCount === 0 && !isMobile) return null;
       
       return (
           <div className={`${baseClass} ${mobileClass} ${colorClass}`}>
@@ -198,7 +198,7 @@ const Header: React.FC<{
                   <path fillRule="evenodd" d="M15.312 11.224a5.5 5.5 0 01-9.537 2.112l.14-.141a.5.5 0 01.707.707l-.141.141a6.5 6.5 0 0011.23-2.618.5.5 0 01-.48-.655z" clipRule="evenodd" />
                   <path fillRule="evenodd" d="M4.688 8.776a5.5 5.5 0 019.537-2.112l-.14.141a.5.5 0 01-.707-.707l.141-.141a6.5 6.5 0 00-11.23 2.618.5.5 0 01.48.655z" clipRule="evenodd" />
               </svg>
-              <span>{syncLoading ? 'Syncing...' : `${pendingSyncCount} to Sync`}</span>
+              <span>{syncLoading ? 'Syncing...' : pendingSyncCount > 0 ? `${pendingSyncCount} Items to Sync` : 'Synced'}</span>
           </div>
       );
   };
@@ -206,51 +206,46 @@ const Header: React.FC<{
   const navLinkClasses = (targetView: string) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === targetView ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`;
 
   return (
-    <header className="bg-white shadow-md p-3 sm:p-4 relative" ref={headerRef}>
+    <header className="bg-white shadow-md p-3 sm:p-4 relative z-50" ref={headerRef}>
         <div className="flex justify-between items-center">
           {/* Left Side: Logo, Title, Desktop Nav */}
           <div className="flex items-center gap-2 sm:gap-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 sm:h-10 sm:w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 00-1.09.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-800">
-                  <span className="hidden sm:inline">Hapsara</span>
-                  <span className="sm:hidden">HFR</span>
-              </h1>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 sm:h-10 sm:w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
+              <h1 className="text-xl md:text-2xl font-bold text-gray-800">Hapsara</h1>
               
               {/* Desktop Navigation Menu */}
               <nav className="hidden md:flex items-baseline gap-2 ml-6">
                   <button onClick={() => onNavigate('dashboard')} className={navLinkClasses('dashboard')}>Dashboard</button>
-                  <DataMenu onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} onViewRawData={onViewRawData} permissions={permissions} />
+                  <DataMenu variant="nav" onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} onViewRawData={onViewRawData} permissions={permissions} />
                   {canManage && <button onClick={() => onNavigate('admin')} className={navLinkClasses('admin')}>Admin</button>}
               </nav>
           </div>
 
           {/* Right Side: Actions, Status, Profile */}
-          <div className="flex items-center gap-2">
-              <div className="hidden md:flex items-center gap-2">
-                  {canDelete && selectedCount > 0 && (
-                      <button onClick={onDeleteSelected} className="px-4 py-2 rounded-md transition font-semibold flex items-center gap-2 bg-red-600 text-white hover:bg-red-700" title={`Delete ${selectedCount} selected farmer(s)`}>
-                          Delete ({selectedCount})
-                      </button>
-                  )}
-                  {canEdit && selectedCount > 0 && (
-                      <button onClick={onBatchUpdate} className="px-4 py-2 rounded-md transition font-semibold flex items-center gap-2 bg-yellow-500 text-white hover:bg-yellow-600" title={`Update status for ${selectedCount} selected farmer(s)`}>
-                          Update ({selectedCount})
-                      </button>
+          <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-3">
+                  {(canDelete || canEdit) && selectedCount > 0 && (
+                      <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-lg">
+                        <span className="text-sm font-semibold text-gray-700 pl-2">{selectedCount} selected</span>
+                        {canEdit && <button onClick={onBatchUpdate} className="px-3 py-1 rounded-md transition text-sm font-semibold flex items-center gap-1.5 bg-yellow-400 text-yellow-900 hover:bg-yellow-500" title={`Update status for ${selectedCount} selected farmer(s)`}>Update</button>}
+                        {canDelete && <button onClick={onDeleteSelected} className="px-3 py-1 rounded-md transition text-sm font-semibold flex items-center gap-1.5 bg-red-500 text-white hover:bg-red-600" title={`Delete ${selectedCount} selected farmer(s)`}>Delete</button>}
+                      </div>
                   )}
               </div>
               
-              <div className="hidden sm:flex items-center gap-4 border-l pl-2 ml-2">
-                  <div className="flex items-center gap-2">
-                      <span className={`h-3 w-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} transition-colors`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
+              <div className="hidden sm:flex items-center gap-3 border-l pl-3 ml-1">
+                  <div className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${isOnline ? 'bg-green-50' : 'bg-red-50'}`}>
+                      <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} title={isOnline ? 'Online' : 'Offline - Changes are saved locally'}></span>
+                      <span className={`text-sm font-semibold hidden lg:block ${isOnline ? 'text-green-800' : 'text-red-800'}`}>{isOnline ? 'Online' : 'Offline'}</span>
                   </div>
                   <SyncStatusIndicator />
               </div>
 
               {isOnline && (
-                <button onClick={onSync} disabled={syncLoading} className="relative px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait">
-                  {syncLoading ? 'Syncing...' : 'Sync'}
+                <button onClick={onSync} disabled={syncLoading} className="relative hidden md:inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait">
+                  {syncLoading ? 'Syncing...' : 'Sync Now'}
                   {pendingSyncCount > 0 && !syncLoading && (
-                    <span className="absolute -top-2 -right-2 flex h-5 w-5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-5 w-5 bg-yellow-500 text-yellow-900 text-xs items-center justify-center">{pendingSyncCount}</span></span>
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-yellow-500 text-yellow-900 text-xs items-center justify-center font-bold">{pendingSyncCount}</span></span>
                   )}
                 </button>
               )}
@@ -299,8 +294,11 @@ const Header: React.FC<{
                     </div>
                 )}
                 <nav className="p-2 space-y-1">
+                    {canRegister && <button onClick={() => handleMenuAction(onRegister)} className="w-full text-left px-4 py-3 text-base font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md">Register New Farmer</button>}
+                    {isOnline && <button onClick={() => handleMenuAction(onSync)} disabled={syncLoading} className="w-full text-left px-4 py-3 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md mt-1">{syncLoading ? 'Syncing...' : 'Sync Now'}</button>}
+                    
+                    <div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Navigation</p>
                     <button onClick={() => handleMenuAction(() => onNavigate('dashboard'))} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md font-semibold">Dashboard</button>
-                    {canRegister && <button onClick={() => handleMenuAction(onRegister)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Register Farmer</button>}
                     
                     {selectedCount > 0 && <div className="border-t my-2"></div>}
                     {canDelete && selectedCount > 0 && <button onClick={() => handleMenuAction(onDeleteSelected)} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md font-semibold">Delete Selected ({selectedCount})</button>}
@@ -313,7 +311,7 @@ const Header: React.FC<{
                     <button onClick={() => handleMenuAction(() => onNavigate('admin'))} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Admin Panel</button>
                     <button onClick={() => handleMenuAction(onSetupGuideClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Setup Guide</button></>)}
                     
-                    <div className="border-t my-2"></div>
+                    <div className="border-t my-2"></div><p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Account</p>
                     <button onClick={() => handleMenuAction(onProfileClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Profile</button>
                     <button onClick={() => handleMenuAction(onBillingClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Billing</button>
                     <button onClick={() => handleMenuAction(onUsageAnalyticsClick)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">Usage</button>
