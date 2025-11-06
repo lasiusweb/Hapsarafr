@@ -12,10 +12,9 @@ interface AdminPageProps {
     onBack: () => void;
     invitations: Invitation[];
     onInviteUser: (email: string, groupId: string) => Promise<string>;
-    onShowSetupGuide: () => void;
 }
 
-const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, invitations, onInviteUser, onShowSetupGuide }) => {
+const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, invitations, onInviteUser }) => {
     const permissions = useMemo(() => {
         const userGroup = groups.find(g => g.id === currentUser.groupId);
         return new Set(userGroup?.permissions || []);
@@ -119,10 +118,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                          <p className="text-gray-500">Manage user access and group permissions.</p>
                     </div>
                      <div className="flex items-center gap-4 flex-shrink-0">
-                        <button onClick={onShowSetupGuide} className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition font-semibold text-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.982.54 2.258 0 3.24a1.532 1.532 0 01-.948 2.286c-1.56.38-1.56 2.6 0 2.98.63.153 1.292.986 1.348 1.631a1.532 1.532 0 01-.948 2.286c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.286.948c.38 1.56 2.6 1.56 2.98 0a1.532 1.532 0 012.286-.948c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 01.948-2.286c1.56-.38 1.56-2.6 0-2.98a1.532 1.532 0 01-.948-2.286c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.286-.948zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
-                            Setup Guide
-                        </button>
                          <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />

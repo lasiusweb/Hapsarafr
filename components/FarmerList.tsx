@@ -29,13 +29,14 @@ interface FarmerListProps {
     onPageChange: (page: number) => void;
     onRowsPerPageChange: (rows: number) => void;
     isLoading: boolean;
+    onAddToPrintQueue: (farmerIds: string[]) => void;
 }
 
 const FarmerList: React.FC<FarmerListProps> = ({ 
     farmers, users, canEdit, canDelete, editingRowId, onEditRow, onCancelEditRow, onSaveRow, 
     onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, 
     sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onBatchUpdate, onDeleteSelected,
-    totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange, isLoading 
+    totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange, isLoading, onAddToPrintQueue
 }) => {
     
     const [editedFarmerData, setEditedFarmerData] = useState<Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>>({});
@@ -242,6 +243,14 @@ const FarmerList: React.FC<FarmerListProps> = ({
                         {selectedFarmerIds.length} farmer(s) selected
                     </p>
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => onAddToPrintQueue(selectedFarmerIds)}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold text-sm flex items-center gap-2"
+                            title={`Add ${selectedFarmerIds.length} selected farmer(s) to the print queue`}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a1 1 0 11-2 0 1 1 0 012 0z" /></svg>
+                            Add to Print Queue
+                        </button>
                         {canEdit && (
                             <button
                                 onClick={onBatchUpdate}

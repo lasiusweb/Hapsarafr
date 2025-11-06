@@ -7,9 +7,10 @@ interface BillingPageProps {
     onBack: () => void;
     userCount: number;
     recordCount: number;
+    onNavigate: (view: 'subscription-management') => void;
 }
 
-const BillingPage: React.FC<BillingPageProps> = ({ currentUser, onBack, userCount, recordCount }) => {
+const BillingPage: React.FC<BillingPageProps> = ({ currentUser, onBack, userCount, recordCount, onNavigate }) => {
     
     const estimatedUserCost = userCount * PRICING_MODEL.PER_USER_COST_INR;
     const estimatedRecordCost = recordCount * PRICING_MODEL.PER_RECORD_COST_INR;
@@ -44,7 +45,15 @@ const BillingPage: React.FC<BillingPageProps> = ({ currentUser, onBack, userCoun
                 <div className="grid lg:grid-cols-3 gap-8">
                     {/* Estimated Bill */}
                     <div className="lg:col-span-2 bg-white rounded-lg shadow-xl p-8">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Current Monthly Estimate</h2>
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-gray-800">Current Monthly Estimate</h2>
+                            <button 
+                                onClick={() => onNavigate('subscription-management')}
+                                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold text-sm"
+                            >
+                                Manage Subscription
+                            </button>
+                        </div>
                         <div className="space-y-4 mb-6">
                             <UsageCard label="Active Users" count={userCount} costPerUnit={PRICING_MODEL.PER_USER_COST_INR} totalCost={estimatedUserCost} />
                             <UsageCard label="Farmer Records" count={recordCount} costPerUnit={PRICING_MODEL.PER_RECORD_COST_INR} totalCost={estimatedRecordCost} />

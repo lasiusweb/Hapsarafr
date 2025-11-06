@@ -28,7 +28,8 @@ const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const SupabaseSetupGuide = lazy(() => import('./components/SupabaseSetupGuide'));
+const SubscriptionManagementPage = lazy(() => import('./components/SubscriptionManagementPage'));
+const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
 
 
 // Type declarations for CDN libraries
@@ -132,7 +133,7 @@ const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
   return data;
 };
 
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue';
 
 // Helper function to get view from hash
 const getViewFromHash = (): View | 'not-found' => {
@@ -144,6 +145,8 @@ const getViewFromHash = (): View | 'not-found' => {
         case 'billing':
         case 'usage-analytics':
         case 'content-manager':
+        case 'subscription-management':
+        case 'print-queue':
             return hash;
         case '':
         case 'dashboard':
@@ -174,6 +177,8 @@ const Header: React.FC<{
         billing: 'Billing & Usage',
         'usage-analytics': 'Usage Analytics',
         'content-manager': 'Content Manager',
+        'subscription-management': 'Subscription Management',
+        'print-queue': 'Print Queue',
         'not-found': 'Page Not Found',
     };
 
@@ -222,10 +227,11 @@ const Sidebar: React.FC<{
     onShowPrivacy: () => void;
     onShowHelp: () => void;
     onShowFeedback: () => void;
+    printQueueCount: number;
 }> = ({ 
     isOpen, isCollapsed, onToggleCollapse, currentUser, onLogout, onNavigate, currentView, permissions, 
     onImport, onExportExcel, onExportCsv, onViewRawData,
-    onShowPrivacy, onShowHelp, onShowFeedback
+    onShowPrivacy, onShowHelp, onShowFeedback, printQueueCount
 }) => {
     
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -234,7 +240,7 @@ const Sidebar: React.FC<{
     const canImport = permissions.has(Permission.CAN_IMPORT_DATA);
     const canExport = permissions.has(Permission.CAN_EXPORT_DATA);
 
-    const NavItem: React.FC<{ icon: React.ReactNode; text: string; view: View; isSubItem?: boolean; }> = ({ icon, text, view, isSubItem = false }) => {
+    const NavItem: React.FC<{ icon: React.ReactNode; text: string; view: View; isSubItem?: boolean; badgeCount?: number; }> = ({ icon, text, view, isSubItem = false, badgeCount = 0 }) => {
         const isActive = currentView === view;
         return (
             <li className="relative group">
@@ -244,8 +250,14 @@ const Sidebar: React.FC<{
                 >
                     {icon}
                     <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
+                    {badgeCount > 0 && !isCollapsed && <span className="ml-auto bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">{badgeCount}</span>}
                 </button>
-                 {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>}
+                 {isCollapsed && 
+                    <>
+                        {badgeCount > 0 && <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center text-xs rounded-full bg-green-600 text-white font-bold">{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                        <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>
+                    </>
+                 }
             </li>
         );
     };
@@ -298,6 +310,7 @@ const Sidebar: React.FC<{
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} text="Export to Excel" onClick={onExportExcel} />}
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>} text="Export to CSV" onClick={onExportCsv} />}
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>} text="View Raw Data" onClick={onViewRawData} />}
+                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a1 1 0 11-2 0 1 1 0 012 0z" /></svg>} text="Print Queue" view="print-queue" badgeCount={printQueueCount} />
                     </ul>
                 </div>
                 
@@ -425,7 +438,6 @@ const App: React.FC = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
   
   const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
   const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
@@ -445,6 +457,30 @@ const App: React.FC = () => {
     const userGroup = groups.find(g => g.id === currentUser.groupId);
     return new Set(userGroup?.permissions || []);
   }, [currentUser, groups]);
+
+  // --- PRINT QUEUE ---
+  const [printQueue, setPrintQueue] = useState<string[]>([]);
+
+  const handleAddToPrintQueue = useCallback((farmerIds: string[]) => {
+      setPrintQueue(prev => {
+          const newIds = farmerIds.filter(id => !prev.includes(id));
+          if (newIds.length > 0) {
+              setNotification({ message: `${newIds.length} farmer(s) added to print queue.`, type: 'success'});
+          } else {
+              setNotification({ message: `Selected farmer(s) are already in the queue.`, type: 'info'});
+          }
+          return [...prev, ...newIds];
+      });
+  }, []);
+
+  const handleRemoveFromPrintQueue = useCallback((farmerId: string) => {
+      setPrintQueue(prev => prev.filter(id => id !== farmerId));
+  }, []);
+
+  const handleClearPrintQueue = useCallback(() => {
+      setPrintQueue([]);
+      setNotification({ message: 'Print queue cleared.', type: 'info' });
+  }, []);
 
 
   // --- ROUTING ---
@@ -883,12 +919,14 @@ const App: React.FC = () => {
     }
     switch(view) {
         case 'profile': return <Suspense fallback={<ModalLoader/>}><ProfilePage currentUser={currentUser!} groups={groups} onSave={handleSaveProfile} onBack={() => handleNavigate('dashboard')} /></Suspense>;
-        case 'admin': if (!canAccessAdmin) return null; return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} onShowSetupGuide={() => setShowSetupGuide(true)} /></Suspense>;
-        case 'billing': return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} /></Suspense>
+        case 'admin': if (!canAccessAdmin) return null; return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} /></Suspense>;
+        case 'billing': return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} onNavigate={handleNavigate as any} /></Suspense>
         case 'usage-analytics': return <Suspense fallback={<ModalLoader/>}><UsageAnalyticsPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} supabase={supabase} /></Suspense>
         case 'content-manager': if (!canAccessContentManager) return null; return <Suspense fallback={<ModalLoader/>}><ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('dashboard')} /></Suspense>
+        case 'subscription-management': return <Suspense fallback={<ModalLoader/>}><SubscriptionManagementPage currentUser={currentUser!} onBack={() => handleNavigate('billing')} /></Suspense>;
+        case 'print-queue': return <Suspense fallback={<ModalLoader/>}><PrintQueuePage queuedFarmerIds={printQueue} users={users} onRemove={handleRemoveFromPrintQueue} onClear={handleClearPrintQueue} onBack={() => handleNavigate('farmer-directory')} database={database} /></Suspense>;
         case 'farmer-directory':
-            return (<> <FilterBar onFilterChange={handleFilterChange} /> <FarmerList farmers={paginatedFarmers} users={users} canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)} canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)} editingRowId={editingRowId} onEditRow={setEditingRowId} onCancelEditRow={() => setEditingRowId(null)} onSaveRow={handleSaveRow} onPrint={handlePrint} onExportToPdf={handleExportToPdf} selectedFarmerIds={selectedFarmerIds} onSelectionChange={(id, selected) => setSelectedFarmerIds(p => selected ? [...p, id] : p.filter(i => i !== id))} onSelectAll={(all) => setSelectedFarmerIds(all ? paginatedFarmers.map(f => f.id) : [])} sortConfig={sortConfig} onRequestSort={handleSortRequest} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onBatchUpdate={() => setShowBatchUpdateModal(true)} onDeleteSelected={handleDeleteSelected} totalRecords={filteredAndSortedFarmers.length} currentPage={currentPage} rowsPerPage={rowsPerPage} onPageChange={handlePageChange} onRowsPerPageChange={handleRowsPerPageChange} isLoading={false} /> </>);
+            return (<> <FilterBar onFilterChange={handleFilterChange} /> <FarmerList farmers={paginatedFarmers} users={users} canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)} canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)} editingRowId={editingRowId} onEditRow={setEditingRowId} onCancelEditRow={() => setEditingRowId(null)} onSaveRow={handleSaveRow} onPrint={handlePrint} onExportToPdf={handleExportToPdf} selectedFarmerIds={selectedFarmerIds} onSelectionChange={(id, selected) => setSelectedFarmerIds(p => selected ? [...p, id] : p.filter(i => i !== id))} onSelectAll={(all) => setSelectedFarmerIds(all ? paginatedFarmers.map(f => f.id) : [])} sortConfig={sortConfig} onRequestSort={handleSortRequest} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onBatchUpdate={() => setShowBatchUpdateModal(true)} onDeleteSelected={handleDeleteSelected} totalRecords={filteredAndSortedFarmers.length} currentPage={currentPage} rowsPerPage={rowsPerPage} onPageChange={handlePageChange} onRowsPerPageChange={handleRowsPerPageChange} isLoading={false} onAddToPrintQueue={handleAddToPrintQueue} /> </>);
         case 'dashboard': default:
             return <Suspense fallback={<ModalLoader/>}><Dashboard supabase={supabase} /></Suspense>;
     }
@@ -906,7 +944,7 @@ const App: React.FC = () => {
         case 'APP':
             return (
                 <div className="flex h-screen bg-gray-100 font-sans">
-                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} />
+                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} printQueueCount={printQueue.length} />
                     <div className="flex-1 flex flex-col overflow-hidden">
                         <Header onToggleSidebar={() => setIsMobileMenuOpen(m => !m)} currentView={view} onRegister={handleRegisterClick} onSync={() => handleFullSync()} syncLoading={syncLoading} pendingSyncCount={pendingSyncCount} isOnline={isOnline} permissions={currentUserPermissions} />
                         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
@@ -931,7 +969,6 @@ const App: React.FC = () => {
         {showPrivacyModal && ( <Suspense fallback={<ModalLoader/>}> <PrivacyModal onClose={() => setShowPrivacyModal(false)} appContent={appContent} /> </Suspense> )}
         {showHelpModal && ( <Suspense fallback={<ModalLoader/>}> <HelpModal onClose={() => setShowHelpModal(false)} appContent={appContent} /> </Suspense> )}
         {showFeedbackModal && ( <Suspense fallback={<ModalLoader/>}> <FeedbackModal onClose={() => setShowFeedbackModal(false)} /> </Suspense> )}
-        {showSetupGuide && ( <Suspense fallback={<ModalLoader/>}><SupabaseSetupGuide onClose={() => setShowSetupGuide(false)} /></Suspense> )}
         <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0"> {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={modelToPlain(pdfExportFarmer)} users={users} isForPdf={true} /></Suspense>} </div>
         <PrintView farmer={modelToPlain(printingFarmer)} users={users} />
         {notification && ( 
