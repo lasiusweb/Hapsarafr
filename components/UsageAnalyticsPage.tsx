@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { User } from '../types';
-import { ACTIVITY_LOG_DATA, ActivityLogEntry } from '../data/activityLogData';
+import React, { useMemo, useState, useEffect } from 'react';
+import { User, AuditLogEntry } from '../types';
 
 interface UsageAnalyticsPageProps {
     currentUser: User;
     onBack: () => void;
+    supabase: any;
 }
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; }> = ({ title, value, icon }) => (
@@ -19,43 +19,56 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
     </div>
 );
 
-const UsageAnalyticsPage: React.FC<UsageAnalyticsPageProps> = ({ currentUser, onBack }) => {
-    // In a real application, this data would be fetched from an API for the current user.
-    // Here, we simulate it by using the mock data.
-    const userActivity: ActivityLogEntry[] = useMemo(() => {
-        // Sort data chronologically, most recent first
-        return [...ACTIVITY_LOG_DATA].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    }, []);
-    
+const UsageAnalyticsPage: React.FC<UsageAnalyticsPageProps> = ({ currentUser, onBack, supabase }) => {
+    const [activityLog, setActivityLog] = useState<AuditLogEntry[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const rowsPerPage = 10;
     
+    useEffect(() => {
+        const fetchActivity = async () => {
+            if (!supabase) return;
+            setIsLoading(true);
+            const { data, error } = await supabase
+                .from('audit_log_view') // Use the view to get user names
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching activity log:", error);
+                setError("Failed to load activity log.");
+            } else {
+                setActivityLog(data as AuditLogEntry[]);
+            }
+            setIsLoading(false);
+        };
+        fetchActivity();
+    }, [supabase]);
+    
     const metrics = useMemo(() => {
-        return userActivity.reduce((acc, log) => {
+        return activityLog.reduce((acc, log) => {
             switch (log.action) {
-                case 'CREATE': acc.created++; break;
+                case 'INSERT': acc.created++; break;
                 case 'UPDATE': acc.updated++; break;
                 case 'DELETE': acc.deleted++; break;
-                case 'EXPORT': acc.exported++; break;
             }
             return acc;
-        }, { created: 0, updated: 0, deleted: 0, exported: 0 });
-    }, [userActivity]);
+        }, { created: 0, updated: 0, deleted: 0 });
+    }, [activityLog]);
 
     // Pagination logic for the activity log
-    const totalPages = Math.ceil(userActivity.length / rowsPerPage);
+    const totalPages = Math.ceil(activityLog.length / rowsPerPage);
     const paginatedLog = useMemo(() => {
         const startIndex = (currentPage - 1) * rowsPerPage;
-        return userActivity.slice(startIndex, startIndex + rowsPerPage);
-    }, [userActivity, currentPage, rowsPerPage]);
+        return activityLog.slice(startIndex, startIndex + rowsPerPage);
+    }, [activityLog, currentPage, rowsPerPage]);
     
-    const getActionBadge = (action: ActivityLogEntry['action']) => {
+    const getActionBadge = (action: AuditLogEntry['action']) => {
         const styles: Record<typeof action, string> = {
-            'CREATE': 'bg-green-100 text-green-800',
+            'INSERT': 'bg-green-100 text-green-800',
             'UPDATE': 'bg-yellow-100 text-yellow-800',
             'DELETE': 'bg-red-100 text-red-800',
-            'EXPORT': 'bg-blue-100 text-blue-800',
-            'LOGIN': 'bg-gray-100 text-gray-800',
         };
         return <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${styles[action]}`}>{action}</span>
     };
@@ -66,7 +79,7 @@ const UsageAnalyticsPage: React.FC<UsageAnalyticsPageProps> = ({ currentUser, on
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Usage Analytics</h1>
-                        <p className="text-gray-500">Your data activity overview for {currentUser.name}.</p>
+                        <p className="text-gray-500">A complete audit trail of all data modifications.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -77,7 +90,7 @@ const UsageAnalyticsPage: React.FC<UsageAnalyticsPageProps> = ({ currentUser, on
                 </div>
 
                 {/* Metric Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                     <StatCard 
                         title="Records Created" 
                         value={metrics.created} 
@@ -87,11 +100,6 @@ const UsageAnalyticsPage: React.FC<UsageAnalyticsPageProps> = ({ currentUser, on
                         title="Records Updated" 
                         value={metrics.updated} 
                         icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}
-                    />
-                     <StatCard 
-                        title="Data Exports" 
-                        value={metrics.exported} 
-                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}
                     />
                      <StatCard 
                         title="Records Deleted" 
@@ -110,21 +118,25 @@ const UsageAnalyticsPage: React.FC<UsageAnalyticsPageProps> = ({ currentUser, on
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Farmer ID</th>
                                 </tr>
                             </thead>
                              <tbody className="bg-white divide-y divide-gray-200">
-                                {paginatedLog.map(log => (
+                                {isLoading ? (
+                                    <tr><td colSpan={4} className="text-center py-10 text-gray-500">Loading activity...</td></tr>
+                                ) : error ? (
+                                     <tr><td colSpan={4} className="text-center py-10 text-red-500">{error}</td></tr>
+                                ) : paginatedLog.map(log => (
                                     <tr key={log.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(log.timestamp).toLocaleString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(log.created_at).toLocaleString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">{log.user_name || 'Unknown User'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm"><div className="w-min">{getActionBadge(log.action)}</div></td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">{log.targetId || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{log.details}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">{log.record_id || 'N/A'}</td>
                                     </tr>
                                 ))}
-                                {paginatedLog.length === 0 && (
+                                {!isLoading && !error && paginatedLog.length === 0 && (
                                     <tr>
                                         <td colSpan={4} className="text-center py-10 text-gray-500">No activity recorded.</td>
                                     </tr>
@@ -134,7 +146,7 @@ const UsageAnalyticsPage: React.FC<UsageAnalyticsPageProps> = ({ currentUser, on
                     </div>
                     {/* Pagination for Table */}
                      <div className="p-4 border-t flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Showing {paginatedLog.length} of {userActivity.length} entries</span>
+                        <span className="text-sm text-gray-600">Showing {paginatedLog.length} of {activityLog.length} entries</span>
                         <div className="flex gap-2">
                             <button 
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}

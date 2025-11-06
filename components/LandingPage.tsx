@@ -1,8 +1,10 @@
 import React from 'react';
 import { PRICING_MODEL } from '../data/subscriptionPlans';
+import { AppContent } from '../types';
 
 interface LandingPageProps {
   onLaunch: () => void;
+  appContent: Partial<AppContent> | null;
 }
 
 // Reusable Feature Card Component
@@ -17,7 +19,13 @@ const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; description:
 );
 
 // Main Landing Page Component
-const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onLaunch, appContent }) => {
+  const defaultContent = {
+    heroTitle: "Empowering Agriculture Through Technology",
+    heroSubtitle: "The complete SaaS platform for farmer management. Streamline registrations, track progress, and manage subsidies with our robust, offline-first solution.",
+    aboutUs: `<p class="text-gray-600 mb-4">Hapsara is designed to bridge the gap between agricultural administration and on-the-ground reality. Our mission is to provide a seamless, reliable, and user-friendly platform for government agencies and organizations to manage large-scale agricultural missions efficiently.</p><p class="text-gray-600">Built with cutting-edge technology, our offline-first approach ensures that fieldwork is never interrupted, even in the most remote areas. Data is securely stored locally and synchronized with the central server whenever a connection is available, ensuring data integrity and real-time insights.</p>`,
+  };
+
   return (
     <div className="bg-gray-50 font-sans">
       {/* Header */}
@@ -51,9 +59,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
             ></div>
             <div className="absolute inset-0 bg-black/50 z-10"></div>
             <div className="container mx-auto px-6 relative z-20">
-                <h2 className="text-4xl md:text-5xl font-extrabold leading-tight mb-4">Empowering Agriculture Through Technology</h2>
+                <h2 className="text-4xl md:text-5xl font-extrabold leading-tight mb-4">{appContent?.landing_hero_title || defaultContent.heroTitle}</h2>
                 <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto mb-8">
-                    The complete SaaS platform for farmer management. Streamline registrations, track progress, and manage subsidies with our robust, offline-first solution.
+                    {appContent?.landing_hero_subtitle || defaultContent.heroSubtitle}
                 </p>
                 <button
                     onClick={onLaunch}
@@ -72,12 +80,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
                 </div>
                 <div>
                     <h3 className="text-3xl font-bold text-gray-800 mb-4">About Hapsara</h3>
-                    <p className="text-gray-600 mb-4">
-                        Hapsara is designed to bridge the gap between agricultural administration and on-the-ground reality. Our mission is to provide a seamless, reliable, and user-friendly platform for government agencies and organizations to manage large-scale agricultural missions efficiently.
-                    </p>
-                    <p className="text-gray-600">
-                        Built with cutting-edge technology, our offline-first approach ensures that fieldwork is never interrupted, even in the most remote areas. Data is securely stored locally and synchronized with the central server whenever a connection is available, ensuring data integrity and real-time insights.
-                    </p>
+                    <div dangerouslySetInnerHTML={{ __html: appContent?.landing_about_us || defaultContent.aboutUs }} />
                 </div>
             </div>
         </section>
@@ -103,7 +106,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
                     <FeatureCard
                         icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
                         title="Secure & Scalable"
-                        description="Enterprise-grade security with a multi-tiered subscription model that grows with your organization's needs."
+                        description="Enterprise-grade security with a flexible pay-as-you-go model that grows with your organization's needs."
                     />
                      <FeatureCard
                         icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}

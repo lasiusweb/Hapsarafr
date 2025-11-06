@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import SupabaseFunctionCreator from './SupabaseFunctionCreator';
 
 const CodeBlock: React.FC<{ code: string }> = ({ code }) => {
     const [copied, setCopied] = useState(false);
@@ -22,238 +21,282 @@ const CodeBlock: React.FC<{ code: string }> = ({ code }) => {
     );
 };
 
-const setupSteps = [
-    {
-        title: "Resetting Your Schema (Optional)",
-        content: (
-            <>
-                <p>If you are re-running this setup guide or have encountered errors like <code className="bg-gray-700 px-1 rounded text-red-400">relation "farmers" already exists</code> or <code className="bg-gray-700 px-1 rounded text-red-400">policy ... already exists</code>, it means some parts of the database are already configured. To start fresh, you must first delete the old configuration.</p>
-                <div className="my-3 p-3 bg-red-900/50 border border-red-700 rounded-md text-red-300 text-sm">
-                    <strong>Warning:</strong> The following script will <strong className="font-bold">permanently delete</strong> all data from the `farmers`, `profiles`, `groups`, and `invitations` tables. Use this only if you want a complete reset.
-                </div>
-                <p>Run this script in the <strong className="text-gray-200">SQL Editor</strong> before proceeding to Step 2.</p>
-                <CodeBlock code={`
--- Step 1: Drop the Authentication Trigger from the 'auth.users' table
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+interface SupabaseSetupGuideProps {
+    onClose: () => void;
+}
 
--- Step 2: Drop the function that the trigger uses
-DROP FUNCTION IF EXISTS public.handle_new_user();
-DROP FUNCTION IF EXISTS public.is_admin();
-
--- Step 3: Drop the tables. The order is important due to relationships.
--- Dropping a table also automatically removes its policies.
-DROP TABLE IF EXISTS public.farmers;
-DROP TABLE IF EXISTS public.invitations;
-DROP TABLE IF EXISTS public.profiles;
-DROP TABLE IF EXISTS public.groups;
-                `} />
-            </>
-        )
-    },
-    {
-        title: "Create Supabase Project",
-        content: (
-            <>
-                <p>First, you'll need a Supabase project. If you don't have one, visit <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline">Supabase's website</a> to create one. The free tier is sufficient to get started.</p>
-                <p className="mt-2">Once your project is created, navigate to the <strong className="text-gray-200">Project Settings &gt; API</strong> section. You will need the <strong className="text-gray-200">Project URL</strong> and the <strong className="text-gray-200">public anon key</strong> to connect the application.</p>
-            </>
-        )
-    },
-    {
-        title: "Create Database Tables & Default Data",
-        content: (
-            <>
-                <p>Go to the <strong className="text-gray-200">SQL Editor</strong> in your Supabase dashboard and run the following single SQL script. It will create all the necessary tables with the correct relationships and insert the default user groups.</p>
-                <CodeBlock code={`
--- Step 2.1: Create Groups table (must be first due to foreign keys)
-CREATE TABLE public.groups (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    permissions JSONB
-);
-
--- Step 2.2: Create Profiles table
-CREATE TABLE public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name TEXT,
-  avatar_url TEXT,
-  group_id TEXT REFERENCES public.groups(id) ON DELETE SET NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Step 2.3: Create Invitations table
-CREATE TABLE public.invitations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    group_id TEXT NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
-    email_for TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NOT NULL,
-    status TEXT DEFAULT 'pending',
-    accepted_by_user_id UUID REFERENCES auth.users(id)
-);
-
--- Step 2.4: Create Farmers table
-CREATE TABLE public.farmers (
-  id TEXT PRIMARY KEY,
-  full_name TEXT,
-  father_husband_name TEXT,
-  aadhaar_number TEXT UNIQUE,
-  mobile_number TEXT,
-  gender TEXT,
-  address TEXT,
-  ppb_rofr_id TEXT,
-  photo TEXT,
-  bank_account_number TEXT,
-  ifsc_code TEXT,
-  account_verified BOOLEAN,
-  applied_extent NUMERIC,
-  approved_extent NUMERIC,
-  number_of_plants INTEGER,
-  method_of_plantation TEXT,
-  plant_type TEXT,
-  plantation_date TEXT,
-  mlrd_plants INTEGER,
-  full_cost_plants INTEGER,
-  application_id TEXT UNIQUE,
-  farmer_id TEXT UNIQUE,
-  proposed_year TEXT,
-  registration_date TEXT,
-  aso_id TEXT,
-  payment_utr_dd TEXT,
-  status TEXT,
-  district TEXT,
-  mandal TEXT,
-  village TEXT,
-  sync_status TEXT,
-  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  updated_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL
-);
-
--- Step 2.5: Insert Default Group Data
-INSERT INTO public.groups (id, name, permissions) VALUES
-('group-admin', 'Administrator', '["CAN_REGISTER_FARMER", "CAN_EDIT_FARMER", "CAN_DELETE_FARMER", "CAN_IMPORT_DATA", "CAN_EXPORT_DATA", "CAN_SYNC_DATA", "CAN_MANAGE_USERS", "CAN_MANAGE_GROUPS", "CAN_INVITE_USERS"]'),
-('group-data-entry', 'Data Entry Operator', '["CAN_REGISTER_FARMER", "CAN_EDIT_FARMER", "CAN_IMPORT_DATA", "CAN_EXPORT_DATA", "CAN_SYNC_DATA"]'),
-('group-viewer', 'Viewer', '["CAN_EXPORT_DATA"]');
-                `} />
-                 <div className="my-3 p-3 bg-blue-900/50 border border-blue-700 rounded-md text-blue-300 text-sm">
-                    <strong>For Existing Setups:</strong> If you've already set up the `farmers` table, run the following commands to add any missing columns. Using `IF NOT EXISTS` is safe to run multiple times.
-                    <CodeBlock code={`
--- Add user tracking columns (if not present)
-ALTER TABLE public.farmers ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
-ALTER TABLE public.farmers ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
-                    `} />
-                </div>
-            </>
-        )
-    },
-    {
-        title: "Enable Row Level Security (RLS)",
-        content: (
-            <>
-                <p>RLS is crucial for securing your data. These policies provide a secure starting point. Run these queries in the <strong className="text-gray-200">SQL Editor</strong>.</p>
-                <h4 className="font-semibold mt-4 text-gray-200">1. Create Admin Checker Function</h4>
-                <p>This helper function checks if the currently logged-in user is part of the 'Administrator' group. This is essential for creating secure policies. Run this in the <strong className="text-gray-200">SQL Editor</strong>.</p>
-                <CodeBlock code={`
-CREATE OR REPLACE FUNCTION is_admin()
-RETURNS boolean AS $$
+const SupabaseSetupGuide: React.FC<SupabaseSetupGuideProps> = ({ onClose }) => {
+    const [activeTab, setActiveTab] = useState<'auth' | 'dashboard' | 'audit' | 'rls'>('auth');
+    
+    const authFunctionCode = `
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
 BEGIN
-    RETURN EXISTS (
-    SELECT 1
-    FROM public.profiles
-    WHERE id = auth.uid() AND group_id = 'group-admin'
-    );
+  INSERT INTO public.profiles (id, full_name, avatar_url, group_id)
+  VALUES (
+    NEW.id,
+    NEW.raw_user_meta_data->>'full_name',
+    NEW.raw_user_meta_data->>'avatar_url',
+    -- Use group_id from metadata if present (from invitation), otherwise default
+    COALESCE(NEW.raw_user_meta_data->>'group_id', 'group-data-entry')
+  );
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-`} />
+    `;
 
-                <h4 className="font-semibold mt-4 text-gray-200">2. Enable RLS and Create Policies</h4>
-                <p>Run these queries in the <strong className="text-gray-200">SQL Editor</strong>. They enable RLS and set up secure access rules.</p>
+    const authTriggerCode = `
+-- First, drop the old trigger if it exists to avoid errors
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
-                <CodeBlock code={`
--- Enable RLS for all tables
+-- Then, create the new trigger
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_new_user();
+    `;
+    
+    const dashboardFunctionCode = `
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN (
+    SELECT json_build_object(
+        'total_farmers', (SELECT count(*) FROM public.farmers),
+        'new_this_month', (SELECT count(*) FROM public.farmers WHERE date_trunc('month', registration_date) = date_trunc('month', now() at time zone 'utc')),
+        'total_extent', (SELECT sum(approved_extent) FROM public.farmers),
+        'farmers_by_district', (SELECT json_agg(t) FROM (SELECT district, count(*) FROM public.farmers GROUP BY district) t)
+    )
+  );
+END;
+$$;
+    `;
+
+    const auditTableCode = `
+-- Create the table to store audit logs
+CREATE TABLE public.audit_log (
+  id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  user_id uuid REFERENCES public.profiles(id),
+  action text NOT NULL,
+  table_name text NOT NULL,
+  record_id text,
+  old_record_json jsonb,
+  new_record_json jsonb,
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+    `;
+
+    const auditFunctionCode = `
+-- Create a function to be called by triggers
+CREATE OR REPLACE FUNCTION public.log_farmer_changes()
+RETURNS TRIGGER AS $$
+DECLARE
+  user_id_from_auth uuid := auth.uid();
+BEGIN
+  IF (TG_OP = 'INSERT') THEN
+    INSERT INTO public.audit_log (user_id, action, table_name, record_id, new_record_json)
+    VALUES (user_id_from_auth, 'INSERT', TG_TABLE_NAME, NEW.id, row_to_json(NEW));
+    RETURN NEW;
+  ELSIF (TG_OP = 'UPDATE') THEN
+    INSERT INTO public.audit_log (user_id, action, table_name, record_id, old_record_json, new_record_json)
+    VALUES (user_id_from_auth, 'UPDATE', TG_TABLE_NAME, NEW.id, row_to_json(OLD), row_to_json(NEW));
+    RETURN NEW;
+  ELSIF (TG_OP = 'DELETE') THEN
+    -- Note: We log the OLD record on delete
+    INSERT INTO public.audit_log (user_id, action, table_name, record_id, old_record_json)
+    VALUES (user_id_from_auth, 'DELETE', TG_TABLE_NAME, OLD.id, row_to_json(OLD));
+    RETURN OLD;
+  END IF;
+  RETURN NULL; -- result is ignored since this is an AFTER trigger
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+    `;
+
+    const auditTriggerCode = `
+-- Drop existing triggers to be safe
+DROP TRIGGER IF EXISTS farmers_audit_insert ON public.farmers;
+DROP TRIGGER IF EXISTS farmers_audit_update ON public.farmers;
+DROP TRIGGER IF EXISTS farmers_audit_delete ON public.farmers;
+
+-- Create triggers to call the function on any data change
+CREATE TRIGGER farmers_audit_insert
+AFTER INSERT ON public.farmers
+FOR EACH ROW EXECUTE FUNCTION public.log_farmer_changes();
+
+CREATE TRIGGER farmers_audit_update
+AFTER UPDATE ON public.farmers
+FOR EACH ROW EXECUTE FUNCTION public.log_farmer_changes();
+
+CREATE TRIGGER farmers_audit_delete
+AFTER DELETE ON public.farmers
+FOR EACH ROW EXECUTE FUNCTION public.log_farmer_changes();
+    `;
+
+    const auditViewCode = `
+-- Create a view for easier querying, joining with profiles to get user names
+CREATE OR REPLACE VIEW public.audit_log_view AS
+SELECT
+  al.id,
+  al.user_id,
+  p.full_name AS user_name,
+  al.action,
+  al.table_name,
+  al.record_id,
+  al.old_record_json,
+  al.new_record_json,
+  al.created_at
+FROM public.audit_log al
+LEFT JOIN public.profiles p ON al.user_id = p.id;
+    `;
+
+    const rlsHelperFunction = `
+-- Helper function to get the current user's permissions from their group
+CREATE OR REPLACE FUNCTION public.get_user_permissions()
+RETURNS text[]
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  user_group_id text;
+  user_permissions text[];
+BEGIN
+  -- Get the user's group_id from their profile
+  SELECT group_id INTO user_group_id
+  FROM public.profiles
+  WHERE id = auth.uid();
+
+  -- Get the permissions for that group
+  SELECT permissions INTO user_permissions
+  FROM public.groups
+  WHERE id = user_group_id;
+
+  RETURN user_permissions;
+END;
+$$;
+    `;
+
+    const rlsFarmersPolicies = `
+-- 1. Enable RLS on the farmers table
 ALTER TABLE public.farmers ENABLE ROW LEVEL SECURITY;
+-- 2. Force RLS for table owners (recommended)
+ALTER TABLE public.farmers FORCE ROW LEVEL SECURITY;
+
+-- 3. Drop existing policies to be safe
+DROP POLICY IF EXISTS "Allow all read access" ON public.farmers;
+DROP POLICY IF EXISTS "Allow insert for authorized users" ON public.farmers;
+DROP POLICY IF EXISTS "Allow update for authorized users" ON public.farmers;
+DROP POLICY IF EXISTS "Allow delete for authorized users" ON public.farmers;
+
+-- 4. Create new policies
+CREATE POLICY "Allow all read access"
+ON public.farmers FOR SELECT
+USING (true);
+
+CREATE POLICY "Allow insert for authorized users"
+ON public.farmers FOR INSERT
+WITH CHECK ('CAN_REGISTER_FARMER' = ANY(public.get_user_permissions()));
+
+CREATE POLICY "Allow update for authorized users"
+ON public.farmers FOR UPDATE
+USING ('CAN_EDIT_FARMER' = ANY(public.get_user_permissions()));
+
+CREATE POLICY "Allow delete for authorized users"
+ON public.farmers FOR DELETE
+USING ('CAN_DELETE_FARMER' = ANY(public.get_user_permissions()));
+    `;
+
+    const rlsProfilesPolicies = `
+-- 1. Enable RLS on the profiles table
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
+-- 2. Force RLS for table owners
+ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
 
--- POLICIES FOR 'farmers'
--- Policy: Authenticated users can perform all actions on farmers.
--- Note: This is a permissive policy for getting started. In production, you should
--- create more granular policies based on user roles. The app's UI already enforces 
--- this, but database-level security is always recommended for production.
-CREATE POLICY "Allow authenticated users to manage farmers"
-ON public.farmers FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- 3. Drop existing policies
+DROP POLICY IF EXISTS "Allow all read access" ON public.profiles;
+DROP POLICY IF EXISTS "Allow users to update their own profile" ON public.profiles;
 
--- POLICIES FOR 'profiles'
-CREATE POLICY "Allow users to view all profiles" ON public.profiles
-FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow users to update their own profile" ON public.profiles
-FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
-CREATE POLICY "Allow admins to manage all profiles" ON public.profiles
-FOR ALL TO authenticated USING (is_admin()) WITH CHECK (is_admin());
+-- 4. Create new policies
+CREATE POLICY "Allow all read access"
+ON public.profiles FOR SELECT
+USING (true);
 
--- POLICIES FOR 'groups'
-CREATE POLICY "Allow authenticated users to read groups" ON public.groups
-FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admins to manage groups" ON public.groups
-FOR ALL TO authenticated USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Allow users to update their own profile"
+ON public.profiles FOR UPDATE
+USING (auth.uid() = id)
+WITH CHECK (auth.uid() = id);
+    `;
 
--- POLICIES FOR 'invitations'
-CREATE POLICY "Allow public read-only access" ON public.invitations
-FOR SELECT USING (true);
-CREATE POLICY "Allow admins to manage invitations" ON public.invitations
-FOR ALL TO authenticated USING (is_admin()) WITH CHECK (is_admin());
-                `} />
-            </>
-        )
-    },
-    {
-        title: "Create User Profile Automation",
-        content: (
-            <>
-                <p>This final backend step is the most critical. We'll create a database <strong className="text-green-300">function</strong> and a <strong className="text-green-300">trigger</strong> that work together to automatically create a profile for new users when they sign up. Follow the steps in the interactive panel below.</p>
-                <SupabaseFunctionCreator />
-            </>
-        )
-    },
-    {
-        title: "Connect the Application",
-        content: (
-            <>
-                <p>Your Supabase backend is now fully configured! The application is pre-configured to automatically connect using the Supabase Project URL and anon key.</p>
-                <p className="mt-2">Simply close this guide and log in or sign up to begin using the application. All data will now be synchronized with your new Supabase project.</p>
-            </>
-        )
-    }
-];
-
-const SupabaseSetupGuide: React.FC<{ onClose: () => void; }> = ({ onClose }) => {
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div
-                className="bg-gray-800 text-gray-300 rounded-lg shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col"
-                onClick={e => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[100]" onClick={onClose}>
+            <div className="bg-gray-800 text-gray-300 rounded-lg shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
-                    <h2 className="text-xl font-bold">Supabase Setup Guide</h2>
-                    <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-700">
+                    <h2 className="text-xl font-bold text-white">Supabase Setup Guide</h2>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-600 transition">
                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
-                <div className="flex-grow p-6 overflow-y-auto space-y-8">
-                    {setupSteps.map((step, index) => (
-                        <section key={index}>
-                            <h3 className="text-2xl font-bold text-green-400 mb-3">{`Step ${index}: ${step.title}`}</h3>
-                            <div className="prose prose-invert prose-sm max-w-none prose-a:text-green-400 prose-strong:text-gray-200">
-                                {step.content}
+
+                <div className="flex-1 flex overflow-hidden">
+                    <div className="w-1/4 border-r border-gray-700 p-4 space-y-2 overflow-y-auto">
+                        <button onClick={() => setActiveTab('auth')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'auth' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>1. Auth Trigger</button>
+                        <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'dashboard' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>2. Dashboard Function</button>
+                        <button onClick={() => setActiveTab('audit')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'audit' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>3. Audit Trail</button>
+                        <button onClick={() => setActiveTab('rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>4. Security Policies (RLS)</button>
+                    </div>
+
+                    <div className="w-3/4 p-6 overflow-y-auto">
+                        {activeTab === 'auth' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">User Profile Trigger</h3>
+                                <p>This automatically creates a public profile when a new user signs up. Run these two scripts in order in the Supabase <strong className="text-gray-200">SQL Editor</strong>.</p>
+                                <p className="font-semibold">Step 1: Create the function.</p>
+                                <CodeBlock code={authFunctionCode} />
+                                <p className="font-semibold">Step 2: Create the trigger.</p>
+                                <CodeBlock code={authTriggerCode} />
                             </div>
-                        </section>
-                    ))}
+                        )}
+                         {activeTab === 'dashboard' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">Dashboard Statistics Function</h3>
+                                <p>This database function calculates the statistics needed for the main dashboard. Run this in the Supabase <strong className="text-gray-200">SQL Editor</strong>.</p>
+                                <CodeBlock code={dashboardFunctionCode} />
+                            </div>
+                        )}
+                        {activeTab === 'audit' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">Audit Trail for Analytics</h3>
+                                <p>This system logs all changes to the `farmers` table, enabling the Usage Analytics page. Run these scripts in order.</p>
+                                <p className="font-semibold">Step 1: Create the audit log table.</p>
+                                <CodeBlock code={auditTableCode} />
+                                <p className="font-semibold">Step 2: Create the function to log changes.</p>
+                                <CodeBlock code={auditFunctionCode} />
+                                 <p className="font-semibold">Step 3: Create triggers on the `farmers` table.</p>
+                                <CodeBlock code={auditTriggerCode} />
+                                <p className="font-semibold">Step 4: Create the view for the application to read.</p>
+                                <CodeBlock code={auditViewCode} />
+                            </div>
+                        )}
+                        {activeTab === 'rls' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">Row Level Security (RLS) Policies</h3>
+                                <p className="text-red-400 font-bold">This is a critical security step.</p>
+                                <p>These policies control who can access and modify data. Run these scripts in order.</p>
+                                <p className="font-semibold">Step 1: Create the helper function to check user permissions.</p>
+                                <CodeBlock code={rlsHelperFunction} />
+                                <p className="font-semibold">Step 2: Apply RLS policies to the `farmers` table.</p>
+                                <CodeBlock code={rlsFarmersPolicies} />
+                                <p className="font-semibold">Step 3: Apply RLS policies to the `profiles` table.</p>
+                                <CodeBlock code={rlsProfilesPolicies} />
+                            </div>
+                        )}
+                    </div>
                 </div>
+
                 <div className="bg-gray-900 p-4 flex justify-end gap-4 rounded-b-lg flex-shrink-0">
-                    <button type="button" onClick={onClose} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">
-                        Done
-                    </button>
+                    <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition">Close</button>
                 </div>
             </div>
         </div>

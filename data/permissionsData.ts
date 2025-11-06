@@ -10,6 +10,7 @@ export const PERMISSIONS_LIST: { id: Permission, description: string; category: 
     { id: Permission.CAN_MANAGE_USERS, description: 'Manage users and their group assignments', category: 'Administration' },
     { id: Permission.CAN_MANAGE_GROUPS, description: 'Manage groups and permissions', category: 'Administration' },
     { id: Permission.CAN_INVITE_USERS, description: 'Invite new users via generating codes', category: 'Administration' },
+    { id: Permission.CAN_MANAGE_CONTENT, description: 'Edit site content (Landing Page, FAQs)', category: 'Administration' },
 ];
 
 export const DEFAULT_GROUPS: Group[] = [

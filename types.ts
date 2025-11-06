@@ -1,11 +1,3 @@
-// FIX: Add missing SubscriptionTier enum to resolve import error.
-export enum SubscriptionTier {
-  Free = 'free',
-  Basic = 'basic',
-  Pro = 'pro',
-  Enterprise = 'enterprise',
-}
-
 export enum PlantationMethod {
   Square = 'Square',
   Triangle = 'Triangle',
@@ -33,6 +25,7 @@ export enum Permission {
   CAN_MANAGE_USERS = 'CAN_MANAGE_USERS',
   CAN_MANAGE_GROUPS = 'CAN_MANAGE_GROUPS',
   CAN_INVITE_USERS = 'CAN_INVITE_USERS',
+  CAN_MANAGE_CONTENT = 'CAN_MANAGE_CONTENT',
 }
 
 export interface Group {
@@ -105,6 +98,8 @@ export interface Farmer {
   // Audit fields
   createdBy?: string; // User ID
   updatedBy?: string; // User ID
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Village {
@@ -122,4 +117,38 @@ export interface District {
   code: string;
   name: string;
   mandals: Mandal[];
+}
+
+// --- CMS Types ---
+export interface FAQItem {
+    id: string;
+    question: string;
+    answer: string;
+}
+
+export interface AppContent {
+    landing_hero_title: string;
+    landing_hero_subtitle: string;
+    landing_about_us: string;
+    privacy_policy: string;
+    faqs: FAQItem[];
+}
+
+export interface DashboardStats {
+    total_farmers: number;
+    new_this_month: number;
+    total_extent: number;
+    farmers_by_district: { district: string; name: string; count: number }[];
+}
+
+export interface AuditLogEntry {
+    id: number;
+    user_id: string;
+    user_name: string;
+    action: 'INSERT' | 'UPDATE' | 'DELETE';
+    table_name: string;
+    record_id: string;
+    created_at: string;
+    old_record_json: any;
+    new_record_json: any;
 }

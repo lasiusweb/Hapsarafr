@@ -1,8 +1,5 @@
-
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { Farmer, FarmerStatus, User, Group, Permission, Invitation } from './types';
+import { Farmer, FarmerStatus, User, Group, Permission, Invitation, AppContent, AuditLogEntry, DashboardStats } from './types';
 import { GEO_DATA } from './data/geoData';
 import FilterBar, { Filters } from './components/FilterBar';
 import FarmerList from './components/FarmerList';
@@ -17,25 +14,26 @@ const PrintView = lazy(() => import('./components/PrintView'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const LoginScreen = lazy(() => import('./components/LoginScreen'));
 const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatusModal'));
-const SyncConfirmationModal = lazy(() => import('./components/SyncConfirmationModal'));
 const BulkImportModal = lazy(() => import('./components/BulkImportModal'));
 const ProfilePage = lazy(() => import('./components/ProfilePage'));
 const AdminPage = lazy(() => import('./components/AdminPage'));
 const ConfirmationModal = lazy(() => import('./components/ConfirmationModal'));
 const AcceptInvitation = lazy(() => import('./components/AcceptInvitation'));
-const SupabaseSettingsModal = lazy(() => import('./components/SupabaseSettingsModal'));
-const SupabaseSetupGuide = lazy(() => import('./components/SupabaseSetupGuide'));
 const RawDataView = lazy(() => import('./components/RawDataView'));
 const BillingPage = lazy(() => import('./components/BillingPage'));
 const UsageAnalyticsPage = lazy(() => import('./components/UsageAnalyticsPage'));
+const PrivacyModal = lazy(() => import('./components/PrivacyModal'));
+const HelpModal = lazy(() => import('./components/HelpModal'));
+const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
+const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
+const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const SupabaseSetupGuide = lazy(() => import('./components/SupabaseSetupGuide'));
 
 
 // Type declarations for CDN libraries
 declare const html2canvas: any;
 declare const jspdf: any;
-
-const SUPABASE_URL = "https://dfqjwffrnzhmocaeqrmg.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmcWp3ZmZybnpobW9jYWVxcm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjUxNjMsImV4cCI6MjA3Nzk0MTE2M30.6og6IkZDzNGO2dEdf5sAg8AKuYl85a9quSd5DD_dRSA";
 
 // Helper to convert object keys from snake_case to camelCase
 const snakeToCamelCase = (obj: any) => {
@@ -87,6 +85,8 @@ const mapModelToApi = (farmer: FarmerModel) => ({
     sync_status: 'synced', // Always set to synced when pushing
     created_by: farmer.createdBy,
     updated_by: farmer.updatedBy,
+    created_at: farmer.createdAt,
+    updated_at: farmer.updatedAt,
 });
 
 
@@ -132,25 +132,32 @@ const useQuery = <T extends FarmerModel>(query: Query<T>): T[] => {
   return data;
 };
 
-type View = 'dashboard' | 'profile' | 'admin' | 'billing' | 'usage-analytics';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager';
 
 // Helper function to get view from hash
-const getViewFromHash = (): View => {
+const getViewFromHash = (): View | 'not-found' => {
     const hash = window.location.hash.replace(/^#\/?/, ''); // Removes # or #/
     switch (hash) {
+        case 'farmer-directory':
         case 'profile':
         case 'admin':
         case 'billing':
         case 'usage-analytics':
+        case 'content-manager':
             return hash;
+        case '':
+        case 'dashboard':
+             return 'dashboard';
         default:
-            return 'dashboard';
+            return 'not-found';
     }
 };
 
+type AppState = 'LANDING' | 'LOADING' | 'AUTH' | 'APP';
+
 const Header: React.FC<{
     onToggleSidebar: () => void;
-    currentView: View;
+    currentView: View | 'not-found';
     onRegister: () => void;
     onSync: () => void;
     syncLoading: boolean;
@@ -159,12 +166,15 @@ const Header: React.FC<{
     permissions: Set<Permission>;
 }> = ({ onToggleSidebar, currentView, onRegister, onSync, syncLoading, pendingSyncCount, isOnline, permissions }) => {
     const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
-    const viewTitles: Record<View, string> = {
-        dashboard: 'Farmer Dashboard',
+    const viewTitles: Record<View | 'not-found', string> = {
+        dashboard: 'Dashboard',
+        'farmer-directory': 'Farmer Directory',
         profile: 'My Profile',
         admin: 'Admin Panel',
         billing: 'Billing & Usage',
         'usage-analytics': 'Usage Analytics',
+        'content-manager': 'Content Manager',
+        'not-found': 'Page Not Found',
     };
 
     return (
@@ -185,9 +195,9 @@ const Header: React.FC<{
                         )}
                     </button>
                 )}
-                {canRegister && (
+                {canRegister && currentView === 'farmer-directory' && (
                     <button onClick={onRegister} className="flex items-center gap-2 px-4 py-2 rounded-md transition font-semibold bg-green-600 text-white hover:bg-green-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110 2h3V6a1 1 0 011-1z" clipRule="evenodd" /></svg>
                         <span className="hidden md:inline">Register Farmer</span>
                     </button>
                 )}
@@ -203,17 +213,24 @@ const Sidebar: React.FC<{
     currentUser: User | null;
     onLogout: () => void;
     onNavigate: (view: View) => void;
-    currentView: View;
+    currentView: View | 'not-found';
     permissions: Set<Permission>;
     onImport: () => void;
     onExportExcel: () => void;
     onExportCsv: () => void;
     onViewRawData: () => void;
-    onSetupGuideClick: () => void;
-}> = ({ isOpen, isCollapsed, onToggleCollapse, currentUser, onLogout, onNavigate, currentView, permissions, onImport, onExportExcel, onExportCsv, onViewRawData, onSetupGuideClick }) => {
+    onShowPrivacy: () => void;
+    onShowHelp: () => void;
+    onShowFeedback: () => void;
+}> = ({ 
+    isOpen, isCollapsed, onToggleCollapse, currentUser, onLogout, onNavigate, currentView, permissions, 
+    onImport, onExportExcel, onExportCsv, onViewRawData,
+    onShowPrivacy, onShowHelp, onShowFeedback
+}) => {
     
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-    const canManage = permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS);
+    const canManageAdmin = permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS);
+    const canManageContent = permissions.has(Permission.CAN_MANAGE_CONTENT);
     const canImport = permissions.has(Permission.CAN_IMPORT_DATA);
     const canExport = permissions.has(Permission.CAN_EXPORT_DATA);
 
@@ -223,7 +240,7 @@ const Sidebar: React.FC<{
             <li className="relative group">
                 <button
                     onClick={() => onNavigate(view)}
-                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} ${isActive ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
+                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} ${isActive ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
                 >
                     {icon}
                     <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
@@ -272,47 +289,62 @@ const Sidebar: React.FC<{
                 <div className="flex-1 overflow-y-auto p-2">
                     <ul className="space-y-1">
                         <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} text="Dashboard" view="dashboard" />
-                        {canManage && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Admin Panel" view="admin" />}
+                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>} text="Farmer Directory" view="farmer-directory" />
+                        {canManageAdmin && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Admin Panel" view="admin" />}
+                        {canManageContent && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>} text="Content Manager" view="content-manager" />}
 
-                        {(canImport || canExport || canManage) && <NavCategory text="Tools" />}
+                        {(canImport || canExport || canManageAdmin) && <NavCategory text="Tools" />}
                         {canImport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>} text="Import Data" onClick={onImport} />}
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} text="Export to Excel" onClick={onExportExcel} />}
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>} text="Export to CSV" onClick={onExportCsv} />}
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>} text="View Raw Data" onClick={onViewRawData} />}
-                        {canManage && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 16v-2m8-8h-2m-16 0H2m16.657-6.657l-1.414-1.414m-11.314 11.314l-1.414-1.414m0-11.314l1.414 1.414m11.314 0l1.414 1.414M12 18a6 6 0 100-12 6 6 0 000 12z" /></svg>} text="Setup Guide" onClick={onSetupGuideClick} />}
                     </ul>
                 </div>
                 
-                <div className="p-2 border-t border-gray-700 flex-shrink-0">
-                    <div className="relative">
-                        {isUserMenuOpen && (
-                            <div className={`absolute bottom-full mb-2 w-full bg-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 ${isCollapsed ? 'left-0' : ''}`}>
-                                <div className="py-1">
-                                    <button onClick={() => onNavigate('profile')} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-t-md">Profile</button>
-                                    <button onClick={() => onNavigate('billing')} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Billing</button>
-                                    <button onClick={() => onNavigate('usage-analytics')} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Usage</button>
-                                    <div className="border-t border-gray-600 my-1"></div>
-                                    <button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-b-md">Logout</button>
+                <div className="mt-auto flex-shrink-0">
+                    <div className="p-2 border-t border-gray-700">
+                        <div className="relative">
+                            {isUserMenuOpen && (
+                                <div className={`
+                                    absolute z-50 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 bg-gray-700
+                                    ${isCollapsed
+                                        ? 'left-full bottom-2 ml-2 w-56' // Position to the side when collapsed
+                                        : 'bottom-full mb-2 w-full' // Position above when expanded
+                                    }
+                                `}>
+                                    <div className="py-1">
+                                        <button onClick={() => { onNavigate('profile'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-t-md">Settings</button>
+                                        <button onClick={() => { onNavigate('billing'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Billing</button>
+                                        <button onClick={() => { onNavigate('usage-analytics'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Usage</button>
+                                        <div className="border-t border-gray-600 my-1"></div>
+                                        <button onClick={() => { onShowHelp(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Help</button>
+                                        <button onClick={() => { onShowFeedback(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Feedback</button>
+                                        <button onClick={() => { onShowPrivacy(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Privacy</button>
+                                        <div className="border-t border-gray-600 my-1"></div>
+                                        <button onClick={() => { onLogout(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-b-md">Logout</button>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                         {currentUser && (
-                            <button onClick={() => setIsUserMenuOpen(o => !o)} className="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-700">
-                                <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-600 flex-shrink-0" />
-                                <div className={`ml-3 overflow-hidden sidebar-item-text`}>
-                                    <p className="font-semibold text-sm text-white whitespace-nowrap">{currentUser.name}</p>
-                                    <p className="text-xs text-gray-400 whitespace-nowrap">Pay-as-you-go</p>
-                                </div>
-                            </button>
-                         )}
+                            )}
+                             {currentUser && (
+                                <button onClick={() => setIsUserMenuOpen(o => !o)} className="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-700">
+                                    <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-600 flex-shrink-0" />
+                                    <div className={`ml-3 overflow-hidden sidebar-item-text`}>
+                                        <p className="font-semibold text-sm text-white whitespace-nowrap">{currentUser.name}</p>
+                                        <p className="text-xs text-gray-400 whitespace-nowrap capitalize">Usage-Based Plan</p>
+                                    </div>
+                                </button>
+                             )}
+                        </div>
                     </div>
-                    <button onClick={onToggleCollapse} className="flex items-center w-full text-left p-3 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white">
-                        {isCollapsed 
-                            ? <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg> 
-                            : <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
-                        }
-                        <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>Collapse</span>
-                    </button>
+                     <div className="p-2 border-t border-gray-700 relative group">
+                        <button onClick={onToggleCollapse} className="flex items-center justify-center w-full p-3 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white">
+                            {isCollapsed 
+                                ? <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg> 
+                                : <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
+                            }
+                        </button>
+                        {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Expand</div>}
+                    </div>
                 </div>
             </nav>
         </>
@@ -355,21 +387,24 @@ const modelToPlain = (f: FarmerModel | null): Farmer | null => {
         syncStatus: f.syncStatusLocal,
         createdBy: f.createdBy,
         updatedBy: f.updatedBy,
+        createdAt: new Date(f.createdAt).toISOString(),
+        updatedAt: new Date(f.updatedAt).toISOString(),
     };
 };
 
 const App: React.FC = () => {
-  const [isAppLaunched, setIsAppLaunched] = useState(false);
+  const [appState, setAppState] = useState<AppState>('LANDING');
+
   const [supabase, setSupabase] = useState<any | null>(null);
   const [session, setSession] = useState<any | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [showSupabaseSettings, setShowSupabaseSettings] = useState(false);
+  const [appContent, setAppContent] = useState<Partial<AppContent> | null>(null);
   const [authView, setAuthView] = useState<'login' | 'signup' | 'accept-invitation'>('login');
   
-  const [view, setView] = useState<View>(getViewFromHash());
+  const [view, setView] = useState<View | 'not-found'>(getViewFromHash());
   const [showForm, setShowForm] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [printingFarmer, setPrintingFarmer] = useState<FarmerModel | null>(null);
@@ -380,16 +415,20 @@ const App: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [showRawDataView, setShowRawDataView] = useState(false);
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
   const isOnline = useOnlineStatus();
-  const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
   const pdfContainerRef = useRef<HTMLDivElement>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+  
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
+  
+  const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id', direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
@@ -407,7 +446,13 @@ const App: React.FC = () => {
     return new Set(userGroup?.permissions || []);
   }, [currentUser, groups]);
 
+
   // --- ROUTING ---
+  const handleNavigate = useCallback((targetView: View) => {
+      window.location.hash = targetView;
+      setIsMobileMenuOpen(false);
+  }, []);
+
   useEffect(() => {
     const handleHashChange = () => {
         setView(getViewFromHash());
@@ -417,29 +462,113 @@ const App: React.FC = () => {
         window.removeEventListener('hashchange', handleHashChange);
     };
   }, []);
+  
+  // Secure routing by checking permissions on view change
+  useEffect(() => {
+    if (appState !== 'APP' || !session) return;
+    
+    const canAccessAdmin = currentUserPermissions.has(Permission.CAN_MANAGE_USERS) || currentUserPermissions.has(Permission.CAN_MANAGE_GROUPS);
+    const canAccessContentManager = currentUserPermissions.has(Permission.CAN_MANAGE_CONTENT);
+    
+    if (view === 'admin' && !canAccessAdmin) {
+        setNotification({ message: "You don't have permission to access the Admin Panel.", type: 'error' });
+        handleNavigate('dashboard');
+    }
+    if (view === 'content-manager' && !canAccessContentManager) {
+        setNotification({ message: "You don't have permission to access the Content Manager.", type: 'error' });
+        handleNavigate('dashboard');
+    }
 
-  const handleNavigate = (targetView: View) => {
-      window.location.hash = targetView === 'dashboard' ? '' : `/${targetView}`;
-      setIsMobileMenuOpen(false);
-  };
+  }, [view, session, appState, currentUserPermissions, handleNavigate]);
 
   // --- SUPABASE & AUTH ---
   useEffect(() => {
-    // Pre-configure Supabase credentials by setting them in localStorage.
-    // This ensures the app connects automatically on first load.
-    if (!localStorage.getItem('supabaseUrl') || !localStorage.getItem('supabaseAnonKey')) {
-        localStorage.setItem('supabaseUrl', SUPABASE_URL);
-        localStorage.setItem('supabaseAnonKey', SUPABASE_ANON_KEY);
-    }
-    
     const client = initializeSupabase();
-    if (client) {
-      setSupabase(client);
-    } else {
-      // This modal will now only show if the Supabase CDN script fails to load.
-      setShowSupabaseSettings(true);
-    }
+    setSupabase(client);
   }, []);
+
+  const fetchUserProfile = useCallback(async (userId: string): Promise<User | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (error) {
+        console.error('Error fetching user profile:', error);
+        if (error.code === 'PGRST116') { // Not found, possibly due to replication delay
+            await new Promise(res => setTimeout(res, 1000));
+            const { data: retryData, error: retryError } = await supabase.from('profiles').select('*').eq('id', userId).single();
+            if (retryError) {
+                console.error('Retry fetching user profile failed:', retryError);
+                return null;
+            }
+            if (retryData) {
+                const userProfile = { id: retryData.id, name: retryData.full_name, avatar: retryData.avatar_url, groupId: retryData.group_id };
+                setCurrentUser(userProfile);
+                return userProfile;
+            }
+        }
+    } else if (data) {
+        const userProfile = { id: data.id, name: data.full_name, avatar: data.avatar_url, groupId: data.group_id };
+        setCurrentUser(userProfile);
+        return userProfile;
+    }
+    return null;
+  }, [supabase]);
+  
+    const fetchAppContent = useCallback(async () => {
+        if (!supabase) return;
+        const { data, error } = await supabase.from('app_content').select('key, value');
+        if (error) {
+            console.error("Error fetching app content:", error);
+            return;
+        }
+        if (data) {
+            const content = data.reduce((acc, { key, value }) => {
+                if (key === 'landing_page') {
+                    acc.landing_hero_title = value.hero_title;
+                    acc.landing_hero_subtitle = value.hero_subtitle;
+                    acc.landing_about_us = value.about_us;
+                } else if (key === 'privacy_policy') {
+                    acc.privacy_policy = value.content;
+                } else if (key === 'faqs') {
+                    acc.faqs = value.items;
+                }
+                return acc;
+            }, {} as Partial<AppContent>);
+            setAppContent(content);
+        }
+    }, [supabase]);
+
+
+    useEffect(() => {
+        if (appState !== 'LOADING' && appState !== 'AUTH') return;
+        if (!supabase) return;
+
+        const handleAuthSession = async (session: any | null) => {
+            setSession(session);
+            if (session) {
+                await fetchUserProfile(session.user.id);
+                await fetchAppContent();
+                setAppState('APP');
+            } else {
+                fetchAppContent(); // Also fetch content for landing page
+                setAppState('AUTH');
+                setCurrentUser(null);
+            }
+        };
+        
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            await handleAuthSession(session);
+        });
+
+        if (appState === 'LOADING') {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                handleAuthSession(session);
+            });
+        }
+        
+        return () => subscription.unsubscribe();
+
+    }, [appState, supabase, fetchUserProfile, fetchAppContent]);
+
 
     const handlePushSync = useCallback(async (isManual = false) => {
         if (!supabase || !isOnline || syncLoading) {
@@ -456,7 +585,7 @@ const App: React.FC = () => {
         }
 
         setSyncLoading(true);
-        if (isManual) setNotification({ message: 'Syncing local changes...', type: 'success' });
+        if (isManual) setNotification({ message: 'Syncing local changes...', type: 'info' });
 
         try {
             if (pendingFarmers.length > 0) {
@@ -489,111 +618,22 @@ const App: React.FC = () => {
         }
     }, [supabase, isOnline, syncLoading, database, farmersCollection]);
   
-  const handlePullSync = useCallback(async (isInitialSync = false) => {
-      if (!supabase || !isOnline) {
-          if (!isInitialSync) setNotification({ message: `Cannot sync while offline.`, type: 'error'});
-          return;
-      }
-      if (!isInitialSync) setNotification({ message: 'Fetching latest data from server...', type: 'success' });
-      try {
-          const { data, error } = await supabase.from('farmers').select('*');
-          if (error) throw error;
+    const handleFullSync = useCallback(async () => {
+        await handlePushSync(true);
+    }, [handlePushSync]);
 
-          if (data && data.length > 0) {
-              await database.write(async () => {
-                  const existingFarmers = await farmersCollection.query().fetch();
-                  const recordsToUpdate: FarmerModel[] = [];
-                  const recordsToCreate: any[] = [];
-
-                  for (const remoteFarmer of data) {
-                      const remoteFarmerCamel = snakeToCamelCase(remoteFarmer);
-                      const localFarmer = existingFarmers.find(f => f.id === remoteFarmerCamel.id);
-                      if (localFarmer) {
-                          if (localFarmer.syncStatusLocal === 'synced') {
-                             recordsToUpdate.push(
-                                localFarmer.prepareUpdate(record => {
-                                    Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
-                                })
-                            );
-                          }
-                      } else {
-                          recordsToCreate.push(
-                              farmersCollection.prepareCreate(record => {
-                                  Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
-                                  record._raw.id = remoteFarmerCamel.id;
-                              })
-                          );
-                      }
-                  }
-                  
-                  const allOperations = [...recordsToCreate, ...recordsToUpdate];
-                  if (allOperations.length > 0) {
-                      await database.batch(...allOperations);
-                  }
-              });
-              if (!isInitialSync) setNotification({ message: `Successfully synced ${data.length} records from the server.`, type: 'success' });
-          } else {
-               if (!isInitialSync) setNotification({ message: 'No new data found on the server.', type: 'success' });
-          }
-      } catch (error: any) {
-          if (!isInitialSync) setNotification({ message: `Failed to fetch data: ${error.message}`, type: 'error' });
-      }
-  }, [supabase, isOnline, database, farmersCollection]);
 
   // --- Real-time and Background Sync ---
   useEffect(() => {
-    if (!supabase || !session) return;
+    if (appState !== 'APP' || !supabase || !session) return;
     
-    // 1. Background PUSH sync for pending changes
-    const syncInterval = setInterval(() => handlePushSync(false), 30000); // Sync every 30 seconds
-
-    // 2. Real-time PULL subscription for changes from other clients
-    const channel = supabase.channel('public:farmers');
-    channel
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'farmers' }, async (payload: any) => {
-        await database.write(async () => {
-            const collection = database.get<FarmerModel>('farmers');
-            let farmer;
-            const newRecord = payload.new ? snakeToCamelCase(payload.new) : null;
-            const oldRecordId = payload.old ? payload.old.id : null;
-            
-            switch (payload.eventType) {
-                case 'INSERT':
-                case 'UPDATE':
-                    if (!newRecord) return;
-                    const existing = await collection.query(Q.where('id', newRecord.id)).fetch();
-                    if (existing.length > 0) {
-                        farmer = existing[0];
-                        if (farmer.syncStatusLocal === 'synced') {
-                           await farmer.update(rec => Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' }));
-                        }
-                    } else {
-                       await collection.create(rec => {
-                           Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
-                           rec._raw.id = newRecord.id;
-                       });
-                    }
-                    break;
-                case 'DELETE':
-                    if (!oldRecordId) return;
-                    try {
-                      farmer = await collection.find(oldRecordId);
-                      await farmer.destroyPermanently();
-                    } catch (e) {
-                      // Might have already been deleted, ignore
-                    }
-                    break;
-            }
-        });
-      })
-      .subscribe();
+    const syncInterval = setInterval(() => handlePushSync(false), 30000);
       
     return () => {
         clearInterval(syncInterval);
-        supabase.removeChannel(channel);
     };
 
-  }, [supabase, session, database, farmersCollection, handlePushSync]);
+  }, [appState, supabase, session, database, farmersCollection, handlePushSync]);
   
   useEffect(() => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -602,16 +642,6 @@ const App: React.FC = () => {
           window.history.replaceState({}, document.title, window.location.pathname);
       }
   }, []);
-
-  const fetchUserProfile = useCallback(async (userId: string) => {
-    if (!supabase) return;
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (error) {
-      console.error('Error fetching user profile:', error);
-    } else if (data) {
-      setCurrentUser({ id: data.id, name: data.full_name, avatar: data.avatar_url, groupId: data.group_id });
-    }
-  }, [supabase]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -626,29 +656,6 @@ const App: React.FC = () => {
   }, [supabase]);
   
   useEffect(() => {
-    if (!supabase) return;
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      if (session) {
-        await fetchUserProfile(session.user.id);
-        handlePullSync(true); // Initial data pull on session load
-      }
-    };
-    getInitialSession();
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session) {
-        await fetchUserProfile(session.user.id);
-        handlePullSync(true); // Initial data pull on login
-      }
-      else setCurrentUser(null);
-    });
-    return () => authListener.subscription.unsubscribe();
-  }, [supabase, fetchUserProfile, handlePullSync]);
-
-  useEffect(() => {
-    // Fetch all users for displaying names, not just for admins
     if (session && supabase) {
         const fetchAllUsers = async () => {
             const { data, error } = await supabase.from('profiles').select('*');
@@ -661,59 +668,32 @@ const App: React.FC = () => {
         fetchAllUsers();
     }
   }, [session, supabase]);
-
-  const handleSaveSupabaseSettings = (url: string, key: string) => {
-    localStorage.setItem('supabaseUrl', url);
-    localStorage.setItem('supabaseAnonKey', key);
-    window.location.reload();
-  };
   
   const handleLogout = async () => {
       if (supabase) {
-          const { error } = await supabase.auth.signOut();
-          if (error) {
-              setNotification({ message: `Logout failed: ${error.message}`, type: 'error' });
-          } else {
-              setNotification({ message: 'Logged out successfully.', type: 'success' });
-          }
+          await supabase.auth.signOut();
       }
       setCurrentUser(null);
+      setAppState('AUTH'); 
       handleNavigate('dashboard');
   };
 
   const handleSignUp = async (name: string, email: string, password: string): Promise<string | null> => {
     if (!supabase) return "Supabase client not available.";
-
     const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-            data: {
-                full_name: name,
-                avatar_url: 'https://terrigen-cdn-dev.marvel.com/content/prod/1x/003cap_ons_crd_03.jpg', // Default avatar
-            }
-        }
+        email, password,
+        options: { data: { full_name: name, avatar_url: 'https://terrigen-cdn-dev.marvel.com/content/prod/1x/003cap_ons_crd_03.jpg' } }
     });
-
-    if (error) {
-        return error.message;
-    }
-    
-    // On success, return null to indicate no error. The LoginScreen will show a success message.
-    return null;
+    return error ? error.message : null;
   };
 
   const handleSaveProfile = async (updatedUser: User) => {
       if (!supabase || !currentUser) return;
-      const { error } = await supabase
-          .from('profiles')
-          .update({ full_name: updatedUser.name, avatar_url: updatedUser.avatar })
-          .eq('id', currentUser.id);
-
+      const { error } = await supabase.from('profiles').update({ full_name: updatedUser.name, avatar_url: updatedUser.avatar }).eq('id', currentUser.id);
       if (error) {
           setNotification({ message: `Error updating profile: ${error.message}`, type: 'error' });
       } else {
-          setCurrentUser(updatedUser); // Optimistic update
+          setCurrentUser(updatedUser);
           setNotification({ message: 'Profile updated successfully.', type: 'success' });
           handleNavigate('dashboard');
       }
@@ -732,13 +712,7 @@ const App: React.FC = () => {
 
   const handleSaveUsers = async (updatedUsers: User[]) => {
       if (!supabase) return;
-      const updates = updatedUsers
-          .filter(u => {
-              const originalUser = users.find(ou => ou.id === u.id);
-              return originalUser && originalUser.groupId !== u.groupId;
-          })
-          .map(u => ({ id: u.id, group_id: u.groupId }));
-
+      const updates = updatedUsers.filter(u => users.some(ou => ou.id === u.id && ou.groupId !== u.groupId)).map(u => ({ id: u.id, group_id: u.groupId }));
       if (updates.length > 0) {
         const { error } = await supabase.from('profiles').upsert(updates);
         if (error) {
@@ -752,17 +726,8 @@ const App: React.FC = () => {
   
   const handleInviteUser = async (email: string, groupId: string): Promise<string> => {
       if (!supabase) return '';
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
-      const { data, error } = await supabase
-          .from('invitations')
-          .insert({
-              email_for: email,
-              group_id: groupId,
-              expires_at: expiresAt.toISOString(),
-          })
-          .select()
-          .single();
-
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      const { data, error } = await supabase.from('invitations').insert({ email_for: email, group_id: groupId, expires_at: expiresAt.toISOString() }).select().single();
       if (error) {
           setNotification({ message: `Error creating invitation: ${error.message}`, type: 'error' });
           return '';
@@ -781,41 +746,20 @@ const App: React.FC = () => {
             setNotification({ message: "Invalid invitation code.", type: 'error' });
             return;
         }
-
         const { data, error } = await supabase.auth.signUp({
-            email: invitation.emailFor,
-            password: userDetails.password,
-            options: {
-                data: {
-                    full_name: userDetails.name,
-                    avatar_url: userDetails.avatar,
-                    group_id: invitation.groupId,
-                },
-            },
+            email: invitation.emailFor, password: userDetails.password,
+            options: { data: { full_name: userDetails.name, avatar_url: userDetails.avatar, group_id: invitation.groupId } },
         });
-        
         if (error) {
             setNotification({ message: `Registration failed: ${error.message}`, type: 'error' });
         } else if (data.user) {
-            await supabase
-                .from('invitations')
-                .update({ status: 'accepted', accepted_by_user_id: data.user.id })
-                .eq('id', code);
-
-            setNotification({ message: "Registration successful! You can now log in.", type: 'success' });
+            await supabase.from('invitations').update({ status: 'accepted', accepted_by_user_id: data.user.id }).eq('id', code);
+            setNotification({ message: "Registration successful! Please check your email to confirm, then log in.", type: 'success' });
             setAuthView('login');
         }
     };
 
-
-  useEffect(() => {
-    if (notification) {
-      const timer = setTimeout(() => {
-        setNotification(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [notification]);
+  useEffect(() => { if (notification) { const timer = setTimeout(() => setNotification(null), 5000); return () => clearTimeout(timer); } }, [notification]);
 
   const handleRegisterClick = () => {
     setShowForm(true);
@@ -823,468 +767,183 @@ const App: React.FC = () => {
 
   const handleRegistration = useCallback(async (farmer: Farmer, photoFile?: File) => {
     if (!currentUser) return;
-    let photoBase64 = '';
-    if (photoFile) {
-        photoBase64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(photoFile);
-        });
-    }
-
-    await database.write(async () => {
-      await farmersCollection.create(record => {
-        Object.assign(record, { 
-            ...farmer, 
-            photo: photoBase64,
-            createdBy: currentUser.id,
-            updatedBy: currentUser.id 
-        });
-        record._raw.id = farmer.id; // Important for WatermelonDB
-      });
-    });
+    let photoBase64 = photoFile ? await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(photoFile); }) : '';
+    await database.write(async () => { await farmersCollection.create(record => { Object.assign(record, { ...farmer, photo: photoBase64, createdBy: currentUser.id, updatedBy: currentUser.id }); record._raw.id = farmer.id; }); });
     setNewlyAddedFarmerId(farmer.id);
   }, [database, farmersCollection, currentUser]);
 
   const handleSaveRow = useCallback(async (farmerToUpdate: FarmerModel, updatedData: Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>) => {
     if (!currentUser) return;
-    await database.write(async () => {
-      await farmerToUpdate.update(record => {
-        Object.assign(record, { ...updatedData, syncStatusLocal: 'pending', updatedBy: currentUser.id });
-      });
-    });
+    await database.write(async () => { await farmerToUpdate.update(record => { Object.assign(record, { ...updatedData, syncStatusLocal: 'pending', updatedBy: currentUser.id }); }); });
     setEditingRowId(null);
   }, [database, currentUser]);
 
-  const handleDeleteSelected = useCallback(() => {
-    setShowDeleteConfirmation(true);
-  }, []);
+  const handleDeleteSelected = useCallback(() => setShowDeleteConfirmation(true), []);
 
   const confirmDeleteSelected = useCallback(async () => {
-    await database.write(async () => {
-      const farmersToDelete = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
-      const updates = farmersToDelete.map(farmer =>
-        farmer.prepareUpdate(record => {
-          record.syncStatusLocal = 'pending_delete';
-        })
-      );
-      await database.batch(...updates);
-    });
-    setShowDeleteConfirmation(false);
-    setSelectedFarmerIds([]);
-    setNotification({ message: `${selectedFarmerIds.length} farmer(s) marked for deletion.`, type: 'success' });
+    await database.write(async () => { const farmersToDelete = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch(); await database.batch(...farmersToDelete.map(f => f.prepareUpdate(rec => { rec.syncStatusLocal = 'pending_delete'; }))); });
+    setShowDeleteConfirmation(false); setSelectedFarmerIds([]); setNotification({ message: `${selectedFarmerIds.length} farmer(s) marked for deletion.`, type: 'success' });
   }, [database, farmersCollection, selectedFarmerIds]);
 
   const handleBatchUpdate = useCallback(async (newStatus: FarmerStatus) => {
     if (!currentUser) return;
-    await database.write(async () => {
-      const farmersToUpdate = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
-      const updates = farmersToUpdate.map(farmer =>
-        farmer.prepareUpdate(record => {
-          record.status = newStatus;
-          record.syncStatusLocal = 'pending';
-          record.updatedBy = currentUser.id;
-        })
-      );
-      await database.batch(...updates);
-    });
-    setShowBatchUpdateModal(false);
-    setSelectedFarmerIds([]);
-    setNotification({ message: `${selectedFarmerIds.length} farmer(s) updated to "${newStatus}".`, type: 'success' });
+    await database.write(async () => { const farmersToUpdate = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch(); await database.batch(...farmersToUpdate.map(f => f.prepareUpdate(rec => { rec.status = newStatus; rec.syncStatusLocal = 'pending'; rec.updatedBy = currentUser.id; }))); });
+    setShowBatchUpdateModal(false); setSelectedFarmerIds([]); setNotification({ message: `${selectedFarmerIds.length} farmer(s) updated to "${newStatus}".`, type: 'success' });
   }, [database, farmersCollection, selectedFarmerIds, currentUser]);
   
   const handleBulkImport = useCallback(async (newFarmers: Farmer[]) => {
       if (!currentUser) return;
-      await database.write(async () => {
-          const creations = newFarmers.map(farmer => 
-              farmersCollection.prepareCreate(record => {
-                  Object.assign(record, {
-                      ...farmer,
-                      createdBy: currentUser.id,
-                      updatedBy: currentUser.id,
-                  });
-                  record._raw.id = farmer.id;
-              })
-          );
-          await database.batch(...creations);
-      });
+      await database.write(async () => { await database.batch(...newFarmers.map(f => farmersCollection.prepareCreate(rec => { Object.assign(rec, { ...f, createdBy: currentUser.id, updatedBy: currentUser.id }); rec._raw.id = f.id; }))); });
       setNotification({ message: `${newFarmers.length} new farmers imported successfully.`, type: 'success'});
   }, [database, farmersCollection, currentUser]);
 
-  const handlePrint = (farmer: FarmerModel) => {
-    setPrintingFarmer(farmer);
-    setTimeout(() => {
-        window.print();
-        setPrintingFarmer(null);
-    }, 100);
-  };
-  
-    const handleExportToPdf = useCallback((farmer: FarmerModel) => {
-    setPdfExportFarmer(farmer);
-  }, []);
+  const handlePrint = (farmer: FarmerModel) => { setPrintingFarmer(farmer); setTimeout(() => { window.print(); setPrintingFarmer(null); }, 100); };
+  const handleExportToPdf = useCallback((farmer: FarmerModel) => setPdfExportFarmer(farmer), []);
   
   useEffect(() => {
     if (pdfExportFarmer && pdfContainerRef.current) {
         const exportPdf = async () => {
-            const { jsPDF } = jspdf;
-            const canvas = await html2canvas(pdfContainerRef.current as HTMLElement, { scale: 2 });
-            const imgData = canvas.toDataURL('image/png');
-            
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: 'a4',
-            });
-            
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgProps = pdf.getImageProperties(imgData);
-            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            
-            let heightLeft = imgHeight;
-            let position = 0;
-            
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-            
-            while (heightLeft >= 0) {
-                position = heightLeft - imgHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                heightLeft -= pdfHeight;
-            }
-            
-            pdf.save(`Hapsara-Farmer-${pdfExportFarmer.farmerId}.pdf`);
-            setPdfExportFarmer(null);
+            const { jsPDF } = jspdf; const canvas = await html2canvas(pdfContainerRef.current as HTMLElement, { scale: 2 }); const imgData = canvas.toDataURL('image/png'); const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }); const pdfWidth = pdf.internal.pageSize.getWidth(); const imgProps = pdf.getImageProperties(imgData); const imgHeight = (imgProps.height * pdfWidth) / imgProps.width; let heightLeft = imgHeight, position = 0; pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight); heightLeft -= pdf.internal.pageSize.getHeight(); while (heightLeft >= 0) { position = heightLeft - imgHeight; pdf.addPage(); pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight); heightLeft -= pdf.internal.pageSize.getHeight(); } pdf.save(`Hapsara-Farmer-${pdfExportFarmer.farmerId}.pdf`); setPdfExportFarmer(null);
         };
-        // Use a short timeout to allow the component to render before capturing
         setTimeout(exportPdf, 100);
     }
 }, [pdfExportFarmer]);
 
-  const handleFilterChange = useCallback((newFilters: Filters) => {
-    setFilters(newFilters);
-    setSelectedFarmerIds([]);
-    setCurrentPage(1);
-  }, []);
+  const handleFilterChange = useCallback((newFilters: Filters) => { setFilters(newFilters); setSelectedFarmerIds([]); setCurrentPage(1); }, []);
+  const handleSortRequest = useCallback((key: keyof Farmer | 'id') => { setSortConfig(s => ({ key, direction: s?.key === key && s.direction === 'ascending' ? 'descending' : 'ascending' })); setCurrentPage(1); }, []);
+  const handlePageChange = (page: number) => setCurrentPage(page);
+  const handleRowsPerPageChange = (rows: number) => { setRowsPerPage(rows); setCurrentPage(1); };
 
-  const handleSortRequest = useCallback((key: keyof Farmer | 'id') => {
-    let direction: 'ascending' | 'descending' = 'ascending';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-        direction = 'descending';
-    }
-    setSortConfig({ key, direction });
-    setCurrentPage(1);
-  }, [sortConfig]);
+  const filteredAndSortedFarmers = useMemo(() => {
+    let filtered = [...allFarmers];
 
-  const processedFarmers = useMemo(() => {
-    let farmersData = [...allFarmers];
-
+    // Apply filters
     if (filters.searchQuery) {
         const query = filters.searchQuery.toLowerCase();
-        farmersData = farmersData.filter(f =>
+        filtered = filtered.filter(f =>
             f.fullName.toLowerCase().includes(query) ||
             f.farmerId.toLowerCase().includes(query) ||
             f.mobileNumber.includes(query)
         );
     }
-    if (filters.district) farmersData = farmersData.filter(f => f.district === filters.district);
-    if (filters.mandal) farmersData = farmersData.filter(f => f.mandal === filters.mandal);
-    if (filters.village) farmersData = farmersData.filter(f => f.village === filters.village);
-    if (filters.status) farmersData = farmersData.filter(f => f.status === filters.status);
-    if (filters.registrationDateFrom) farmersData = farmersData.filter(f => new Date(f.registrationDate) >= new Date(filters.registrationDateFrom));
-    if (filters.registrationDateTo) farmersData = farmersData.filter(f => new Date(f.registrationDate) <= new Date(filters.registrationDateTo));
-    
-    if (sortConfig !== null) {
-      farmersData.sort((a, b) => {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-        
-        if (aValue < bValue) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
+    if (filters.district) {
+        filtered = filtered.filter(f => f.district === filters.district);
+        if (filters.mandal) {
+            filtered = filtered.filter(f => f.mandal === filters.mandal);
+            if (filters.village) {
+                filtered = filtered.filter(f => f.village === filters.village);
+            }
         }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
+    }
+    if (filters.status) {
+        filtered = filtered.filter(f => f.status === filters.status);
+    }
+    if (filters.registrationDateFrom) {
+        const fromDate = new Date(filters.registrationDateFrom);
+        filtered = filtered.filter(f => new Date(f.registrationDate) >= fromDate);
+    }
+    if (filters.registrationDateTo) {
+        const toDate = new Date(filters.registrationDateTo);
+        filtered = filtered.filter(f => new Date(f.registrationDate) <= toDate);
     }
 
-    return farmersData;
+    // Apply sorting
+    if (sortConfig) {
+        filtered.sort((a, b) => {
+            const aValue = a[sortConfig.key];
+            const bValue = b[sortConfig.key];
+            if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+            if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    return filtered;
   }, [allFarmers, filters, sortConfig]);
-
-  useEffect(() => {
-    const totalPages = Math.ceil(processedFarmers.length / rowsPerPage);
-    if (currentPage > totalPages && totalPages > 0) {
-        setCurrentPage(totalPages);
-    }
-  }, [processedFarmers, currentPage, rowsPerPage]);
 
   const paginatedFarmers = useMemo(() => {
     const startIndex = (currentPage - 1) * rowsPerPage;
-    return processedFarmers.slice(startIndex, startIndex + rowsPerPage);
-  }, [processedFarmers, currentPage, rowsPerPage]);
+    return filteredAndSortedFarmers.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredAndSortedFarmers, currentPage, rowsPerPage]);
 
-  const handleSelectionChange = useCallback((farmerId: string, isSelected: boolean) => {
-    setSelectedFarmerIds(prev => {
-      if (isSelected) {
-        return [...prev, farmerId];
-      } else {
-        return prev.filter(id => id !== farmerId);
-      }
-    });
-  }, []);
-
-  const handleSelectAll = useCallback((allSelected: boolean) => {
-    if (allSelected) {
-      setSelectedFarmerIds(paginatedFarmers.map(f => f.id));
-    } else {
-      setSelectedFarmerIds([]);
-    }
-  }, [paginatedFarmers]);
-
-  const handlePageChange = (page: number) => setCurrentPage(page);
-
-  const handleRowsPerPageChange = (rows: number) => {
-      setRowsPerPage(rows);
-      setCurrentPage(1);
-  };
 
   const exportToExcel = () => {
-    const { utils, writeFile } = (window as any).XLSX;
-    const dataToExport = processedFarmers.map(f => {
-        const district = GEO_DATA.find(d => d.code === f.district)?.name || f.district;
-        const mandal = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.name || f.mandal;
-        const village = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.villages.find(v => v.code === f.village)?.name || f.village;
-        
-        return {
-            'Hap ID': f.farmerId,
-            'Application ID': f.applicationId,
-            'Full Name': f.fullName,
-            'Father/Husband Name': f.fatherHusbandName,
-            'Mobile Number': f.mobileNumber,
-            'Aadhaar Number': f.aadhaarNumber,
-            'Status': f.status,
-            'Registration Date': new Date(f.registrationDate).toLocaleDateString(),
-            'District': district,
-            'Mandal': mandal,
-            'Village': village,
-            'Address': f.address,
-            'Approved Extent (Acres)': f.approvedExtent,
-            'Number of Plants': f.numberOfPlants,
-        };
-    });
-    const ws = utils.json_to_sheet(dataToExport);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Farmers");
-    writeFile(wb, "Hapsara_Farmers_Export.xlsx");
+    const { utils, writeFile } = (window as any).XLSX; const dataToExport = allFarmers.map(f => ({ 'Hap ID': f.farmerId, 'Application ID': f.applicationId, 'Full Name': f.fullName, 'Father/Husband Name': f.fatherHusbandName, 'Mobile Number': f.mobileNumber, 'Aadhaar Number': f.aadhaarNumber, 'Status': f.status, 'Registration Date': new Date(f.registrationDate).toLocaleDateString(), District: GEO_DATA.find(d=>d.code===f.district)?.name||f.district, Mandal:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.name||f.mandal, Village:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.villages.find(v=>v.code===f.village)?.name||f.village, Address:f.address, 'Approved Extent (Acres)':f.approvedExtent, 'Number of Plants':f.numberOfPlants })); const ws = utils.json_to_sheet(dataToExport); const wb = utils.book_new(); utils.book_append_sheet(wb, ws, "Farmers"); writeFile(wb, "Hapsara_Farmers_Export.xlsx");
   };
-
   const exportToCsv = () => {
-    const { utils } = (window as any).XLSX;
-    const dataToExport = processedFarmers.map(f => {
-        const district = GEO_DATA.find(d => d.code === f.district)?.name || f.district;
-        const mandal = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.name || f.mandal;
-        const village = GEO_DATA.find(d => d.code === f.district)?.mandals.find(m => m.code === f.mandal)?.villages.find(v => v.code === f.village)?.name || f.village;
-        
-        return {
-            'Hap ID': f.farmerId,
-            'Application ID': f.applicationId,
-            'Full Name': f.fullName,
-            'Father/Husband Name': f.fatherHusbandName,
-            'Mobile Number': f.mobileNumber,
-            'Aadhaar Number': f.aadhaarNumber,
-            'Status': f.status,
-            'Registration Date': new Date(f.registrationDate).toLocaleDateString(),
-            'District': district,
-            'Mandal': mandal,
-            'Village': village,
-            'Address': f.address,
-            'Approved Extent (Acres)': f.approvedExtent,
-            'Number of Plants': f.numberOfPlants,
-        };
-    });
-    const ws = utils.json_to_sheet(dataToExport);
-    const csv = utils.sheet_to_csv(ws);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "Hapsara_Farmers_Export.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const { utils } = (window as any).XLSX; const dataToExport = allFarmers.map(f => ({ 'Hap ID': f.farmerId, 'Application ID': f.applicationId, 'Full Name': f.fullName, 'Father/Husband Name': f.fatherHusbandName, 'Mobile Number': f.mobileNumber, 'Aadhaar Number': f.aadhaarNumber, 'Status': f.status, 'Registration Date': new Date(f.registrationDate).toLocaleDateString(), District: GEO_DATA.find(d=>d.code===f.district)?.name||f.district, Mandal:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.name||f.mandal, Village:GEO_DATA.find(d=>d.code===f.district)?.mandals.find(m=>m.code===f.mandal)?.villages.find(v=>v.code===f.village)?.name||f.village, Address:f.address, 'Approved Extent (Acres)':f.approvedExtent, 'Number of Plants':f.numberOfPlants })); const ws = utils.json_to_sheet(dataToExport); const csv = utils.sheet_to_csv(ws); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); const url = URL.createObjectURL(blob); link.setAttribute("href", url); link.setAttribute("download", "Hapsara_Farmers_Export.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
   
-  if (!isAppLaunched) {
-      return <Suspense fallback={<div></div>}><LandingPage onLaunch={() => setIsAppLaunched(true)} /></Suspense>;
-  }
+  const renderAppContent = () => {
+    const canAccessAdmin = currentUserPermissions.has(Permission.CAN_MANAGE_USERS) || currentUserPermissions.has(Permission.CAN_MANAGE_GROUPS);
+    const canAccessContentManager = currentUserPermissions.has(Permission.CAN_MANAGE_CONTENT);
 
-  if (showSupabaseSettings) {
-      return <Suspense fallback={<div></div>}><SupabaseSettingsModal onSave={handleSaveSupabaseSettings} /></Suspense>;
-  }
-  
-  if (!session) {
-    if (authView === 'accept-invitation') {
-      return <Suspense fallback={<div></div>}><AcceptInvitation groups={groups} invitations={invitations} onAccept={handleAcceptInvitation} onBackToLogin={() => setAuthView('login')} /></Suspense>
+    if (view === 'not-found') {
+        return <Suspense fallback={<ModalLoader/>}><NotFoundPage onBack={() => handleNavigate('dashboard')} /></Suspense>
     }
-    return <Suspense fallback={<div></div>}><LoginScreen supabase={supabase} onSignUp={handleSignUp} onAcceptInvitationClick={() => setAuthView('accept-invitation')} /></Suspense>;
-  }
-
-  const renderView = () => {
     switch(view) {
-        case 'profile':
-            return <Suspense fallback={<ModalLoader/>}><ProfilePage currentUser={currentUser!} groups={groups} onSave={handleSaveProfile} onBack={() => handleNavigate('dashboard')} /></Suspense>;
-        case 'admin':
-            return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} /></Suspense>;
-        case 'billing':
-            return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} /></Suspense>
-        case 'usage-analytics':
-            return <Suspense fallback={<ModalLoader/>}><UsageAnalyticsPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} /></Suspense>
-        case 'dashboard':
-        default:
-            return (
-                <>
-                    <div className="mb-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <div className="bg-white p-6 rounded-lg shadow-md flex items-center gap-4">
-                                <div className="bg-green-100 p-3 rounded-full">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500">Total Farmers</h3>
-                                    <p className="mt-1 text-3xl font-semibold text-gray-900">{allFarmers.length}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <FilterBar onFilterChange={handleFilterChange} />
-                    <FarmerList
-                        farmers={paginatedFarmers}
-                        users={users}
-                        canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)}
-                        canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)}
-                        editingRowId={editingRowId}
-                        onEditRow={setEditingRowId}
-                        onCancelEditRow={() => setEditingRowId(null)}
-                        onSaveRow={handleSaveRow}
-                        onPrint={handlePrint}
-                        onExportToPdf={handleExportToPdf}
-                        selectedFarmerIds={selectedFarmerIds}
-                        onSelectionChange={handleSelectionChange}
-                        onSelectAll={handleSelectAll}
-                        sortConfig={sortConfig}
-                        onRequestSort={handleSortRequest}
-                        newlyAddedFarmerId={newlyAddedFarmerId}
-                        onHighlightComplete={() => setNewlyAddedFarmerId(null)}
-                        onBatchUpdate={() => setShowBatchUpdateModal(true)}
-                        onDeleteSelected={handleDeleteSelected}
-                        totalRecords={processedFarmers.length}
-                        currentPage={currentPage}
-                        rowsPerPage={rowsPerPage}
-                        onPageChange={handlePageChange}
-                        onRowsPerPageChange={handleRowsPerPageChange}
-                    />
-                </>
-            );
+        case 'profile': return <Suspense fallback={<ModalLoader/>}><ProfilePage currentUser={currentUser!} groups={groups} onSave={handleSaveProfile} onBack={() => handleNavigate('dashboard')} /></Suspense>;
+        case 'admin': if (!canAccessAdmin) return null; return <Suspense fallback={<ModalLoader/>}><AdminPage users={users} groups={groups} invitations={invitations} onInviteUser={handleInviteUser} currentUser={currentUser!} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} onShowSetupGuide={() => setShowSetupGuide(true)} /></Suspense>;
+        case 'billing': return <Suspense fallback={<ModalLoader/>}><BillingPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} /></Suspense>
+        case 'usage-analytics': return <Suspense fallback={<ModalLoader/>}><UsageAnalyticsPage currentUser={currentUser!} onBack={() => handleNavigate('dashboard')} supabase={supabase} /></Suspense>
+        case 'content-manager': if (!canAccessContentManager) return null; return <Suspense fallback={<ModalLoader/>}><ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('dashboard')} /></Suspense>
+        case 'farmer-directory':
+            return (<> <FilterBar onFilterChange={handleFilterChange} /> <FarmerList farmers={paginatedFarmers} users={users} canEdit={currentUserPermissions.has(Permission.CAN_EDIT_FARMER)} canDelete={currentUserPermissions.has(Permission.CAN_DELETE_FARMER)} editingRowId={editingRowId} onEditRow={setEditingRowId} onCancelEditRow={() => setEditingRowId(null)} onSaveRow={handleSaveRow} onPrint={handlePrint} onExportToPdf={handleExportToPdf} selectedFarmerIds={selectedFarmerIds} onSelectionChange={(id, selected) => setSelectedFarmerIds(p => selected ? [...p, id] : p.filter(i => i !== id))} onSelectAll={(all) => setSelectedFarmerIds(all ? paginatedFarmers.map(f => f.id) : [])} sortConfig={sortConfig} onRequestSort={handleSortRequest} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onBatchUpdate={() => setShowBatchUpdateModal(true)} onDeleteSelected={handleDeleteSelected} totalRecords={filteredAndSortedFarmers.length} currentPage={currentPage} rowsPerPage={rowsPerPage} onPageChange={handlePageChange} onRowsPerPageChange={handleRowsPerPageChange} isLoading={false} /> </>);
+        case 'dashboard': default:
+            return <Suspense fallback={<ModalLoader/>}><Dashboard supabase={supabase} /></Suspense>;
     }
   }
+
+  const renderContent = () => {
+    switch (appState) {
+        case 'LANDING':
+            return <Suspense fallback={<div></div>}><LandingPage onLaunch={() => setAppState('LOADING')} appContent={appContent} /></Suspense>;
+        case 'LOADING':
+            return <div className="fixed inset-0 bg-white flex items-center justify-center"><ModalLoader /></div>;
+        case 'AUTH':
+            if (authView === 'accept-invitation') return <Suspense fallback={<ModalLoader/>}><AcceptInvitation groups={groups} invitations={invitations} onAccept={handleAcceptInvitation} onBackToLogin={() => setAuthView('login')} /></Suspense>
+            return <Suspense fallback={<ModalLoader/>}><LoginScreen supabase={supabase} onSignUp={handleSignUp} onAcceptInvitationClick={() => setAuthView('accept-invitation')} /></Suspense>;
+        case 'APP':
+            return (
+                <div className="flex h-screen bg-gray-100 font-sans">
+                    <Sidebar isOpen={isMobileMenuOpen} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(c => !c)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} currentView={view} permissions={currentUserPermissions} onImport={() => setShowImportModal(true)} onExportExcel={exportToExcel} onExportCsv={exportToCsv} onViewRawData={() => setShowRawDataView(true)} onShowPrivacy={() => setShowPrivacyModal(true)} onShowHelp={() => setShowHelpModal(true)} onShowFeedback={() => setShowFeedbackModal(true)} />
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                        <Header onToggleSidebar={() => setIsMobileMenuOpen(m => !m)} currentView={view} onRegister={handleRegisterClick} onSync={() => handleFullSync()} syncLoading={syncLoading} pendingSyncCount={pendingSyncCount} isOnline={isOnline} permissions={currentUserPermissions} />
+                        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
+                            {renderAppContent()}
+                        </main>
+                    </div>
+                </div>
+            );
+        default:
+            return <Suspense fallback={<div></div>}><LandingPage onLaunch={() => setAppState('LOADING')} appContent={appContent} /></Suspense>;
+    }
+  };
 
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <Sidebar
-        isOpen={isMobileMenuOpen}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(c => !c)}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        onNavigate={handleNavigate}
-        currentView={view}
-        permissions={currentUserPermissions}
-        onImport={() => setShowImportModal(true)}
-        onExportExcel={exportToExcel}
-        onExportCsv={exportToCsv}
-        onViewRawData={() => setShowRawDataView(true)}
-        onSetupGuideClick={() => setShowSetupGuide(true)}
-      />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-         <Header
-            onToggleSidebar={() => setIsMobileMenuOpen(m => !m)}
-            currentView={view}
-            onRegister={handleRegisterClick}
-            onSync={() => handlePushSync(true)}
-            syncLoading={syncLoading}
-            pendingSyncCount={pendingSyncCount}
-            isOnline={isOnline}
-            permissions={currentUserPermissions}
-          />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
-              {renderView()}
-          </main>
-      </div>
-      
-
-      {showForm && (
-        <Suspense fallback={<ModalLoader/>}>
-            <RegistrationForm
-                onSubmit={handleRegistration}
-                onCancel={() => setShowForm(false)}
-                existingFarmers={allFarmersPlain}
-            />
-        </Suspense>
-      )}
-      
-       {showRawDataView && (
-            <Suspense fallback={<ModalLoader/>}>
-                <RawDataView farmers={allFarmers} onClose={() => setShowRawDataView(false)} />
-            </Suspense>
-       )}
-
-       {showSetupGuide && (
-        <Suspense fallback={<ModalLoader/>}>
-          <SupabaseSetupGuide onClose={() => setShowSetupGuide(false)} />
-        </Suspense>
-       )}
-      
-      {showBatchUpdateModal && (
-        <Suspense fallback={<ModalLoader/>}>
-            <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleBatchUpdate} onCancel={() => setShowBatchUpdateModal(false)}/>
-        </Suspense>
-      )}
-
-      {showImportModal && (
-          <Suspense fallback={<ModalLoader/>}>
-              <BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allFarmersPlain} />
-          </Suspense>
-      )}
-
-      {showDeleteConfirmation && (
-          <Suspense fallback={<ModalLoader/>}>
-              <ConfirmationModal
-                  isOpen={showDeleteConfirmation}
-                  title="Confirm Deletion"
-                  message={`Are you sure you want to delete ${selectedFarmerIds.length} farmer record(s)? This action cannot be undone.`}
-                  onConfirm={confirmDeleteSelected}
-                  onCancel={() => setShowDeleteConfirmation(false)}
-                  confirmText="Delete"
-                  confirmButtonClass="bg-red-600 hover:bg-red-700"
-              />
-          </Suspense>
-      )}
-
-      <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0">
-          {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={modelToPlain(pdfExportFarmer)} users={users} isForPdf={true} /></Suspense>}
-      </div>
-      <PrintView farmer={modelToPlain(printingFarmer)} users={users} />
-
-      {notification && (
-        <div className={`fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {notification.message}
-        </div>
-      )}
-    </div>
+    <>
+        {renderContent()}
+        {showForm && ( <Suspense fallback={<ModalLoader/>}> <RegistrationForm onSubmit={handleRegistration} onCancel={() => setShowForm(false)} existingFarmers={allFarmersPlain} /> </Suspense> )}
+        {showRawDataView && ( <Suspense fallback={<ModalLoader/>}> <RawDataView farmers={allFarmers} onClose={() => setShowRawDataView(false)} /> </Suspense> )}
+        {showBatchUpdateModal && ( <Suspense fallback={<ModalLoader/>}> <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleBatchUpdate} onCancel={() => setShowBatchUpdateModal(false)}/> </Suspense> )}
+        {showImportModal && ( <Suspense fallback={<ModalLoader/>}> <BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allFarmersPlain} /> </Suspense> )}
+        {showDeleteConfirmation && ( <Suspense fallback={<ModalLoader/>}> <ConfirmationModal isOpen={showDeleteConfirmation} title="Confirm Deletion" message={`Are you sure you want to delete ${selectedFarmerIds.length} farmer record(s)? This action cannot be undone.`} onConfirm={confirmDeleteSelected} onCancel={() => setShowDeleteConfirmation(false)} confirmText="Delete" confirmButtonClass="bg-red-600 hover:bg-red-700" /> </Suspense> )}
+        {showPrivacyModal && ( <Suspense fallback={<ModalLoader/>}> <PrivacyModal onClose={() => setShowPrivacyModal(false)} appContent={appContent} /> </Suspense> )}
+        {showHelpModal && ( <Suspense fallback={<ModalLoader/>}> <HelpModal onClose={() => setShowHelpModal(false)} appContent={appContent} /> </Suspense> )}
+        {showFeedbackModal && ( <Suspense fallback={<ModalLoader/>}> <FeedbackModal onClose={() => setShowFeedbackModal(false)} /> </Suspense> )}
+        {showSetupGuide && ( <Suspense fallback={<ModalLoader/>}><SupabaseSetupGuide onClose={() => setShowSetupGuide(false)} /></Suspense> )}
+        <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0"> {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={modelToPlain(pdfExportFarmer)} users={users} isForPdf={true} /></Suspense>} </div>
+        <PrintView farmer={modelToPlain(printingFarmer)} users={users} />
+        {notification && ( 
+            <div className={`fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white animate-fade-in-up
+                ${notification.type === 'success' ? 'bg-green-600' : ''}
+                ${notification.type === 'error' ? 'bg-red-600' : ''}
+                ${notification.type === 'info' ? 'bg-blue-600' : ''}
+            `}>
+                {notification.message}
+            </div> 
+        )}
+    </>
   );
 };
 

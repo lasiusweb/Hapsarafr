@@ -9,7 +9,7 @@ interface RegistrationFormProps {
     existingFarmers: Farmer[];
 }
 
-const initialFormData: Omit<Farmer, 'id'> = {
+const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
     fullName: '',
     fatherHusbandName: '',
     aadhaarNumber: '',
@@ -120,7 +120,7 @@ type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers }) => {
-    const [formData, setFormData] = useState<Omit<Farmer, 'id'>>(initialFormData);
+    const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -341,8 +341,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (validate()) {
-// FIX: The farmerData object was missing an 'id' property in its type definition, causing a TypeScript error.
-// The logic is updated to construct a new, fully-typed `Farmer` object with all necessary properties, including the generated IDs.
             const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
             const farmersInVillage = existingFarmers.filter(f => f.village === formData.village && f.mandal === formData.mandal && f.district === formData.district);
             const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
@@ -350,6 +348,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
             const applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
             const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
+            const now = new Date().toISOString();
 
             const farmerData: Farmer = {
                 ...formData,
@@ -357,6 +356,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 farmerId,
                 applicationId,
                 asoId,
+                createdAt: now,
+                updatedAt: now,
             };
 
             setPreparedFarmerData(farmerData);
@@ -462,6 +463,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <FormRow><FormLabel required>Gender</FormLabel><FormField><div className="relative"><select name="gender" value={formData.gender} onChange={handleChange} className={getSelectClass('gender')}><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
                                 <FormRow><FormLabel required>Address</FormLabel><FormField><textarea name="address" value={formData.address} onChange={handleChange} className={getInputClass('address')} rows={3}></textarea><InputError message={errors.address} onDismiss={() => handleDismissError('address')} /></FormField></FormRow>
                                 <FormRow><FormLabel>PPB/ROFR ID</FormLabel><FormField><input type="text" name="ppbRofrId" value={formData.ppbRofrId} onChange={handleChange} className={getInputClass('ppbRofrId')} /><InputError message={errors.ppbRofrId} onDismiss={() => handleDismissError('ppbRofrId')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Registration Date</FormLabel><FormField><input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={getInputClass('registrationDate')} max={new Date().toISOString().split('T')[0]} /><InputError message={errors.registrationDate} onDismiss={() => handleDismissError('registrationDate')} /></FormField></FormRow>
                                 <FormRow>
                                     <FormLabel>Photo</FormLabel>
                                     <FormField>
@@ -516,7 +518,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                              <section className="mt-6">
                                 <h3 className="text-lg font-semibold text-green-700 mb-4">5. Application Status</h3>
                                 <FormRow><FormLabel>Current Status</FormLabel><FormField><div className="relative"><select name="status" value={formData.status} onChange={handleChange} className={getSelectClass('status')}>{Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
-                                <FormRow><FormLabel>Registration Date</FormLabel><FormField><input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={getInputClass('registrationDate')} max={new Date().toISOString().split('T')[0]} /><InputError message={errors.registrationDate} onDismiss={() => handleDismissError('registrationDate')} /></FormField></FormRow>
                             </section>
                         </div>
                         <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">

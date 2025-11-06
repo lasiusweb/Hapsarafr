@@ -153,6 +153,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     const { districtCode, mandalCode, villageCode } = villageInfo;
 
                     const registrationDate = new Date();
+                    const now = registrationDate.toISOString();
                     const regYear = registrationDate.getFullYear().toString().slice(-2);
                     
                     const farmersInVillage = allKnownFarmers.filter(f => 
@@ -167,6 +168,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     
                     const asoId = `SO${regYear}${districtCode}${mandalCode}${Math.floor(100 + Math.random() * 900)}`;
 
+                    // Fix: Added missing createdAt and updatedAt fields to satisfy the Farmer type.
                     const farmer: Omit<Farmer, 'createdBy' | 'updatedBy'> & { id: string } = {
                         id: farmerId,
                         farmerId: farmerId,
@@ -192,13 +194,15 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         mlrdPlants: 0,
                         fullCostPlants: 0,
                         proposedYear: '2024-25',
-                        registrationDate: registrationDate.toISOString().split('T')[0],
+                        registrationDate: now.split('T')[0],
                         paymentUtrDd: '',
                         status: FarmerStatus.Registered,
                         district: districtCode,
                         mandal: mandalCode,
                         village: villageCode,
                         syncStatus: 'pending',
+                        createdAt: now,
+                        updatedAt: now,
                     };
                     
                     newFarmers.push(farmer as Farmer);

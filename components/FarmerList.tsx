@@ -28,13 +28,14 @@ interface FarmerListProps {
     rowsPerPage: number;
     onPageChange: (page: number) => void;
     onRowsPerPageChange: (rows: number) => void;
+    isLoading: boolean;
 }
 
 const FarmerList: React.FC<FarmerListProps> = ({ 
     farmers, users, canEdit, canDelete, editingRowId, onEditRow, onCancelEditRow, onSaveRow, 
     onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, 
     sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onBatchUpdate, onDeleteSelected,
-    totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange 
+    totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange, isLoading 
 }) => {
     
     const [editedFarmerData, setEditedFarmerData] = useState<Partial<Pick<Farmer, 'fullName' | 'mobileNumber' | 'status'>>>({});
@@ -99,6 +100,15 @@ const FarmerList: React.FC<FarmerListProps> = ({
         return user ? user.name : 'Unknown User';
     };
     
+    // Fix: Added isLoading prop to show a loading indicator.
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-64 bg-white shadow-md rounded-lg">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div>
+            </div>
+        );
+    }
+
     if (totalRecords === 0) {
         return (
             <div className="text-center py-20 text-gray-500 bg-white shadow-md rounded-lg">
