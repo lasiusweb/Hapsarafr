@@ -165,14 +165,14 @@ const Header: React.FC<{
   const canManage = (permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS));
   
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
             setIsProfileMenuOpen(false);
-            setIsMobileMenuOpen(false);
+            setIsMenuOpen(false);
         }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -182,7 +182,7 @@ const Header: React.FC<{
   const handleMenuAction = (action: () => void) => {
       action();
       setIsProfileMenuOpen(false);
-      setIsMobileMenuOpen(false);
+      setIsMenuOpen(false);
   };
   
   const SyncStatusIndicator: React.FC<{isMobile?: boolean}> = ({ isMobile = false }) => {
@@ -202,26 +202,17 @@ const Header: React.FC<{
           </div>
       );
   };
-  
-  const navLinkClasses = (targetView: string) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === targetView ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`;
 
   return (
     <header className="bg-white shadow-md p-3 sm:p-4 relative z-50" ref={headerRef}>
         <div className="flex justify-between items-center">
-          {/* Left Side: Logo, Title, Desktop Nav */}
+          {/* Left Side: Logo, Title */}
           <div className="flex items-center gap-2 sm:gap-4">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 sm:h-10 sm:w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
               <h1 className="text-xl md:text-2xl font-bold text-gray-800">Hapsara</h1>
-              
-              {/* Desktop Navigation Menu */}
-              <nav className="hidden md:flex items-baseline gap-2 ml-6">
-                  <button onClick={() => onNavigate('dashboard')} className={navLinkClasses('dashboard')}>Dashboard</button>
-                  <DataMenu variant="nav" onImport={onImport} onExportExcel={onExport} onExportCsv={onExportCsv} onViewRawData={onViewRawData} permissions={permissions} />
-                  {canManage && <button onClick={() => onNavigate('admin')} className={navLinkClasses('admin')}>Admin</button>}
-              </nav>
           </div>
 
-          {/* Right Side: Actions, Status, Profile */}
+          {/* Right Side: Actions, Status, Profile, Menu */}
           <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-3">
                   {(canDelete || canEdit) && selectedCount > 0 && (
@@ -275,18 +266,18 @@ const Header: React.FC<{
                 </div>
               )}
 
-              {/* Mobile Hamburger Button */}
-              <div className="md:hidden">
-                  <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400">
+              {/* Universal Hamburger Button */}
+              <div>
+                  <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
                   </button>
               </div>
           </div>
         </div>
         
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-            <div className="absolute top-full left-0 w-full bg-white shadow-lg md:hidden z-40 animate-fade-in-down">
+        {/* Universal Menu Panel */}
+        {isMenuOpen && (
+            <div className="absolute top-full left-0 w-full bg-white shadow-lg z-40 animate-fade-in-down">
                  {currentUser && (
                     <div className="p-4 border-b">
                          <div className="flex items-center gap-3 mb-4"><img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-200" /><div><p className="font-semibold text-gray-800 text-sm">{currentUser.name}</p><p className="text-xs text-gray-500">Pay-as-you-go Plan</p></div></div>
