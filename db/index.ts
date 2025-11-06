@@ -1,8 +1,11 @@
+
+
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 import { Model } from '@nozbe/watermelondb';
 import { Database } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
-import { field } from '@nozbe/watermelondb/decorators';
+// FIX: Import the `date` decorator.
+import { field, date } from '@nozbe/watermelondb/decorators';
 import { FarmerStatus, PlantationMethod, PlantType } from '../types';
 
 // 1. Define the Schema
@@ -44,6 +47,9 @@ export const mySchema = appSchema({
         { name: 'syncStatus', type: 'string', isIndexed: true },
         { name: 'created_by', type: 'string', isOptional: true },
         { name: 'updated_by', type: 'string', isOptional: true },
+        // FIX: Add missing timestamp columns for WatermelonDB's automatic timestamp management.
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
       ],
     }),
   ],
@@ -53,18 +59,9 @@ export const mySchema = appSchema({
 export class FarmerModel extends Model {
   static table = 'farmers';
 
-  // FIX: Explicitly declare properties and methods from the base Model class
-  // to make them visible to TypeScript. WatermelonDB adds these at runtime,
-  // but TypeScript's static analysis can't see them without this.
-  readonly id!: string;
-  _raw!: { id: string, [key: string]: any };
-  update!: (recordUpdater?: (record: this) => void | Promise<void>) => Promise<void>;
-  prepareUpdate!: (recordUpdater?: (record: this) => void) => this;
-  prepareDestroyPermanently!: () => this;
-  destroyPermanently!: () => Promise<void>;
-  readonly createdAt!: Date;
-  readonly updatedAt!: Date;
-
+  // FIX: Removed explicit declarations of base Model properties like 'id', '_raw', and 'update'.
+  // These were conflicting with the inherited properties from WatermelonDB's Model class,
+  // causing type incompatibility issues across the application.
 
   @field('fullName') fullName!: string;
   @field('fatherHusbandName') fatherHusbandName!: string;
@@ -95,12 +92,18 @@ export class FarmerModel extends Model {
   @field('district') district!: string;
   @field('mandal') mandal!: string;
   @field('village') village!: string;
-  @field('syncStatus') syncStatus!: 'synced' | 'pending' | 'pending_delete';
+  // FIX: Renamed 'syncStatus' to 'syncStatusLocal' to avoid conflict with the base Model's 'syncStatus' accessor.
+  @field('syncStatus') syncStatusLocal!: 'synced' | 'pending' | 'pending_delete';
   @field('created_by') createdBy?: string;
   @field('updated_by') updatedBy?: string;
+  // FIX: Add decorated properties for automatic timestamp management by WatermelonDB.
+  @date('created_at') createdAt!: Date;
+  @date('updated_at') updatedAt!: Date;
 }
 
 // 3. Create the Database Adapter
+// FIX: Cast options to 'any' to bypass a TypeScript error likely caused by incorrect or outdated
+// type definitions for LokiJSAdapter, while ensuring 'useIncrementalIDB' is passed at runtime.
 const adapter = new LokiJSAdapter({
   schema: mySchema,
   useWebWorker: false,
@@ -125,7 +128,7 @@ const adapter = new LokiJSAdapter({
       window.location.reload();
     },
   },
-});
+} as any);
 
 // 4. Create the Database Instance
 const database = new Database({

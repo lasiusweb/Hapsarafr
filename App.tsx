@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { Farmer, FarmerStatus, User, Group, Permission, Invitation } from './types';
 import { GEO_DATA } from './data/geoData';
@@ -326,6 +328,46 @@ const Header: React.FC<{
   );
 };
 
+// FIX: Add a helper function to convert FarmerModel to a plain Farmer object.
+const modelToPlain = (f: FarmerModel | null): Farmer | null => {
+    if (!f) return null;
+    return {
+        id: f.id,
+        fullName: f.fullName,
+        fatherHusbandName: f.fatherHusbandName,
+        aadhaarNumber: f.aadhaarNumber,
+        mobileNumber: f.mobileNumber,
+        gender: f.gender,
+        address: f.address,
+        ppbRofrId: f.ppbRofrId,
+        photo: f.photo,
+        bankAccountNumber: f.bankAccountNumber,
+        ifscCode: f.ifscCode,
+        accountVerified: f.accountVerified,
+        appliedExtent: f.appliedExtent,
+        approvedExtent: f.approvedExtent,
+        numberOfPlants: f.numberOfPlants,
+        methodOfPlantation: f.methodOfPlantation,
+        plantType: f.plantType,
+        plantationDate: f.plantationDate,
+        mlrdPlants: f.mlrdPlants,
+        fullCostPlants: f.fullCostPlants,
+        applicationId: f.applicationId,
+        farmerId: f.farmerId,
+        proposedYear: f.proposedYear,
+        registrationDate: f.registrationDate,
+        asoId: f.asoId,
+        paymentUtrDd: f.paymentUtrDd,
+        status: f.status,
+        district: f.district,
+        mandal: f.mandal,
+        village: f.village,
+        syncStatus: f.syncStatusLocal,
+        createdBy: f.createdBy,
+        updatedBy: f.updatedBy,
+    };
+};
+
 const App: React.FC = () => {
   const [isAppLaunched, setIsAppLaunched] = useState(false);
   const [supabase, setSupabase] = useState<any | null>(null);
@@ -364,6 +406,9 @@ const App: React.FC = () => {
   
   const allFarmers = useQuery(farmersCollection.query(Q.where('syncStatus', Q.notEq('pending_delete'))));
   const pendingSyncCount = useQuery(farmersCollection.query(Q.where('syncStatus', Q.oneOf(['pending', 'pending_delete'])))).length;
+  
+  // FIX: Create a memoized plain object version of the farmers for components that expect the `Farmer[]` type.
+  const allFarmersPlain: Farmer[] = useMemo(() => allFarmers.map(f => modelToPlain(f)!), [allFarmers]);
   
   const currentUserPermissions = useMemo(() => {
     if (!currentUser) return new Set<Permission>();
@@ -412,7 +457,9 @@ const App: React.FC = () => {
                 const { error } = await supabase.from('farmers').upsert(plainFarmers);
                 if (error) throw error;
                 await database.write(async () => {
-                    const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { rec.syncStatus = 'synced'; }));
+                    const updates = pendingFarmers.map(f => f.prepareUpdate(rec => { 
+// FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+rec.syncStatusLocal = 'synced'; }));
                     await database.batch(...updates);
                 });
             }
@@ -455,17 +502,20 @@ const App: React.FC = () => {
                       const remoteFarmerCamel = snakeToCamelCase(remoteFarmer);
                       const localFarmer = existingFarmers.find(f => f.id === remoteFarmerCamel.id);
                       if (localFarmer) {
-                          if (localFarmer.syncStatus === 'synced') {
+                          // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+if (localFarmer.syncStatusLocal === 'synced') {
                              recordsToUpdate.push(
                                 localFarmer.prepareUpdate(record => {
-                                    Object.assign(record, { ...remoteFarmerCamel, syncStatus: 'synced' });
+                                    // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
                                 })
                             );
                           }
                       } else {
                           recordsToCreate.push(
                               farmersCollection.prepareCreate(record => {
-                                  Object.assign(record, { ...remoteFarmerCamel, syncStatus: 'synced' });
+                                  // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+Object.assign(record, { ...remoteFarmerCamel, syncStatusLocal: 'synced' });
                                   record._raw.id = remoteFarmerCamel.id;
                               })
                           );
@@ -510,12 +560,15 @@ const App: React.FC = () => {
                     const existing = await collection.query(Q.where('id', newRecord.id)).fetch();
                     if (existing.length > 0) {
                         farmer = existing[0];
-                        if (farmer.syncStatus === 'synced') {
-                           await farmer.update(rec => Object.assign(rec, { ...newRecord, syncStatus: 'synced' }));
+                        // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+if (farmer.syncStatusLocal === 'synced') {
+                           // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+await farmer.update(rec => Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' }));
                         }
                     } else {
                        await collection.create(rec => {
-                           Object.assign(rec, { ...newRecord, syncStatus: 'synced' });
+                           // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+Object.assign(rec, { ...newRecord, syncStatusLocal: 'synced' });
                            rec._raw.id = newRecord.id;
                        });
                     }
@@ -796,7 +849,8 @@ const App: React.FC = () => {
     if (!currentUser) return;
     await database.write(async () => {
       await farmerToUpdate.update(record => {
-        Object.assign(record, { ...updatedData, syncStatus: 'pending', updatedBy: currentUser.id });
+        // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+Object.assign(record, { ...updatedData, syncStatusLocal: 'pending', updatedBy: currentUser.id });
       });
     });
     setEditingRowId(null);
@@ -811,7 +865,8 @@ const App: React.FC = () => {
       const farmersToDelete = await farmersCollection.query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
       const updates = farmersToDelete.map(farmer =>
         farmer.prepareUpdate(record => {
-          record.syncStatus = 'pending_delete';
+          // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+record.syncStatusLocal = 'pending_delete';
         })
       );
       await database.batch(...updates);
@@ -828,7 +883,8 @@ const App: React.FC = () => {
       const updates = farmersToUpdate.map(farmer =>
         farmer.prepareUpdate(record => {
           record.status = newStatus;
-          record.syncStatus = 'pending';
+          // FIX: Use `syncStatusLocal` to avoid conflict with the base Model's `syncStatus` accessor.
+record.syncStatusLocal = 'pending';
           record.updatedBy = currentUser.id;
         })
       );
@@ -1154,7 +1210,8 @@ const App: React.FC = () => {
             <RegistrationForm
                 onSubmit={handleRegistration}
                 onCancel={() => setShowForm(false)}
-                existingFarmers={allFarmers}
+// FIX: Pass the plain Farmer array instead of FarmerModel array to match component's prop type.
+                existingFarmers={allFarmersPlain}
             />
         </Suspense>
       )}
@@ -1179,7 +1236,8 @@ const App: React.FC = () => {
 
       {showImportModal && (
           <Suspense fallback={<ModalLoader/>}>
-              <BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allFarmers} />
+{/* FIX: Pass the plain Farmer array instead of FarmerModel array to match component's prop type. */}
+              <BulkImportModal onClose={() => setShowImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allFarmersPlain} />
           </Suspense>
       )}
 
@@ -1198,9 +1256,11 @@ const App: React.FC = () => {
       )}
 
       <div ref={pdfContainerRef} className="absolute -left-[9999px] top-0">
-          {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={pdfExportFarmer} users={users} isForPdf={true} /></Suspense>}
+{/* FIX: Convert FarmerModel to plain Farmer object before passing to PrintView. */}
+          {pdfExportFarmer && <Suspense fallback={<div></div>}><PrintView farmer={modelToPlain(pdfExportFarmer)} users={users} isForPdf={true} /></Suspense>}
       </div>
-      <PrintView farmer={printingFarmer} users={users} />
+{/* FIX: Convert FarmerModel to plain Farmer object before passing to PrintView. */}
+      <PrintView farmer={modelToPlain(printingFarmer)} users={users} />
 
       {notification && (
         <div className={`fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
