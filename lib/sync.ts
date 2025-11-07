@@ -5,7 +5,9 @@ import { FarmerModel, SubsidyPaymentModel } from '../db';
 // It removes WatermelonDB-specific fields (_status, _changed).
 // It also maps the model's 'syncStatusLocal' property to 'syncStatus' for the backend.
 const modelToSupabaseReadyObject = (model: FarmerModel | SubsidyPaymentModel) => {
-    const plainObject: { [key: string]: any } = { ...model._raw };
+    // FIX: Property '_raw' is not publicly exposed in types. Cast to 'any' to access it.
+    // FIX: Cast model to `any` to access the internal `_raw` property for creating a plain object.
+    const plainObject: { [key: string]: any } = { ...(model as any)._raw };
     delete plainObject._status;
     delete plainObject._changed;
     

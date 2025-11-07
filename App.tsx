@@ -1,20 +1,21 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import * as ReactDOM from 'react-dom/client';
-import { Farmer, User, Group, Permission, PaymentStage, ActivityType, Filters, AppContent, FarmerStatus } from './types';
+import { Farmer, User, Group, Permission, PaymentStage, ActivityType, Filters, AppContent, FarmerStatus, District } from './types';
 import FilterBar from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
 import { Q, Query, Model } from '@nozbe/watermelondb';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, AppContentCacheModel } from './db';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, AppContentCacheModel, DistrictModel, MandalModel, VillageModel } from './db';
 import { initializeSupabase } from './lib/supabase';
 import { DEFAULT_GROUPS } from './data/permissionsData';
 import { MOCK_USERS } from './data/userData';
+import { GEO_DATA } from './data/geoData';
 import Sidebar from './components/Sidebar';
 import Notification from './components/Notification';
 import { synchronize } from './lib/sync';
 import { exportToExcel, exportToCsv } from './lib/export';
 import PrintView from './components/PrintView';
-import { farmerModelToPlain, getGeoName } from './lib/utils';
+import { farmerModelToPlain, getGeoName, buildGeoNameMap } from './lib/utils';
 import { useQuery } from './hooks/useQuery';
 import { useDebounce } from './hooks/useDebounce';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -47,6 +48,8 @@ const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'))
 const ReportsPage = lazy(() => import('./components/ReportsPage'));
 const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerPage'));
 const SupabaseSettingsModal = lazy(() => import('./components/SupabaseSettingsModal'));
+const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
+const GeoManagementPage = lazy(() => import('./components/GeoManagementPage'));
 
 
 // Type declarations for CDN libraries
@@ -135,7 +138,7 @@ const AlertsPanel: React.FC<{
 };
 
 
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner' | 'data-health' | 'geo-management';
 type ParsedHash = 
     | { view: View; params: {} }
     | { view: 'farmer-details'; params: { farmerId: string } }
@@ -151,7 +154,7 @@ const parseHash = (): ParsedHash => {
         return { view: 'farmer-details', params: { farmerId: id } };
     }
 
-    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner'];
+    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner', 'data-health', 'geo-management'];
     if (simpleViews.includes(path as View)) {
         return { view: path as View, params: {} };
     }
@@ -181,6 +184,8 @@ const getViewTitle = (view: View | 'farmer-details' | 'not-found'): string => {
         'id-verification': 'ID Verification Tool',
         'reports': 'Reports & Analytics',
         'crop-health-scanner': 'Crop Health Scanner',
+        'data-health': 'Data Health',
+        'geo-management': 'Geographic Management',
         'not-found': 'Page Not Found',
     };
     return titles[view] || 'Hapsara';
@@ -230,6 +235,7 @@ const App: React.FC = () => {
     const [pendingSyncCount, setPendingSyncCount] = useState(0);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [appContent, setAppContent] = useState<Partial<AppContent> | null>(null);
+    const [isDataInitialized, setIsDataInitialized] = useState(false);
 
     // Alert System State
     const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -246,40 +252,90 @@ const App: React.FC = () => {
     const dbGroups = useQuery(groupsQuery);
 
     const users = useMemo(() => dbUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar, groupId: u.groupId })), [dbUsers]);
-    // FIX: Use the renamed `parsedPermissions` getter on GroupModel.
     const groups = useMemo(() => dbGroups.map(g => ({ id: g.id, name: g.name, permissions: g.parsedPermissions })), [dbGroups]);
 
     const allPlainFarmers = useMemo(() => allFarmers.map(f => farmerModelToPlain(f)).filter(Boolean) as Farmer[], [allFarmers]);
     
-    // --- Database Seeding Effect ---
+    // --- Database Seeding & Initialization Effect ---
     useEffect(() => {
-        const seedDatabase = async () => {
-            const groupsCount = await database.collections.get('groups').query().fetchCount();
-            if (groupsCount === 0) {
-                console.log('Seeding database with default groups and users...');
-                await database.write(async () => {
-                    const groupCollection = database.collections.get('groups');
-                    for (const group of DEFAULT_GROUPS) {
-                        await groupCollection.create(g => {
-                            (g as any)._raw.id = group.id;
-                            (g as GroupModel).name = group.name;
-                            (g as GroupModel).permissionsStr = JSON.stringify(group.permissions);
-                        });
-                    }
-                    const userCollection = database.collections.get('users');
-                    for (const user of MOCK_USERS) {
-                         await userCollection.create(u => {
-                            (u as any)._raw.id = user.id;
-                            (u as UserModel).name = user.name;
-                            (u as UserModel).avatar = user.avatar;
-                            (u as UserModel).groupId = user.groupId;
-                        });
-                    }
-                });
-                console.log('Database seeding complete.');
-            }
+        const initializeApp = async () => {
+            const seedDatabase = async () => {
+                const groupsCount = await database.collections.get('groups').query().fetchCount();
+                if (groupsCount === 0) {
+                    console.log('Seeding database with default groups and users...');
+                    await database.write(async () => {
+                        const groupCollection = database.collections.get('groups');
+                        for (const group of DEFAULT_GROUPS) {
+                            await groupCollection.create(g => {
+                                (g as any)._raw.id = group.id;
+                                (g as GroupModel).name = group.name;
+                                (g as GroupModel).permissionsStr = JSON.stringify(group.permissions);
+                            });
+                        }
+                        const userCollection = database.collections.get('users');
+                        for (const user of MOCK_USERS) {
+                             await userCollection.create(u => {
+                                (u as any)._raw.id = user.id;
+                                (u as UserModel).name = user.name;
+                                (u as UserModel).avatar = user.avatar;
+                                (u as UserModel).groupId = user.groupId;
+                            });
+                        }
+                    });
+                    console.log('Database seeding complete.');
+                }
+            };
+
+            const seedGeoDatabase = async () => {
+                const districtsCount = await database.get('districts').query().fetchCount();
+                if (districtsCount === 0 && GEO_DATA.length > 0) {
+                    console.log('Seeding geographic data...');
+                    await database.write(async writer => {
+                        const districtCollection = database.get<DistrictModel>('districts');
+                        const mandalCollection = database.get<MandalModel>('mandals');
+                        const villageCollection = database.get<VillageModel>('villages');
+
+                        for (const districtData of (GEO_DATA as District[])) {
+                            const newDistrict = await districtCollection.create(d => {
+                                d._raw.id = `district_${districtData.code}`;
+                                d.code = districtData.code;
+                                d.name = districtData.name;
+                            });
+                            
+                            if (districtData.mandals) {
+                                for (const mandalData of districtData.mandals) {
+                                    const newMandal = await mandalCollection.create(m => {
+                                        m.code = mandalData.code;
+                                        m.name = mandalData.name;
+                                        m.districtId = newDistrict.id;
+                                    });
+
+                                    if (mandalData.villages) {
+                                        for (const villageData of mandalData.villages) {
+                                            await villageCollection.create(v => {
+                                                v.code = villageData.code;
+                                                v.name = villageData.name;
+                                                v.mandalId = newMandal.id;
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    console.log('Geographic data seeding complete.');
+                }
+            };
+
+            await seedDatabase();
+            await seedGeoDatabase();
+            await buildGeoNameMap(database);
+            setIsDataInitialized(true);
         };
-        seedDatabase();
+        
+        if (database) {
+            initializeApp();
+        }
     }, [database]);
 
 
@@ -846,9 +902,17 @@ const App: React.FC = () => {
         setAlerts(updatedAlerts);
         localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
     };
+    
+    const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
 
     const renderCurrentView = () => {
-      if (!currentUser) return null;
+      if (!currentUser || !isDataInitialized) {
+        return (
+             <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div>
+            </div>
+        );
+      }
       switch (parsedHash.view) {
         case 'dashboard':
             return <Dashboard farmers={allPlainFarmers} onNavigateWithFilter={handleNavigateWithFilter} />;
@@ -886,13 +950,15 @@ const App: React.FC = () => {
         case 'profile':
             return <ProfilePage currentUser={currentUser} groups={groups} onBack={() => handleNavigate('dashboard')} onSave={async () => {}} />;
         case 'admin':
-            return <AdminPage users={users} groups={groups} currentUser={currentUser} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} invitations={[]} onInviteUser={async () => ''} />;
+            return <AdminPage users={users} groups={groups} currentUser={currentUser} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} invitations={[]} onInviteUser={async () => ''} onNavigate={handleNavigate} />;
         case 'billing':
             return <BillingPage currentUser={currentUser} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} onNavigate={handleNavigate} />;
         case 'usage-analytics':
             return <UsageAnalyticsPage currentUser={currentUser} onBack={() => handleNavigate('dashboard')} supabase={supabase} />;
         case 'content-manager':
-            return <ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('dashboard')} />;
+            return <ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('admin')} />;
+        case 'geo-management':
+            return <GeoManagementPage onBack={() => handleNavigate('admin')} />;
         case 'subscription-management':
             return <SubscriptionManagementPage currentUser={currentUser} onBack={() => handleNavigate('billing')} />;
         case 'print-queue':
@@ -909,6 +975,8 @@ const App: React.FC = () => {
             return <ReportsPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
         case 'crop-health-scanner':
             return <CropHealthScannerPage onBack={() => handleNavigate('dashboard')} />;
+        case 'data-health':
+            return <DataHealthPage allFarmers={allPlainFarmers} onNavigate={handleNavigate} onBack={() => handleNavigate('dashboard')} />;
         default:
             return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
       }
@@ -950,7 +1018,9 @@ const App: React.FC = () => {
                                     <button onClick={() => setIsSidebarOpen(o => !o)} className="lg:hidden p-2 text-gray-500 hover:text-gray-800">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                                     </button>
-                                    <h1 className="text-2xl font-bold text-gray-800">{getViewTitle(parsedHash.view)}</h1>
+                                    <h1 className="text-2xl font-bold text-gray-800">
+                                        {parsedHash.view === 'admin' && isSuperAdmin ? 'Super Admin Panel' : getViewTitle(parsedHash.view)}
+                                    </h1>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     {permissions.has(Permission.CAN_SYNC_DATA) && (

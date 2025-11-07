@@ -1,3 +1,4 @@
+
 export enum PlantationMethod {
   Square = 'Square',
   Triangle = 'Triangle',
@@ -144,20 +145,25 @@ export interface ActivityLog {
 
 
 export interface Village {
+  id?: string;
   code: string;
   name: string;
+  mandalId?: string;
 }
 
 export interface Mandal {
+  id?: string;
   code: string;
   name:string;
-  villages: Village[];
+  districtId?: string;
+  villages?: Village[];
 }
 
 export interface District {
+  id?: string;
   code: string;
   name: string;
-  mandals: Mandal[];
+  mandals?: Mandal[];
 }
 
 // --- CMS Types ---

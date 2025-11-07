@@ -1,6 +1,9 @@
-import React, { useMemo } from 'react';
-import { FarmerStatus, Mandal, Village, Filters } from '../types';
-import { GEO_DATA } from '../data/geoData';
+import React, { useMemo, useState, useEffect } from 'react';
+import { FarmerStatus, Filters } from '../types';
+import { useDatabase } from '../DatabaseContext';
+import { useQuery } from '../hooks/useQuery';
+import { DistrictModel, MandalModel, VillageModel } from '../db';
+import { Q } from '@nozbe/watermelondb';
 
 interface FilterBarProps {
   filters: Filters;
@@ -18,19 +21,26 @@ const initialFilters: Filters = {
 };
 
 const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
-  // Derive mandals and villages directly from filters prop.
-  const mandals: Mandal[] = useMemo(() => {
-    if (!filters.district) return [];
-    const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
-    return selectedDistrict?.mandals || [];
-  }, [filters.district]);
+  const database = useDatabase();
+  
+  // Queries for geo data
+  const districts = useQuery(useMemo(() => database.get<DistrictModel>('districts').query(Q.sortBy('name')), [database]));
+  
+  const [selectedDistrict, setSelectedDistrict] = useState<DistrictModel | null>(null);
+  const [selectedMandal, setSelectedMandal] = useState<MandalModel | null>(null);
 
-  const villages: Village[] = useMemo(() => {
-    if (!filters.district || !filters.mandal) return [];
-    const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
-    const selectedMandal = selectedDistrict?.mandals.find(m => m.code === filters.mandal);
-    return selectedMandal?.villages || [];
-  }, [filters.district, filters.mandal]);
+  const mandalsQuery = useMemo(() => {
+    if (!selectedDistrict) return null;
+    return database.get<MandalModel>('mandals').query(Q.where('district_id', selectedDistrict.id), Q.sortBy('name'));
+  }, [database, selectedDistrict]);
+  const mandals = useQuery(mandalsQuery || database.get<MandalModel>('mandals').query(Q.where('id', 'null')));
+
+  const villagesQuery = useMemo(() => {
+    if (!selectedMandal) return null;
+    return database.get<VillageModel>('villages').query(Q.where('mandal_id', selectedMandal.id), Q.sortBy('name'));
+  }, [database, selectedMandal]);
+  const villages = useQuery(villagesQuery || database.get<VillageModel>('villages').query(Q.where('id', 'null')));
+
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -38,26 +48,33 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
   };
   
   const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newDistrict = e.target.value;
+    const newDistrictCode = e.target.value;
+    const district = districts.find(d => d.code === newDistrictCode) || null;
+    setSelectedDistrict(district);
+    setSelectedMandal(null);
     onFilterChange({
         ...filters,
-        district: newDistrict,
-        mandal: '', // Reset mandal
-        village: '', // Reset village
+        district: newDistrictCode,
+        mandal: '',
+        village: '',
     });
   };
 
   const handleMandalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const newMandal = e.target.value;
+      const newMandalCode = e.target.value;
+      const mandal = mandals.find(m => m.code === newMandalCode) || null;
+      setSelectedMandal(mandal);
       onFilterChange({
           ...filters,
-          mandal: newMandal,
-          village: '', // Reset village
+          mandal: newMandalCode,
+          village: '',
       });
   };
 
   const clearFilters = () => {
     onFilterChange(initialFilters);
+    setSelectedDistrict(null);
+    setSelectedMandal(null);
   };
 
   const inputClass = "w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";
@@ -85,7 +102,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
                  <div className="relative">
                     <select id="district" name="district" value={filters.district} onChange={handleDistrictChange} className={selectInputClass} title="Filter farmers by their district.">
                         <option value="">All Districts</option>
-                        {GEO_DATA.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+                        {districts.map(d => <option key={d.id} value={d.code}>{d.name}</option>)}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                         <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -97,7 +114,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
                  <div className="relative">
                     <select id="mandal" name="mandal" value={filters.mandal} onChange={handleMandalChange} className={selectInputClass} disabled={!filters.district} title="Filter farmers by their mandal. A district must be selected first.">
                         <option value="">All Mandals</option>
-                        {mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                        {mandals.map(m => <option key={m.id} value={m.code}>{m.name}</option>)}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                         <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -109,7 +126,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
                 <div className="relative">
                     <select id="village" name="village" value={filters.village} onChange={handleInputChange} className={selectInputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
                         <option value="">All Villages</option>
-                        {villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
+                        {villages.map(v => <option key={v.id} value={v.code}>{v.name}</option>)}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                         <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -121,7 +138,6 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
                 <div className="relative">
                     <select id="status" name="status" value={filters.status} onChange={handleInputChange} className={selectInputClass} title="Filter farmers by their current registration status.">
                         <option value="">All Statuses</option>
-                        {/* Dynamically generate options from the FarmerStatus enum to ensure all statuses are always included */}
                         {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">

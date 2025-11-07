@@ -15,9 +15,25 @@ export const PERMISSIONS_LIST: { id: Permission, description: string; category: 
 
 export const DEFAULT_GROUPS: Group[] = [
     {
+        id: 'group-super-admin',
+        name: 'Super Administrator',
+        permissions: Object.values(Permission), // Super Admin gets all permissions
+    },
+    {
         id: 'group-admin',
         name: 'Administrator',
-        permissions: Object.values(Permission), // Admin gets all permissions
+        permissions: [
+            Permission.CAN_REGISTER_FARMER,
+            Permission.CAN_EDIT_FARMER,
+            Permission.CAN_DELETE_FARMER,
+            Permission.CAN_IMPORT_DATA,
+            Permission.CAN_EXPORT_DATA,
+            Permission.CAN_SYNC_DATA,
+            Permission.CAN_MANAGE_USERS,
+            Permission.CAN_MANAGE_GROUPS,
+            Permission.CAN_INVITE_USERS,
+            // CAN_MANAGE_CONTENT is intentionally omitted for regular admins
+        ],
     },
     {
         id: 'group-data-entry',

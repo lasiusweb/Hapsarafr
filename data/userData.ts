@@ -3,6 +3,12 @@ import { AVATARS } from './avatars';
 
 export const MOCK_USERS: User[] = [
   {
+    id: 'user-super-admin-1',
+    name: 'Hapsara One',
+    groupId: 'group-super-admin',
+    avatar: AVATARS[10], // Thanos
+  },
+  {
     id: 'user-admin-1',
     name: 'Admin Tony',
     groupId: 'group-admin',

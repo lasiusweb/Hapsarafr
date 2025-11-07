@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppContent, FAQItem } from '../types';
 
 interface ContentManagerPageProps {
@@ -7,6 +7,114 @@ interface ContentManagerPageProps {
     onContentSave: () => void;
     onBack: () => void;
 }
+
+// --- Rich Text Area Component ---
+
+interface RichTextAreaProps {
+    id: string;
+    value: string;
+    onChange: (value: string) => void;
+    rows: number;
+}
+
+const ToolbarButton: React.FC<{ onClick: () => void; title: string; children: React.ReactNode }> = ({ onClick, title, children }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        className="p-2 rounded text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+        aria-label={title}
+    >
+        {children}
+    </button>
+);
+
+const RichTextArea: React.FC<RichTextAreaProps> = ({ id, value, onChange, rows }) => {
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const applyStyle = (openTag: string, closeTag: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = value.substring(start, end);
+
+        if (selectedText) {
+            const newText = `${value.substring(0, start)}${openTag}${selectedText}${closeTag}${value.substring(end)}`;
+            onChange(newText);
+            // After state update, focus and set selection
+            setTimeout(() => {
+                textarea.focus();
+                textarea.setSelectionRange(start + openTag.length, end + openTag.length);
+            }, 0);
+        }
+    };
+    
+     const applyList = (listTag: 'ul' | 'ol') => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        
+        // Find the start and end of the lines that are selected
+        let lineStart = start;
+        while (lineStart > 0 && value[lineStart - 1] !== '\n') {
+            lineStart--;
+        }
+        let lineEnd = end;
+        // Adjust lineEnd to include the full line if selection ends mid-line
+        while (lineEnd < value.length && value[lineEnd] !== '\n' && value[lineEnd] !== '\r') {
+            lineEnd++;
+        }
+        
+        const selectedLinesText = value.substring(lineStart, lineEnd).trim();
+        const lines = selectedLinesText.split('\n').filter(line => line.trim() !== '');
+
+        if (lines.length > 0) {
+            const newListItems = lines.map(line => `  <li>${line.trim()}</li>`).join('\n');
+            const listBlock = `\n<${listTag}>\n${newListItems}\n</${listTag}>\n`;
+            
+            const newText = `${value.substring(0, lineStart)}${listBlock}${value.substring(lineEnd)}`;
+            onChange(newText);
+        }
+    };
+
+
+    return (
+        <div className="border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-green-500 focus-within:border-green-500">
+            <div className="flex items-center gap-1 p-1 bg-gray-100 border-b border-gray-300 rounded-t-md">
+                <ToolbarButton title="Bold" onClick={() => applyStyle('<strong>', '</strong>')}>
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path d="M8.21 13c2.106 0 3.412-1.087 3.412-2.823 0-1.306-.984-2.283-2.324-2.386v-.055a2.176 2.176 0 0 0 1.852-2.14c0-1.51-1.162-2.46-3.014-2.46H3.843V13H8.21zM5.908 4.674h1.696c.963 0 1.517.451 1.517 1.244 0 .834-.629 1.32-1.73 1.32H5.908V4.674zm0 6.788V8.598h1.8c1.157 0 1.904.43 1.904 1.386 0 .931-.722 1.43-1.943 1.43H5.908z"/></svg>
+                </ToolbarButton>
+                <ToolbarButton title="Italic" onClick={() => applyStyle('<em>', '</em>')}>
+                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path d="M7.991 11.674 9.53 4.455c.123-.595.246-.71 1.347-.807l.11-.52H7.211l-.11.52c1.06.096 1.128.212 1.005.807L6.57 11.674c-.123.595-.246.71-1.346.806l-.11.52h3.774l.11-.52c-1.06-.095-1.129-.211-1.006-.806z"/></svg>
+                </ToolbarButton>
+                 <ToolbarButton title="Heading 3" onClick={() => applyStyle('<h3>', '</h3>')}>
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path d="M6.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L12.293 11H3.5a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h8.793L6.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                </ToolbarButton>
+                <div className="w-px h-5 bg-gray-300 mx-1"></div>
+                <ToolbarButton title="Unordered List" onClick={() => applyList('ul')}>
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm-3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm0 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm0 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+                </ToolbarButton>
+                <ToolbarButton title="Ordered List" onClick={() => applyList('ol')}>
+                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"/><path d="M1.713 11.865v-.474H2c.217 0 .363-.137.363-.317 0-.185-.158-.31-.363-.31-.223 0-.367.152-.373.31h-.59c.016-.467.373-.787.986-.787.588-.002.954.291.954.772 0 .285-.215.51-.585.545v.05c.327.036.558.258.558.59 0 .422-.413.713-1.127.713-.693 0-1.13-.3-1.13-.715 0-.38.255-.585.65-.585h.045l.003.011c.017.07.033.15.033.224 0 .18-.147.29-.33.29-.196 0-.322-.1-.322-.284a.5.5 0 0 0-.11-.318zM4.5 13.5v-1c0-.535.342-1.002 1.036-1.002.637 0 1.036.446 1.036 1.002v1c0 .556-.4.991-1.036.991-.638 0-1.036-.435-1.036-.991zM4 3.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm0 4a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1z"/></svg>
+                </ToolbarButton>
+            </div>
+            <textarea
+                ref={textareaRef}
+                id={id}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                rows={rows}
+                className="w-full p-2 border-none rounded-b-md focus:ring-0 font-mono"
+            />
+        </div>
+    );
+};
+
+// --- Main Component ---
 
 const ContentManagerPage: React.FC<ContentManagerPageProps> = ({ supabase, currentContent, onContentSave, onBack }) => {
     const [activeTab, setActiveTab] = useState<'landing' | 'faq' | 'privacy'>('landing');
@@ -83,15 +191,16 @@ const ContentManagerPage: React.FC<ContentManagerPageProps> = ({ supabase, curre
         <div className="space-y-6">
             <div>
                 <label htmlFor="heroTitle" className="block text-sm font-medium text-gray-700">Hero Title</label>
-                <input type="text" id="heroTitle" value={heroTitle} onChange={e => setHeroTitle(e.target.value)} className="mt-1 w-full p-2 border rounded-md" />
+                <input type="text" id="heroTitle" value={heroTitle} onChange={e => setHeroTitle(e.target.value)} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
             </div>
              <div>
                 <label htmlFor="heroSubtitle" className="block text-sm font-medium text-gray-700">Hero Subtitle</label>
-                <textarea id="heroSubtitle" value={heroSubtitle} onChange={e => setHeroSubtitle(e.target.value)} rows={3} className="mt-1 w-full p-2 border rounded-md"></textarea>
+                <textarea id="heroSubtitle" value={heroSubtitle} onChange={e => setHeroSubtitle(e.target.value)} rows={3} className="mt-1 w-full p-2 border border-gray-300 rounded-md"></textarea>
             </div>
              <div>
-                <label htmlFor="aboutUs" className="block text-sm font-medium text-gray-700">About Us Content (HTML allowed: p, strong, em, ul, ol, li, h3, b, i, br)</label>
-                <textarea id="aboutUs" value={aboutUs} onChange={e => setAboutUs(e.target.value)} rows={8} className="mt-1 w-full p-2 border rounded-md font-mono"></textarea>
+                <label htmlFor="aboutUs" className="block text-sm font-medium text-gray-700 mb-1">About Us Content</label>
+                <p className="text-xs text-gray-500 mb-2">Allowed tags: p, strong, em, ul, ol, li, h3, b, i, br</p>
+                <RichTextArea id="aboutUs" value={aboutUs} onChange={setAboutUs} rows={10} />
             </div>
         </div>
     );
@@ -105,11 +214,11 @@ const ContentManagerPage: React.FC<ContentManagerPageProps> = ({ supabase, curre
                     </button>
                     <div className="mb-2">
                         <label className="block text-sm font-medium text-gray-700">Question</label>
-                        <input type="text" value={faq.question} onChange={e => handleFaqChange(index, 'question', e.target.value)} className="mt-1 w-full p-2 border rounded-md" />
+                        <input type="text" value={faq.question} onChange={e => handleFaqChange(index, 'question', e.target.value)} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Answer</label>
-                        <textarea value={faq.answer} onChange={e => handleFaqChange(index, 'answer', e.target.value)} rows={3} className="mt-1 w-full p-2 border rounded-md"></textarea>
+                        <textarea value={faq.answer} onChange={e => handleFaqChange(index, 'answer', e.target.value)} rows={3} className="mt-1 w-full p-2 border border-gray-300 rounded-md"></textarea>
                     </div>
                 </div>
             ))}
@@ -121,8 +230,9 @@ const ContentManagerPage: React.FC<ContentManagerPageProps> = ({ supabase, curre
 
     const renderPrivacyPolicyForm = () => (
         <div>
-            <label htmlFor="privacyPolicy" className="block text-sm font-medium text-gray-700">Privacy Policy (HTML allowed: p, strong, em, ul, ol, li, h3, b, i, br)</label>
-            <textarea id="privacyPolicy" value={privacyPolicy} onChange={e => setPrivacyPolicy(e.target.value)} rows={20} className="mt-1 w-full p-2 border rounded-md font-mono"></textarea>
+            <label htmlFor="privacyPolicy" className="block text-sm font-medium text-gray-700 mb-1">Privacy Policy</label>
+            <p className="text-xs text-gray-500 mb-2">Allowed tags: p, strong, em, ul, ol, li, h3, b, i, br</p>
+            <RichTextArea id="privacyPolicy" value={privacyPolicy} onChange={setPrivacyPolicy} rows={20} />
         </div>
     );
 

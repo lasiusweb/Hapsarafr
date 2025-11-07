@@ -12,9 +12,12 @@ interface AdminPageProps {
     onBack: () => void;
     invitations: Invitation[];
     onInviteUser: (email: string, groupId: string) => Promise<string>;
+    onNavigate: (view: 'content-manager' | 'geo-management') => void;
 }
 
-const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, invitations, onInviteUser }) => {
+const SUPER_ADMIN_GROUP_ID = 'group-super-admin';
+
+const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, invitations, onInviteUser, onNavigate }) => {
     const permissions = useMemo(() => {
         const userGroup = groups.find(g => g.id === currentUser.groupId);
         return new Set(userGroup?.permissions || []);
@@ -23,8 +26,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     const canManageUsers = permissions.has(Permission.CAN_MANAGE_USERS);
     const canManageGroups = permissions.has(Permission.CAN_MANAGE_GROUPS);
     const canInvite = permissions.has(Permission.CAN_INVITE_USERS);
+    const isSuperAdmin = currentUser.groupId === SUPER_ADMIN_GROUP_ID;
 
-    const [activeTab, setActiveTab] = useState<'users' | 'groups'>(canManageUsers ? 'users' : 'groups');
+    const [activeTab, setActiveTab] = useState<'users' | 'groups' | 'system'>(isSuperAdmin ? 'system' : canManageUsers ? 'users' : 'groups');
     const [editedUsers, setEditedUsers] = useState<User[]>(users);
     const [editedGroups, setEditedGroups] = useState<Group[]>(groups);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(groups[0]?.id || null);
@@ -35,15 +39,19 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
 
     useEffect(() => {
         setEditedGroups(groups);
-        // Also reset selected group if it disappears from the list
         if (selectedGroupId && !groups.some(g => g.id === selectedGroupId)) {
             setSelectedGroupId(groups[0]?.id || null);
         }
     }, [groups, selectedGroupId]);
     
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteGroup, setInviteGroup] = useState(groups[0]?.id || '');
+    const [inviteGroup, setInviteGroup] = useState(groups.find(g => g.id !== SUPER_ADMIN_GROUP_ID)?.id || '');
     const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+
+    // Filter out super admins from view if the current user is not a super admin
+    const visibleUsers = useMemo(() => isSuperAdmin ? editedUsers : editedUsers.filter(u => u.groupId !== SUPER_ADMIN_GROUP_ID), [editedUsers, isSuperAdmin]);
+    const visibleGroups = useMemo(() => isSuperAdmin ? editedGroups : editedGroups.filter(g => g.id !== SUPER_ADMIN_GROUP_ID), [editedGroups, isSuperAdmin]);
+    const assignableGroups = useMemo(() => isSuperAdmin ? groups : groups.filter(g => g.id !== SUPER_ADMIN_GROUP_ID), [groups, isSuperAdmin]);
 
     const selectedGroup = useMemo(() => editedGroups.find(g => g.id === selectedGroupId) || null, [editedGroups, selectedGroupId]);
 
@@ -86,7 +94,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     };
 
     const handleDeleteGroup = () => {
-        if (!selectedGroup) return;
+        if (!selectedGroup || selectedGroup.id === SUPER_ADMIN_GROUP_ID) return;
         if (editedUsers.some(u => u.groupId === selectedGroupId)) {
             alert("Cannot delete a group that has users assigned to it.");
             return;
@@ -121,13 +129,34 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
             return acc;
         }, initialValue);
     }, []);
+    
+    const SystemManagementTab = () => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button onClick={() => onNavigate('content-manager' as any)} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
+                <h4 className="font-bold text-gray-800">Manage Site Content</h4>
+                <p className="text-sm text-gray-600 mt-1">Edit the landing page, FAQs, and privacy policy.</p>
+            </button>
+            <button onClick={() => onNavigate('geo-management' as any)} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
+                <h4 className="font-bold text-gray-800">Manage Geography</h4>
+                <p className="text-sm text-gray-600 mt-1">Add, edit, or remove districts, mandals, and villages.</p>
+            </button>
+            <div className="p-6 bg-gray-100 rounded-lg border border-dashed text-left opacity-60">
+                <h4 className="font-bold text-gray-500">System Analytics</h4>
+                <p className="text-sm text-gray-500 mt-1">View cross-tenant usage and performance metrics (coming soon).</p>
+            </div>
+            <div className="p-6 bg-gray-100 rounded-lg border border-dashed text-left opacity-60">
+                <h4 className="font-bold text-gray-500">Tenant Management</h4>
+                <p className="text-sm text-gray-500 mt-1">Onboard new organizations and manage subscriptions (coming soon).</p>
+            </div>
+        </div>
+    );
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                         <h1 className="text-3xl font-bold text-gray-800">Admin Panel</h1>
+                         <h1 className="text-3xl font-bold text-gray-800">{isSuperAdmin ? 'Super Admin Panel' : 'Admin Panel'}</h1>
                          <p className="text-gray-500">Manage user access and group permissions.</p>
                     </div>
                      <div className="flex items-center gap-4 flex-shrink-0">
@@ -142,11 +171,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                 
                 <div className="bg-white rounded-lg shadow-xl p-2">
                     <div className="flex border-b">
+                        {isSuperAdmin && <button onClick={() => setActiveTab('system')} className={`px-4 py-3 font-semibold ${activeTab === 'system' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>System Management</button>}
                         {canManageUsers && <button onClick={() => setActiveTab('users')} className={`px-4 py-3 font-semibold ${activeTab === 'users' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>User Management</button>}
                         {canManageGroups && <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-semibold ${activeTab === 'groups' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>Group Management</button>}
                     </div>
 
                     <div className="p-6">
+                        {activeTab === 'system' && isSuperAdmin && <SystemManagementTab />}
                         {activeTab === 'users' && canManageUsers && (
                             <div>
                                 <div className="overflow-x-auto">
@@ -158,7 +189,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                            {editedUsers.map(user => (
+                                            {visibleUsers.map(user => (
                                                 <tr key={user.id}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="flex items-center">
@@ -172,11 +203,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                                         <select
                                                             value={user.groupId}
                                                             onChange={e => handleUserGroupChange(user.id, e.target.value)}
-                                                            disabled={user.id === currentUser.id && user.groupId === 'group-admin'}
-                                                            title={user.id === currentUser.id && user.groupId === 'group-admin' ? "Administrators cannot change their own group." : ""}
+                                                            disabled={user.id === currentUser.id && (user.groupId === 'group-admin' || user.groupId === SUPER_ADMIN_GROUP_ID)}
+                                                            title={user.id === currentUser.id ? "Administrators cannot change their own group." : ""}
                                                             className="w-full max-w-xs p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
                                                         >
-                                                            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                                            {assignableGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                                                         </select>
                                                     </td>
                                                 </tr>
@@ -196,7 +227,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                                  <div>
                                                     <label htmlFor="inviteGroup" className="block text-sm font-medium text-gray-700">Assign to Group</label>
                                                     <select id="inviteGroup" value={inviteGroup} onChange={e => setInviteGroup(e.target.value)} className="mt-1 p-2 border border-gray-300 rounded-md w-64">
-                                                        {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                                        {assignableGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                                                     </select>
                                                 </div>
                                                 <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Generate Invitation</button>
@@ -233,7 +264,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                         <button onClick={handleAddNewGroup} className="text-sm text-green-600 font-semibold hover:underline">+ New</button>
                                     </div>
                                     <ul className="border rounded-md divide-y">
-                                        {editedGroups.map(g => (
+                                        {visibleGroups.map(g => (
                                             <li key={g.id}>
                                                 <button onClick={() => setSelectedGroupId(g.id)} className={`w-full text-left p-3 ${selectedGroupId === g.id ? 'bg-green-100 font-semibold' : 'hover:bg-gray-50'}`}>
                                                     {g.name}

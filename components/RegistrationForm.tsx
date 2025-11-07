@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Farmer, FarmerStatus, PlantationMethod, PlantType, Village, Mandal } from '../types';
+import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import AiReviewModal from './AiReviewModal';
-import { getGeoName, geoMap } from '../lib/utils';
+import { getGeoName } from '../lib/utils';
 import { useDebounce } from '../hooks/useDebounce';
+import { useDatabase } from '../DatabaseContext';
+import { useQuery } from '../hooks/useQuery';
+import { DistrictModel, MandalModel, VillageModel } from '../db';
+import { Q } from '@nozbe/watermelondb';
 
 interface RegistrationFormProps {
     onSubmit: (farmer: Farmer, photoFile?: File) => Promise<void>;
@@ -70,6 +74,7 @@ const FormLabel = ({ children, required = false }: FormLabelProps) => <label cla
 
 
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null }) => {
+    const database = useDatabase();
     const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -87,6 +92,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     
     const debouncedFormData = useDebounce(formData, 1000);
 
+    // --- Dynamic Geo Data ---
+    const districts = useQuery(useMemo(() => database.get<DistrictModel>('districts').query(Q.sortBy('name')), [database]));
+    
+    const [selectedDistrict, setSelectedDistrict] = useState<DistrictModel | null>(null);
+    const [selectedMandal, setSelectedMandal] = useState<MandalModel | null>(null);
+
+    const mandalsQuery = useMemo(() => {
+        if (!selectedDistrict) return null;
+        return database.get<MandalModel>('mandals').query(Q.where('district_id', selectedDistrict.id), Q.sortBy('name'));
+    }, [database, selectedDistrict]);
+    const mandals = useQuery(mandalsQuery || database.get<MandalModel>('mandals').query(Q.where('id', 'null')));
+
+    const villagesQuery = useMemo(() => {
+        if (!selectedMandal) return null;
+        return database.get<VillageModel>('villages').query(Q.where('mandal_id', selectedMandal.id), Q.sortBy('name'));
+    }, [database, selectedMandal]);
+    const villages = useQuery(villagesQuery || database.get<VillageModel>('villages').query(Q.where('id', 'null')));
+
+
     useEffect(() => {
         if (mode === 'edit' && existingFarmer) {
             const formStateFromFarmer: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = { ...initialFormData, ...existingFarmer };
@@ -94,8 +118,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             if (existingFarmer.photo) {
                 setPhotoPreview(existingFarmer.photo);
             }
+            // Pre-populate dynamic geo selections for edit mode
+            const initialDistrict = districts.find(d => d.code === existingFarmer.district);
+            if (initialDistrict) setSelectedDistrict(initialDistrict);
+
         }
-    }, [mode, existingFarmer]);
+    }, [mode, existingFarmer, districts]);
+
+     // Effect to set initial mandal for edit mode once mandals are loaded
+    useEffect(() => {
+        if(mode === 'edit' && existingFarmer && mandals.length > 0) {
+            const initialMandal = mandals.find(m => m.code === existingFarmer.mandal);
+            if(initialMandal) setSelectedMandal(initialMandal);
+        }
+    }, [mode, existingFarmer, mandals]);
     
     const handleDismissError = (fieldName: keyof typeof errors) => {
         setErrors(prev => {
@@ -149,32 +185,22 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             localStorage.removeItem(DRAFT_STORAGE_KEY);
         }
     }, [debouncedFormData, hasDraft, mode]);
-    
-    const districtsForSelect = useMemo(() => Object.entries(geoMap).map(([code, { name }]) => ({ code, name })), []);
-    const mandals = useMemo(() => {
-        if (!formData.district || !geoMap[formData.district]) return [];
-        const mandalData = geoMap[formData.district].mandals;
-        return Object.entries(mandalData).map(([code, { name }]) => ({ code, name, villages: [] as Village[] }));
-    }, [formData.district]);
-    const villages = useMemo(() => {
-        if (!formData.district || !formData.mandal || !geoMap[formData.district]?.mandals[formData.mandal]) return [];
-        const villageData = geoMap[formData.district].mandals[formData.mandal].villages;
-        return Object.entries(villageData).map(([code, { name }]) => ({ code, name }));
-    }, [formData.district, formData.mandal]);
 
     const handleGeoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => {
-            const newState = { ...prev, [name]: value };
-            if (name === 'district') {
-                newState.mandal = '';
-                newState.village = '';
-            }
-            if (name === 'mandal') {
-                newState.village = '';
-            }
-            return newState;
-        });
+        setFormData(prev => ({ ...prev, [name]: value }));
+
+        if (name === 'district') {
+            const district = districts.find(d => d.code === value) || null;
+            setSelectedDistrict(district);
+            setSelectedMandal(null);
+            setFormData(prev => ({ ...prev, mandal: '', village: '' }));
+        }
+        if (name === 'mandal') {
+            const mandal = mandals.find(m => m.code === value) || null;
+            setSelectedMandal(mandal);
+            setFormData(prev => ({ ...prev, village: '' }));
+        }
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -494,9 +520,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <FormRow><FormLabel>Registration Date</FormLabel><FormField><input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={getInputClass('registrationDate')} max={new Date().toISOString().split('T')[0]} /><InputError message={errors.registrationDate} onDismiss={() => handleDismissError('registrationDate')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Photo</FormLabel><FormField>{photoPreview ? (<div className="flex items-center gap-4"><img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/><div className="flex flex-col gap-1"><div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div><button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-md hover:bg-red-200 transition">Remove</button></div></div>) : (<input ref={fileInputRef} type="file" accept="image/jpeg, image/png" onChange={handlePhotoChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />)}<InputError message={errors.photo} onDismiss={() => handleDismissError('photo')} /></FormField></FormRow>
                             </section>}
-                            {currentStep === 2 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3><FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')} disabled={mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select District --</option>{districtsForSelect.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
+                            {currentStep === 2 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3><FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')} disabled={mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select District --</option>{districts.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
                                 <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')}/></FormField></FormRow>
-                                <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleGeoChange} className={getSelectClass('village')} disabled={!formData.mandal || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
+                                <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleChange} className={getSelectClass('village')} disabled={!formData.mandal || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
                             </section>}
                             {currentStep === 3 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">3. Bank Details</h3><FormRow><FormLabel required>Bank Account Number</FormLabel><FormField><input type="text" name="bankAccountNumber" value={formData.bankAccountNumber} onChange={handleChange} className={getInputClass('bankAccountNumber')} /><InputError message={errors.bankAccountNumber} onDismiss={() => handleDismissError('bankAccountNumber')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>IFSC Code</FormLabel><FormField><input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={getInputClass('ifscCode')} /><InputError message={errors.ifscCode} onDismiss={() => handleDismissError('ifscCode')} /></FormField></FormRow>
