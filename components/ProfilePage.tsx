@@ -7,9 +7,10 @@ interface ProfilePageProps {
     groups: Group[];
     onSave: (updatedUser: User) => Promise<void>;
     onBack: () => void;
+    setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, onBack }) => {
+const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, onBack, setNotification }) => {
     const [name, setName] = useState(currentUser.name);
     const [avatar, setAvatar] = useState(currentUser.avatar);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -17,11 +18,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, 
     const userGroup = groups.find(g => g.id === currentUser.groupId);
 
     const handleSave = async () => {
-        await onSave({
-            ...currentUser,
-            name,
-            avatar,
-        });
+        try {
+            await onSave({
+                ...currentUser,
+                name,
+                avatar,
+            });
+            setNotification({ message: 'Profile updated successfully.', type: 'success' });
+        } catch (error) {
+            console.error("Failed to update profile:", error);
+            setNotification({ message: 'Failed to update profile. Please try again.', type: 'error' });
+        }
     };
 
     return (

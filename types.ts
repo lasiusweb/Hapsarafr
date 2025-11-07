@@ -46,19 +46,11 @@ export interface Group {
 export interface User {
   id: string;
   name: string;
+  email: string;
   groupId: string;
   avatar: string;
   tenantId: string;
-}
-
-export interface Invitation {
-  id: string; // unique token/code
-  groupId: string;
-  emailFor: string; // The email this was intended for
-  createdAt: string; // ISO string
-  expiresAt: string; // ISO string
-  status: 'pending' | 'accepted';
-  acceptedByUserId?: string;
+  is_verified: boolean;
 }
 
 export interface Farmer {

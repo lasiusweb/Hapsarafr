@@ -5,7 +5,7 @@ import { FarmerStatus, PlantationMethod, PlantType, PaymentStage, Permission, Gr
 
 // 1. Define the Schema
 export const mySchema = appSchema({
-  version: 6,
+  version: 7,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -81,6 +81,8 @@ export const mySchema = appSchema({
         columns: [
             { name: 'name', type: 'string' },
             { name: 'avatar', type: 'string' },
+            { name: 'email', type: 'string', isIndexed: true },
+            { name: 'is_verified', type: 'boolean' },
             { name: 'group_id', type: 'string', isIndexed: true },
             { name: 'tenant_id', type: 'string', isIndexed: true },
         ]
@@ -215,6 +217,8 @@ export class UserModel extends Model {
 
     @field('name') name!: string;
     @field('avatar') avatar!: string;
+    @field('email') email!: string;
+    @field('is_verified') isVerified!: boolean;
     @field('group_id') groupId!: string;
     @field('tenant_id') tenantId!: string;
 }
@@ -404,8 +408,8 @@ const adapter = new LokiJSAdapter({
   useIncrementalIDB: true,
   dbName: 'hapsara-watermelon',
   migrations: {
-      from: 5,
-      to: 6,
+      from: 6,
+      to: 7,
       steps: []
   },
   onIndexedDBVersionChange: () => {

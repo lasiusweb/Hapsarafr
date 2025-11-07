@@ -74,46 +74,53 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
 
 
     const handleSavePayment = useCallback(async (paymentData: Omit<SubsidyPayment, 'syncStatus' | 'createdAt' | 'createdBy' | 'farmerId' | 'tenantId'>) => {
-        const paymentsCollection = database.get<SubsidyPaymentModel>('subsidy_payments');
-        
-        if (paymentData.id && editingPayment) { // This is an update
-            await database.write(async () => {
-                await editingPayment.update(rec => {
-                    rec.paymentDate = paymentData.paymentDate;
-                    rec.amount = paymentData.amount;
-                    rec.utrNumber = paymentData.utrNumber;
-                    rec.paymentStage = paymentData.paymentStage;
-                    rec.notes = paymentData.notes;
-                    rec.syncStatusLocal = 'pending';
+        try {
+            const paymentsCollection = database.get<SubsidyPaymentModel>('subsidy_payments');
+            
+            if (paymentData.id && editingPayment) { // This is an update
+                await database.write(async () => {
+                    await editingPayment.update(rec => {
+                        rec.paymentDate = paymentData.paymentDate;
+                        rec.amount = paymentData.amount;
+                        rec.utrNumber = paymentData.utrNumber;
+                        rec.paymentStage = paymentData.paymentStage;
+                        rec.notes = paymentData.notes;
+                        rec.syncStatusLocal = 'pending';
+                    });
                 });
-            });
-            setNotification({ message: 'Payment updated successfully.', type: 'success' });
-            setEditingPayment(null);
-        } else { // This is a create
-            await database.write(async writer => {
-                await paymentsCollection.create(rec => {
-                    rec.farmerId = farmer.id;
-                    rec.paymentDate = paymentData.paymentDate;
-                    rec.amount = paymentData.amount;
-                    rec.utrNumber = paymentData.utrNumber;
-                    rec.paymentStage = paymentData.paymentStage;
-                    rec.notes = paymentData.notes;
-                    rec.createdBy = currentUser.id;
-                    rec.syncStatusLocal = 'pending';
-                    rec.tenantId = farmer.tenantId; // Assign tenant ID
-                }, writer);
-
-                const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
-                await activityLogsCollection.create(log => {
-                    log.farmerId = farmer.id;
-                    log.activityType = ActivityType.PAYMENT_RECORDED;
-                    log.description = `${paymentData.paymentStage} of ₹${paymentData.amount.toLocaleString()} recorded.`;
-                    log.createdBy = currentUser.id;
-                    log.tenantId = farmer.tenantId; // Assign tenant ID
-                }, writer);
-            });
-            setNotification({ message: 'Payment recorded successfully.', type: 'success' });
+                setNotification({ message: 'Payment updated successfully.', type: 'success' });
+                setEditingPayment(null);
+            } else { // This is a create
+                await database.write(async writer => {
+                    await paymentsCollection.create(rec => {
+                        rec.farmerId = farmer.id;
+                        rec.paymentDate = paymentData.paymentDate;
+                        rec.amount = paymentData.amount;
+                        rec.utrNumber = paymentData.utrNumber;
+                        rec.paymentStage = paymentData.paymentStage;
+                        rec.notes = paymentData.notes;
+                        rec.createdBy = currentUser.id;
+                        rec.syncStatusLocal = 'pending';
+                        rec.tenantId = farmer.tenantId; // Assign tenant ID
+                    }, writer);
+    
+                    const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
+                    await activityLogsCollection.create(log => {
+                        log.farmerId = farmer.id;
+                        log.activityType = ActivityType.PAYMENT_RECORDED;
+                        log.description = `${paymentData.paymentStage} of ₹${paymentData.amount.toLocaleString()} recorded.`;
+                        log.createdBy = currentUser.id;
+                        log.tenantId = farmer.tenantId; // Assign tenant ID
+                    }, writer);
+                });
+                setNotification({ message: 'Payment recorded successfully.', type: 'success' });
+                setShowPaymentModal(false);
+            }
+        } catch(error) {
+            console.error("Failed to save payment:", error);
+            setNotification({ message: 'Failed to save payment. Please try again.', type: 'error' });
             setShowPaymentModal(false);
+            setEditingPayment(null);
         }
     }, [database, farmer, currentUser.id, setNotification, editingPayment]);
 

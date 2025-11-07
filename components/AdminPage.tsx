@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Group, Permission, Invitation } from '../types';
+// FIX: Remove unused Invitation type, which is obsolete.
+import { User, Group, Permission } from '../types';
 import { PERMISSIONS_LIST } from '../data/permissionsData';
-import InvitationModal from './InvitationModal';
+// FIX: Remove unused InvitationModal import, which is obsolete.
 import CustomSelect from './CustomSelect';
 
 interface AdminPageProps {
@@ -11,14 +12,15 @@ interface AdminPageProps {
     onSaveUsers: (updatedUsers: User[]) => Promise<void>;
     onSaveGroups: (updatedGroups: Group[]) => Promise<void>;
     onBack: () => void;
-    invitations: Invitation[];
-    onInviteUser: (email: string, groupId: string) => Promise<string>;
+    // FIX: Remove obsolete invitation props.
     onNavigate: (view: 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management') => void;
+    setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
 const SUPER_ADMIN_GROUP_ID = 'group-super-admin';
 
-const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, invitations, onInviteUser, onNavigate }) => {
+// FIX: Remove obsolete invitation props.
+const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, onNavigate, setNotification }) => {
     const permissions = useMemo(() => {
         const userGroup = groups.find(g => g.id === currentUser.groupId);
         return new Set(userGroup?.permissions || []);
@@ -26,7 +28,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
 
     const canManageUsers = permissions.has(Permission.CAN_MANAGE_USERS);
     const canManageGroups = permissions.has(Permission.CAN_MANAGE_GROUPS);
-    const canInvite = permissions.has(Permission.CAN_INVITE_USERS);
+    // FIX: Remove unused canInvite constant.
     const isSuperAdmin = currentUser.groupId === SUPER_ADMIN_GROUP_ID;
 
     const [activeTab, setActiveTab] = useState<'users' | 'groups' | 'system'>(isSuperAdmin ? 'system' : canManageUsers ? 'users' : 'groups');
@@ -45,9 +47,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
         }
     }, [groups, selectedGroupId]);
     
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteGroup, setInviteGroup] = useState(groups.find(g => g.id !== SUPER_ADMIN_GROUP_ID)?.id || '');
-    const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+    // FIX: Remove obsolete invitation-related state.
 
     // Filter out super admins from view if the current user is not a super admin
     const visibleUsers = useMemo(() => isSuperAdmin ? editedUsers : editedUsers.filter(u => u.groupId !== SUPER_ADMIN_GROUP_ID), [editedUsers, isSuperAdmin]);
@@ -63,11 +63,16 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     };
 
     const handleSaveChanges = async () => {
-        await Promise.all([
-            onSaveUsers(editedUsers),
-            onSaveGroups(editedGroups)
-        ]);
-        alert("Changes saved successfully!");
+        try {
+            await Promise.all([
+                onSaveUsers(editedUsers),
+                onSaveGroups(editedGroups)
+            ]);
+            setNotification({ message: 'Changes saved successfully!', type: 'success' });
+        } catch (error) {
+            console.error("Failed to save changes:", error);
+            setNotification({ message: 'Failed to save changes. Please try again.', type: 'error' });
+        }
     };
     
     const handleGroupNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,18 +113,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
         }
     };
     
-    const handleInviteSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!inviteEmail || !inviteGroup) {
-            alert("Please provide an email and select a group.");
-            return;
-        }
-        const code = await onInviteUser(inviteEmail, inviteGroup);
-        if (code) {
-            setGeneratedCode(code);
-            setInviteEmail('');
-        }
-    };
+    // FIX: Remove obsolete handleInviteSubmit function.
 
     const permissionCategories = useMemo(() => {
         const initialValue: Record<string, { id: Permission; description: string; category: string; }[]> = {};
@@ -220,48 +214,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                         </tbody>
                                     </table>
                                 </div>
-                                {canInvite && (
-                                    <>
-                                        <div className="mt-8 pt-6 border-t">
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Invite New User</h3>
-                                            <form onSubmit={handleInviteSubmit} className="flex items-end gap-4 p-4 bg-gray-50 rounded-lg">
-                                                <div className="w-64">
-                                                    <label htmlFor="inviteEmail" className="block text-sm font-medium text-gray-700">Email Address</label>
-                                                    <input type="email" id="inviteEmail" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required className="mt-1 p-2 border border-gray-300 rounded-md w-full" placeholder="user@example.com" />
-                                                </div>
-                                                 <div className="w-64">
-                                                    <label htmlFor="inviteGroup" className="block text-sm font-medium text-gray-700">Assign to Group</label>
-                                                    <CustomSelect
-                                                        value={inviteGroup}
-                                                        onChange={setInviteGroup}
-                                                        options={assignableGroupOptions}
-                                                        className="mt-1"
-                                                    />
-                                                </div>
-                                                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Generate Invitation</button>
-                                            </form>
-                                        </div>
-                                        
-                                        <div className="mt-8">
-                                             <h3 className="text-lg font-semibold text-gray-800 mb-4">Pending Invitations</h3>
-                                             {invitations.filter(inv => inv.status === 'pending').length > 0 ? (
-                                                 <ul className="divide-y border rounded-md">
-                                                     {invitations.filter(inv => inv.status === 'pending').map(inv => (
-                                                         <li key={inv.id} className="p-3 flex justify-between items-center">
-                                                             <div>
-                                                                 <p className="font-semibold">{inv.emailFor}</p>
-                                                                 <p className="text-sm text-gray-500">Group: {groups.find(g => g.id === inv.groupId)?.name}</p>
-                                                             </div>
-                                                             <div className="text-sm text-gray-500">Expires: {new Date(inv.expiresAt).toLocaleDateString()}</div>
-                                                         </li>
-                                                     ))}
-                                                 </ul>
-                                             ) : (
-                                                 <p className="text-gray-500">No pending invitations.</p>
-                                             )}
-                                        </div>
-                                    </>
-                                )}
+                                {/* FIX: Remove obsolete invitation UI. */}
                             </div>
                         )}
                         {activeTab === 'groups' && canManageGroups && (
@@ -332,7 +285,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                     </div>
                 </div>
             </div>
-            {generatedCode && <InvitationModal invitationCode={generatedCode} onClose={() => setGeneratedCode(null)} />}
+            {/* FIX: Remove obsolete InvitationModal. */}
         </div>
     );
 };

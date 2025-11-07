@@ -15,6 +15,7 @@ interface RegistrationFormProps {
     existingFarmers: Farmer[];
     mode?: 'create' | 'edit';
     existingFarmer?: Farmer | null;
+    setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
 const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -131,7 +132,7 @@ type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 
 
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null }) => {
+const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null, setNotification }) => {
     const database = useDatabase();
     const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -389,7 +390,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 setShowSuccess(true);
             } catch (error) {
                 console.error("Submission failed:", error);
-                alert("An error occurred while saving the farmer. Please try again.");
+                setNotification({ message: 'An error occurred while saving the farmer. Please try again.', type: 'error' });
+                setPreparedFarmerData(null);
             } finally {
                 setIsSubmitting(false);
             }

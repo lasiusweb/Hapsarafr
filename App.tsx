@@ -195,16 +195,17 @@ const getViewTitle = (view: View | 'farmer-details' | 'not-found'): string => {
     return titles[view] || 'Hapsara';
 };
 
-const ModalLoader: React.FC = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-[100]">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div>
+const ModalLoader: React.FC<{ message?: string }> = ({ message = "Loading Application..." }) => (
+    <div className="fixed inset-0 bg-gray-100 flex flex-col items-center justify-center z-[100]">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500 mb-4"></div>
+        <p className="text-lg text-gray-600 font-semibold">{message}</p>
     </div>
 );
 
 const App: React.FC = () => {
     const database = useDatabase();
     const isOnline = useOnlineStatus();
-    const [appState, setAppState] = useState<string>('LANDING'); // 'LANDING', 'LOGIN', 'APP'
+    const [appState, setAppState] = useState<string>('LOADING'); // LOADING, LANDING, AUTH, APP
     const [supabase, setSupabase] = useState<any | null>(null);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [currentTenantName, setCurrentTenantName] = useState<string | null>(null);
@@ -227,7 +228,6 @@ const App: React.FC = () => {
     const [showChangelogModal, setShowChangelogModal] = useState(false);
     const [printQueue, setPrintQueue] = useState<string[]>([]);
     const [showSupabaseSettingsModal, setShowSupabaseSettingsModal] = useState(false);
-    const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [listViewMode, setListViewMode] = useState<'table' | 'grid'>('table');
 
     // Data State
@@ -238,70 +238,180 @@ const App: React.FC = () => {
     const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
 
     // Data Queries
-    const allUsers = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database]));
     const allGroups = useQuery(useMemo(() => database.get<GroupModel>('groups').query(), [database]));
     const allTenants = useQuery(useMemo(() => database.get<TenantModel>('tenants').query(), [database]));
     const allFarmerModels = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
     const allPaymentModels = useQuery(useMemo(() => database.get<SubsidyPaymentModel>('subsidy_payments').query(), [database]));
     const allActivityLogModels = useQuery(useMemo(() => database.get<ActivityLogModel>('activity_logs').query(), [database]));
     const appContentRecord = useQuery(useMemo(() => database.get<AppContentCacheModel>('app_content_cache').query(), [database]));
-
-    const plainUsers = useMemo(() => allUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar, groupId: u.groupId, tenantId: u.tenantId })), [allUsers]);
+    
+    // Derived plain data
+    const allUsersFromDB = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database]));
+    const plainUsers = useMemo(() => allUsersFromDB.map(u => ({ id: u.id, name: u.name, email: u.email!, avatar: u.avatar, groupId: u.groupId, tenantId: u.tenantId, is_verified: u.isVerified! })), [allUsersFromDB]);
     const plainGroups = useMemo(() => allGroups.map(g => ({ id: g.id, name: g.name, permissions: g.parsedPermissions, tenantId: g.tenantId })), [allGroups]);
     const allFarmers = useMemo(() => allFarmerModels.map(f => farmerModelToPlain(f) as Farmer), [allFarmerModels]);
-    
-    // ... (rest of the component logic)
-    
-    const handleLogin = useCallback(async (userId: string) => {
-        try {
-            const userModel = await database.get<UserModel>('users').find(userId);
-            const user = { id: userModel.id, name: userModel.name, avatar: userModel.avatar, groupId: userModel.groupId, tenantId: userModel.tenantId };
-            setCurrentUser(user);
-    
-            try {
-                const tenantModel = await database.get<TenantModel>('tenants').find(user.tenantId);
-                setCurrentTenantName(tenantModel.name);
-            } catch (e) {
-                if (user.tenantId === 'default-tenant') {
-                    setCurrentTenantName('Hapsara Platform');
-                } else {
-                    console.error("Could not find tenant for user", e);
-                    setCurrentTenantName('Unknown Organization');
-                }
-            }
-            
-            setAppState('APP');
-            window.location.hash = '#/dashboard';
-        } catch (error) {
-            console.error("Login failed:", error);
-            setNotification({ message: 'Failed to log in.', type: 'error' });
-        }
-    }, [database]);
-
-    // This is a placeholder for the rest of App.tsx which is very long. The key changes are above.
-    // The following part is a reconstruction to make the file valid.
 
     useEffect(() => {
-        // This is a placeholder for the logic that was likely in the original file
-    }, []);
+      const sp = initializeSupabase();
+      setSupabase(sp);
+  
+      if (!sp) {
+        setAppState('LANDING'); // Fallback if Supabase isn't configured
+        return;
+      }
+  
+      const { data: { subscription } } = sp.auth.onAuthStateChange(async (_event: string, session: any) => {
+        if (session?.user) {
+          const userEmail = session.user.email;
+          if (userEmail) {
+            const users = await database.get<UserModel>('users').query(Q.where('email', userEmail)).fetch();
+            if (users.length > 0) {
+              const userModel = users[0];
+              const plainUser: User = { id: userModel.id, name: userModel.name, email: userModel.email!, avatar: userModel.avatar, groupId: userModel.groupId, tenantId: userModel.tenantId, is_verified: userModel.isVerified! };
+              
+              if (!userModel.isVerified) {
+                  await database.write(async () => {
+                      await userModel.update(u => { u.isVerified = true; });
+                  });
+              }
+
+              setCurrentUser(plainUser);
+              const tenantModel = await database.get<TenantModel>('tenants').find(plainUser.tenantId);
+              setCurrentTenantName(tenantModel.name);
+              setAppState('APP');
+
+            } else {
+              setNotification({ message: 'User profile not found locally. Contact admin.', type: 'error' });
+              await sp.auth.signOut();
+            }
+          }
+        } else {
+          setCurrentUser(null);
+          setCurrentTenantName(null);
+          setAppState('AUTH');
+        }
+      });
+  
+      sp.auth.getSession().then(({ data: { session } }: any) => {
+        if (!session) {
+          setAppState('LANDING');
+        }
+      });
+  
+      return () => subscription.unsubscribe();
+    }, [database]);
 
 
-    if (appState === 'LOGIN') {
-        const usersForLogin = allUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar, groupId: u.groupId, tenantId: u.tenantId }));
-        const tenantsForLogin: Tenant[] = allTenants.map(t => ({ id: t.id, name: t.name, subscriptionStatus: t.subscriptionStatus, createdAt: new Date(t.createdAt).toISOString() }));
+    const handleLogout = async () => {
+        if (supabase) {
+            await supabase.auth.signOut();
+        }
+        setAppState('AUTH');
+    };
+
+    const handleRegisterFarmer = async (farmerData: Farmer, photoFile?: File) => {
+        const farmersCollection = database.get<FarmerModel>('farmers');
+        await database.write(async () => {
+            let photoBase64 = farmerData.photo;
+            if (photoFile) {
+                photoBase64 = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(photoFile);
+                });
+            }
+
+            await farmersCollection.create(f => {
+                Object.assign(f, {
+                    ...farmerData,
+                    id: farmerData.id,
+                    photo: photoBase64,
+                    syncStatusLocal: 'pending',
+                    createdBy: currentUser!.id,
+                    updatedBy: currentUser!.id,
+                    tenantId: currentUser!.tenantId
+                });
+                f._raw.id = farmerData.id;
+            });
+        });
+        setNewlyAddedFarmerId(farmerData.id);
+    };
+    
+    const handleSaveProfile = async (updatedUser: User) => {
+        const usersCollection = database.get<UserModel>('users');
+        const userToUpdate = await usersCollection.find(updatedUser.id);
+        await database.write(async () => {
+            await userToUpdate.update(user => {
+                user.name = updatedUser.name;
+                user.avatar = updatedUser.avatar;
+            });
+        });
+        setCurrentUser(updatedUser);
+    };
+
+    const handleSaveUsers = async (updatedUsers: User[]) => {
+        const usersCollection = database.get<UserModel>('users');
+        await database.write(async () => {
+            for (const updatedUser of updatedUsers) {
+                const userToUpdate = await usersCollection.find(updatedUser.id);
+                await userToUpdate.update(user => {
+                    user.groupId = updatedUser.groupId;
+                });
+            }
+        });
+    };
+    const handleSaveGroups = async (updatedGroups: Group[]) => {
+        const groupsCollection = database.get<GroupModel>('groups');
+        await database.write(async () => {
+            for (const updatedGroup of updatedGroups) {
+                try {
+                    const groupToUpdate = await groupsCollection.find(updatedGroup.id);
+                    await groupToUpdate.update(group => {
+                        group.name = updatedGroup.name;
+                        group.permissionsStr = JSON.stringify(updatedGroup.permissions);
+                    });
+                } catch (error) { // It might be a new group
+                    if (String(error).includes('not found')) {
+                        await groupsCollection.create(group => {
+                            group._raw.id = updatedGroup.id;
+                            group.name = updatedGroup.name;
+                            group.permissionsStr = JSON.stringify(updatedGroup.permissions);
+                            group.tenantId = updatedGroup.tenantId;
+                        });
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+        });
+    };
+
+    if (appState === 'LOADING') {
+        return <ModalLoader />;
+    }
+
+    if (appState === 'LANDING') {
         return (
             <Suspense fallback={<ModalLoader />}>
-                <LoginScreen onLogin={handleLogin} users={usersForLogin} tenants={tenantsForLogin} />
+                <LandingPage onLaunch={() => setAppState('AUTH')} appContent={null} />
             </Suspense>
         );
     }
     
-    // Placeholder for the main app view
+    if (appState === 'AUTH') {
+        return (
+            <Suspense fallback={<ModalLoader />}>
+                <LoginScreen supabase={supabase} />
+            </Suspense>
+        );
+    }
+    
     if (appState === 'APP' && currentUser) {
-        // More logic would be here in the real file (filtering, sorting, etc.)
+        const parsed = parseHash();
+        const { view, params } = parsed;
         const isSuperAdmin = currentUser.groupId === 'group-super-admin';
         const tenants: Tenant[] = allTenants.map(t => ({ id: t.id, name: t.name, subscriptionStatus: t.subscriptionStatus, createdAt: new Date(t.createdAt).toISOString() }));
-
 
         return (
             <div className="flex h-screen bg-gray-100">
@@ -312,7 +422,7 @@ const App: React.FC = () => {
                         onToggleCollapse={() => setIsSidebarCollapsed(c => !c)}
                         currentUser={currentUser}
                         currentTenantName={currentTenantName}
-                        onLogout={() => setAppState('LOGIN')}
+                        onLogout={handleLogout}
                         onNavigate={(path) => window.location.hash = path}
                         currentView={parseHash().view as View}
                         permissions={new Set(plainGroups.find(g => g.id === currentUser.groupId)?.permissions)}
@@ -327,13 +437,12 @@ const App: React.FC = () => {
                     />
                 </Suspense>
                  <main className="flex-1 flex flex-col overflow-hidden">
-                    {/* Placeholder Header */}
                      <header className="bg-white shadow-md p-4 z-30">
                         <h1 className="text-xl font-semibold">{getViewTitle(parseHash().view)}</h1>
                     </header>
                     <div className="flex-1 overflow-y-auto p-6">
                         <Suspense fallback={<ModalLoader />}>
-                           {parseHash().view === 'farmer-directory' && (
+                           {view === 'farmer-directory' && (
                                 <FarmerList
                                     farmers={allFarmers}
                                     users={plainUsers}
@@ -364,19 +473,57 @@ const App: React.FC = () => {
                                     onSetListViewMode={setListViewMode}
                                 />
                             )}
-                            {/* Other views would be rendered here */}
+                            {view === 'profile' && (
+                                <ProfilePage
+                                    currentUser={currentUser}
+                                    groups={plainGroups}
+                                    onSave={handleSaveProfile}
+                                    onBack={() => window.location.hash = 'dashboard'}
+                                    setNotification={setNotification}
+                                />
+                            )}
+                            {view === 'admin' && (
+                                <AdminPage
+                                    users={plainUsers}
+                                    groups={plainGroups}
+                                    currentUser={currentUser}
+                                    onSaveUsers={handleSaveUsers}
+                                    onSaveGroups={handleSaveGroups}
+                                    onBack={() => window.location.hash = 'dashboard'}
+                                    onNavigate={(v) => window.location.hash = v}
+                                    setNotification={setNotification}
+                                />
+                            )}
                         </Suspense>
                     </div>
                 </main>
+                {notification && (
+                    <Notification
+                        message={notification.message}
+                        type={notification.type}
+                        onDismiss={() => setNotification(null)}
+                    />
+                )}
+                 {isShowingRegistrationForm && (
+                    <Suspense fallback={<ModalLoader />}>
+                        <RegistrationForm
+                            onSubmit={handleRegisterFarmer}
+                            onCancel={() => {
+                                setIsShowingRegistrationForm(false);
+                                setEditingFarmer(null);
+                            }}
+                            existingFarmers={allFarmers}
+                            mode={editingFarmer ? 'edit' : 'create'}
+                            existingFarmer={editingFarmer}
+                            setNotification={setNotification}
+                        />
+                    </Suspense>
+                )}
             </div>
         );
     }
 
-    return (
-        <Suspense fallback={<ModalLoader />}>
-            <LandingPage onLaunch={() => setAppState('LOGIN')} appContent={null} />
-        </Suspense>
-    );
+    return <ModalLoader message="Initializing authentication..." />;
 }
 
 export default App;

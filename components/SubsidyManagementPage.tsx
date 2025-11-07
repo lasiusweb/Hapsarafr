@@ -79,22 +79,29 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
 
     const handleSavePayment = useCallback(async (paymentData: any) => {
         if (!paymentContext) return;
-        const paymentsCollection = database.get('subsidy_payments');
-        await database.write(async () => {
-            await paymentsCollection.create((rec: SubsidyPaymentModel) => {
-                rec.farmerId = paymentContext.farmer.id;
-                rec.paymentDate = paymentData.paymentDate;
-                rec.amount = paymentData.amount;
-                rec.utrNumber = paymentData.utrNumber;
-                rec.paymentStage = paymentData.paymentStage;
-                rec.notes = paymentData.notes;
-                rec.createdBy = currentUser.id;
-                rec.syncStatusLocal = 'pending';
+        try {
+            const paymentsCollection = database.get('subsidy_payments');
+            await database.write(async () => {
+                await paymentsCollection.create((rec: SubsidyPaymentModel) => {
+                    rec.farmerId = paymentContext.farmer.id;
+                    rec.paymentDate = paymentData.paymentDate;
+                    rec.amount = paymentData.amount;
+                    rec.utrNumber = paymentData.utrNumber;
+                    rec.paymentStage = paymentData.paymentStage;
+                    rec.notes = paymentData.notes;
+                    rec.createdBy = currentUser.id;
+                    rec.syncStatusLocal = 'pending';
+                });
             });
-        });
-        setNotification({ message: 'Payment recorded successfully.', type: 'success' });
-        setShowPaymentModal(false);
-        setPaymentContext(null);
+            setNotification({ message: 'Payment recorded successfully.', type: 'success' });
+            setShowPaymentModal(false);
+            setPaymentContext(null);
+        } catch (error) {
+            console.error("Failed to save payment:", error);
+            setNotification({ message: 'Failed to save payment. Please try again.', type: 'error' });
+            setShowPaymentModal(false);
+            setPaymentContext(null);
+        }
     }, [database, currentUser.id, paymentContext, setNotification]);
 
     const processedData = useMemo(() => {

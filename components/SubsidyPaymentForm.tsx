@@ -53,9 +53,6 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                 ...formData,
                 amount,
             });
-        } catch (error) {
-            console.error("Failed to submit payment:", error);
-            alert("An error occurred. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
