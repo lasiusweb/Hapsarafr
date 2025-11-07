@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, Permission } from '../types';
 
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -103,6 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.79 4 4s-1.79 4-4 4c-1.742 0-3.223-.835-3.772-2M12 12h.01M12 12a9 9 0 110-18 9 9 0 010 18z" /></svg>} text="Help & Support" view="help" />
 
                         {(canImport || canExport || canManageAdmin) && <NavCategory text="Tools" />}
+                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.293 2.293a1 1 0 010 1.414L11 12l-2 2-2.293-2.293a1 1 0 010-1.414L10 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 19l-2.293-2.293a1 1 0 00-1.414 0L12 21l2-2 2.293 2.293a1 1 0 001.414 0L19 19z" /></svg>} text="Crop Health Scanner" view="crop-health-scanner" />
                         {canImport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>} text="Import Data" onClick={onImport} />}
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} text="Export to Excel" onClick={onExportExcel} />}
                         {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>} text="Export to CSV" onClick={onExportCsv} />}

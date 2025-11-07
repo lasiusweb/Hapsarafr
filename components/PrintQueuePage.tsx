@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import { Q } from '@nozbe/watermelondb';
 import { FarmerModel } from '../db';
-import { User } from '../types';
+import { User, Farmer } from '../types';
 import PrintView from './PrintView';
+import { farmerModelToPlain } from '../lib/utils';
+import { useDatabase } from '../DatabaseContext';
 
 interface PrintQueuePageProps {
     queuedFarmerIds: string[];
@@ -11,51 +13,12 @@ interface PrintQueuePageProps {
     onRemove: (farmerId: string) => void;
     onClear: () => void;
     onBack: () => void;
-    database: Database;
 }
 
-const modelToPlain = (f: FarmerModel) => ({
-    id: f.id,
-    fullName: f.fullName,
-    fatherHusbandName: f.fatherHusbandName,
-    aadhaarNumber: f.aadhaarNumber,
-    mobileNumber: f.mobileNumber,
-    gender: f.gender,
-    address: f.address,
-    ppbRofrId: f.ppbRofrId,
-    photo: f.photo,
-    bankAccountNumber: f.bankAccountNumber,
-    ifscCode: f.ifscCode,
-    accountVerified: f.accountVerified,
-    appliedExtent: f.appliedExtent,
-    approvedExtent: f.approvedExtent,
-    numberOfPlants: f.numberOfPlants,
-    methodOfPlantation: f.methodOfPlantation,
-    plantType: f.plantType,
-    plantationDate: f.plantationDate,
-    mlrdPlants: f.mlrdPlants,
-    fullCostPlants: f.fullCostPlants,
-    applicationId: f.applicationId,
-    farmerId: f.farmerId,
-    proposedYear: f.proposedYear,
-    registrationDate: f.registrationDate,
-    asoId: f.asoId,
-    paymentUtrDd: f.paymentUtrDd,
-    status: f.status,
-    district: f.district,
-    mandal: f.mandal,
-    village: f.village,
-    syncStatus: f.syncStatusLocal,
-    createdBy: f.createdBy,
-    updatedBy: f.updatedBy,
-    createdAt: new Date(f.createdAt).toISOString(),
-    updatedAt: new Date(f.updatedAt).toISOString(),
-});
-
-
-const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users, onRemove, onClear, onBack, database }) => {
+const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users, onRemove, onClear, onBack }) => {
     const [queuedFarmers, setQueuedFarmers] = useState<FarmerModel[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const database = useDatabase();
 
     useEffect(() => {
         const fetchFarmers = async () => {
@@ -81,7 +44,7 @@ const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users,
         fetchFarmers();
     }, [queuedFarmerIds, database]);
     
-    const plainFarmers = useMemo(() => queuedFarmers.map(modelToPlain), [queuedFarmers]);
+    const plainFarmers = useMemo(() => queuedFarmers.map(f => farmerModelToPlain(f)).filter(Boolean) as Farmer[], [queuedFarmers]);
 
     const handlePrint = () => {
         window.print();

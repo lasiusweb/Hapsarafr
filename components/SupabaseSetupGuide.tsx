@@ -26,7 +26,7 @@ interface SupabaseSetupGuideProps {
 }
 
 const SupabaseSetupGuide: React.FC<SupabaseSetupGuideProps> = ({ onClose }) => {
-    const [activeTab, setActiveTab] = useState<'auth' | 'dashboard' | 'audit' | 'rls' | 'subsidy' | 'geo'>('auth');
+    const [activeTab, setActiveTab] = useState<'auth' | 'audit' | 'rls' | 'subsidy' | 'geo'>('auth');
     
     const authFunctionCode = `
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -56,25 +56,6 @@ FOR EACH ROW
 EXECUTE FUNCTION public.handle_new_user();
     `;
     
-    const dashboardFunctionCode = `
-CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  RETURN (
-    SELECT json_build_object(
-        'total_farmers', (SELECT count(*) FROM public.farmers),
-        'new_this_month', (SELECT count(*) FROM public.farmers WHERE date_trunc('month', registration_date) = date_trunc('month', now() at time zone 'utc')),
-        'total_extent', (SELECT sum(approved_extent) FROM public.farmers),
-        'farmers_by_district', (SELECT json_agg(t) FROM (SELECT district, count(*) FROM public.farmers GROUP BY district) t)
-    )
-  );
-END;
-$$;
-    `;
-
     const auditTableCode = `
 -- Create the table to store audit logs
 CREATE TABLE public.audit_log (
@@ -290,11 +271,10 @@ ADD COLUMN IF NOT EXISTS longitude numeric;
                 <div className="flex-1 flex overflow-hidden">
                     <div className="w-1/4 border-r border-gray-700 p-4 space-y-2 overflow-y-auto">
                         <button onClick={() => setActiveTab('auth')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'auth' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>1. Auth Trigger</button>
-                        <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'dashboard' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>2. Dashboard Function</button>
-                        <button onClick={() => setActiveTab('audit')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'audit' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>3. Audit Trail</button>
-                        <button onClick={() => setActiveTab('rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>4. Security Policies (RLS)</button>
-                        <button onClick={() => setActiveTab('subsidy')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'subsidy' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>5. Subsidy Payments</button>
-                        <button onClick={() => setActiveTab('geo')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'geo' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>6. Geolocation Fields</button>
+                        <button onClick={() => setActiveTab('audit')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'audit' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>2. Audit Trail</button>
+                        <button onClick={() => setActiveTab('rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>3. Security Policies (RLS)</button>
+                        <button onClick={() => setActiveTab('subsidy')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'subsidy' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>4. Subsidy Payments</button>
+                        <button onClick={() => setActiveTab('geo')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'geo' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>5. Geolocation Fields</button>
                     </div>
 
                     <div className="w-3/4 p-6 overflow-y-auto">
@@ -306,13 +286,6 @@ ADD COLUMN IF NOT EXISTS longitude numeric;
                                 <CodeBlock code={authFunctionCode} />
                                 <p className="font-semibold">Step 2: Create the trigger.</p>
                                 <CodeBlock code={authTriggerCode} />
-                            </div>
-                        )}
-                         {activeTab === 'dashboard' && (
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-bold text-white">Dashboard Statistics Function</h3>
-                                <p>This database function calculates the statistics needed for the main dashboard. Run this in the Supabase <strong className="text-gray-200">SQL Editor</strong>.</p>
-                                <CodeBlock code={dashboardFunctionCode} />
                             </div>
                         )}
                         {activeTab === 'audit' && (

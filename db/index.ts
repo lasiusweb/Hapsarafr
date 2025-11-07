@@ -1,13 +1,7 @@
-
-
-
-import { appSchema, tableSchema } from '@nozbe/watermelondb';
-import { Model } from '@nozbe/watermelondb';
-import { Database } from '@nozbe/watermelondb';
+import { appSchema, tableSchema, Model, Database, Q, CollectionMap } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { field, date, lazy } from '@nozbe/watermelondb/decorators';
 import { FarmerStatus, PlantationMethod, PlantType, PaymentStage } from '../types';
-import { Q } from '@nozbe/watermelondb';
 
 // 1. Define the Schema
 export const mySchema = appSchema({
@@ -68,6 +62,16 @@ export const mySchema = appSchema({
             { name: 'created_at', type: 'number' },
         ],
     }),
+    tableSchema({
+        name: 'activity_logs',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'activity_type', type: 'string' },
+            { name: 'description', type: 'string' },
+            { name: 'created_by', type: 'string' },
+            { name: 'created_at', type: 'number' },
+        ],
+    }),
   ],
 });
 
@@ -76,6 +80,10 @@ export class SubsidyPaymentModel extends Model {
     static associations = {
         farmers: { type: 'belongs_to', key: 'farmer_id' },
     } as const;
+
+    readonly id!: string;
+    readonly _raw!: any;
+    readonly database!: Database;
 
     @field('farmer_id') farmerId!: string;
     @field('paymentDate') paymentDate!: string;
@@ -88,9 +96,31 @@ export class SubsidyPaymentModel extends Model {
     @date('created_at') createdAt!: Date;
 }
 
+export class ActivityLogModel extends Model {
+    static table = 'activity_logs';
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+    } as const;
+
+    readonly id!: string;
+    readonly _raw!: any;
+    readonly database!: Database;
+
+    @field('farmer_id') farmerId!: string;
+    @field('activity_type') activityType!: string;
+    @field('description') description!: string;
+    @field('created_by') createdBy!: string;
+    @date('created_at') createdAt!: Date;
+}
+
 // 2. Define the Model
 export class FarmerModel extends Model {
   static table = 'farmers';
+
+  readonly id!: string;
+  readonly _raw!: any;
+  readonly collections!: CollectionMap;
+  readonly database!: Database;
 
   @field('fullName') fullName!: string;
   @field('fatherHusbandName') fatherHusbandName!: string;
@@ -133,6 +163,11 @@ export class FarmerModel extends Model {
       Q.where('farmer_id', this.id),
       Q.sortBy('paymentDate', Q.desc)
   );
+  
+  @lazy activityLogs = this.collections.get<ActivityLogModel>('activity_logs').query(
+      Q.where('farmer_id', this.id),
+      Q.sortBy('created_at', Q.desc)
+  );
 }
 
 // 3. Create the Database Adapter
@@ -165,7 +200,7 @@ const adapter = new LokiJSAdapter({
 // 4. Create the Database Instance
 const database = new Database({
   adapter,
-  modelClasses: [FarmerModel, SubsidyPaymentModel],
+  modelClasses: [FarmerModel, SubsidyPaymentModel, ActivityLogModel],
 });
 
 export default database;

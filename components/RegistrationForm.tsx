@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType, Village, Mandal } from '../types';
-import { GEO_DATA } from '../data/geoData';
 import ConfirmationModal from './ConfirmationModal';
 import AiReviewModal from './AiReviewModal';
+import { getGeoName, geoMap } from '../lib/utils';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface RegistrationFormProps {
     onSubmit: (farmer: Farmer, photoFile?: File) => Promise<void>;
@@ -48,72 +49,15 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
 };
 
 const DRAFT_STORAGE_KEY = 'hapsara-farmer-registration-draft';
+const PLANT_DENSITY_PER_ACRE = 57; // As per standard guidelines for oil palm
 
-// --- Geo Data Optimization ---
-// Create a more efficient map-based structure for fast geo lookups
-interface VillageInfo { name: string; }
-interface MandalInfo { name: string; villages: Record<string, VillageInfo>; }
-interface DistrictInfo { name: string; mandals: Record<string, MandalInfo>; }
-
-const geoMap: Record<string, DistrictInfo> = GEO_DATA.reduce((distAcc, district) => {
-    distAcc[district.code] = {
-        name: district.name,
-        mandals: district.mandals.reduce((mandAcc, mandal) => {
-            mandAcc[mandal.code] = {
-                name: mandal.name,
-                villages: mandal.villages.reduce((villAcc, village) => {
-                    villAcc[village.code] = { name: village.name };
-                    return villAcc;
-                }, {} as Record<string, VillageInfo>),
-            };
-            return mandAcc;
-        }, {} as Record<string, MandalInfo>),
-    };
-    return distAcc;
-}, {} as Record<string, DistrictInfo>);
-
-// Helper function to get geo names from the optimized map
-const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { district: string; mandal?: string; village?: string }) => {
-    try {
-        const district = geoMap[codes.district];
-        if (!district) return codes.district || 'N/A';
-        if (type === 'district') return district.name;
-
-        if (!codes.mandal) return 'N/A';
-        const mandal = district.mandals[codes.mandal];
-        if (!mandal) return codes.mandal || 'N/A';
-        if (type === 'mandal') return mandal.name;
-        
-        if (!codes.village) return 'N/A';
-        const village = mandal.villages[codes.village];
-        if (!village) return codes.village || 'N/A';
-        if (type === 'village') return village.name;
-    } catch (e) {
-        console.error("Error getting geo name:", e);
-        return 'N/A';
-    }
-    return codes[type] || 'N/A';
-};
-
-/**
- * A custom hook to debounce a value.
- * This prevents a function from being called too frequently by delaying its update.
- * @param value The value to debounce
- * @param delay The delay in milliseconds
- * @returns The debounced value
- */
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-}
+const STEPS = [
+    { id: 1, name: 'Personal Details' },
+    { id: 2, name: 'Geographic Details' },
+    { id: 3, name: 'Bank Details' },
+    { id: 4, name: 'Land & Plantation' },
+    { id: 5, name: 'Review & Submit' },
+];
 
 type FormRowProps = { children?: React.ReactNode };
 const FormRow = ({ children }: FormRowProps) => <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-center">{children}</div>;
@@ -124,13 +68,13 @@ const FormField = ({ children }: FormFieldProps) => <div className="md:col-span-
 type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 
+
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null }) => {
     const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [showConfirmation, setShowConfirmation] = useState(false);
     const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
     const [preparedFarmerData, setPreparedFarmerData] = useState<Farmer | null>(null);
     const [hasDraft, setHasDraft] = useState(false);
@@ -139,8 +83,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const [isCapturingLocation, setIsCapturingLocation] = useState(false);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [showAiReview, setShowAiReview] = useState(false);
+    const [currentStep, setCurrentStep] = useState(1);
     
-    const debouncedFormData = useDebounce(formData, 1000); // 1-second delay for auto-save
+    const debouncedFormData = useDebounce(formData, 1000);
 
     useEffect(() => {
         if (mode === 'edit' && existingFarmer) {
@@ -179,14 +124,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         );
     };
 
-    // Check for a saved draft when the component mounts
     useEffect(() => {
         if (mode === 'edit') return;
         const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
         if (savedDraft) {
             try {
                 const draftData = JSON.parse(savedDraft);
-                // Check if the draft is just the initial form state
                 if (JSON.stringify(draftData) !== JSON.stringify(initialFormData)) {
                      setHasDraft(true);
                 }
@@ -197,30 +140,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         }
     }, [mode]);
 
-    // Effect to auto-save the form data to localStorage (only in create mode)
     useEffect(() => {
-        if (mode === 'edit' || showConfirmation || hasDraft) return;
+        if (mode === 'edit' || hasDraft) return;
         const isInitial = JSON.stringify(debouncedFormData) === JSON.stringify(initialFormData);
         if (!isInitial) {
             localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(debouncedFormData));
         } else {
             localStorage.removeItem(DRAFT_STORAGE_KEY);
         }
-    }, [debouncedFormData, showConfirmation, hasDraft, mode]);
+    }, [debouncedFormData, hasDraft, mode]);
     
     const districtsForSelect = useMemo(() => Object.entries(geoMap).map(([code, { name }]) => ({ code, name })), []);
-
     const mandals = useMemo(() => {
         if (!formData.district || !geoMap[formData.district]) return [];
         const mandalData = geoMap[formData.district].mandals;
-        // Convert back to array for dropdown rendering
         return Object.entries(mandalData).map(([code, { name }]) => ({ code, name, villages: [] as Village[] }));
     }, [formData.district]);
-
     const villages = useMemo(() => {
         if (!formData.district || !formData.mandal || !geoMap[formData.district]?.mandals[formData.mandal]) return [];
         const villageData = geoMap[formData.district].mandals[formData.mandal].villages;
-        // Convert back to array for dropdown rendering
         return Object.entries(villageData).map(([code, { name }]) => ({ code, name }));
     }, [formData.district, formData.mandal]);
 
@@ -253,25 +191,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            if (file.size > 2 * 1024 * 1024) { // 2MB limit
-                setErrors(prev => ({...prev, photo: 'File size should not exceed 2MB'}));
-                return;
-            }
-            if(!['image/jpeg', 'image/png'].includes(file.type)){
-                setErrors(prev => ({...prev, photo: 'Only JPG/PNG files are allowed'}));
-                return;
-            }
-            setPhotoFile(file); // Store the file object for upload
+            if (file.size > 2 * 1024 * 1024) { setErrors(prev => ({...prev, photo: 'File size should not exceed 2MB'})); return; }
+            if(!['image/jpeg', 'image/png'].includes(file.type)){ setErrors(prev => ({...prev, photo: 'Only JPG/PNG files are allowed'})); return; }
+            setPhotoFile(file);
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64String = reader.result as string;
-                setPhotoPreview(base64String); // For UI preview only
-                setFormData(prev => ({ ...prev, photo: '' })); // Clear any old photo URL/base64
-                setErrors(prev => {
-                    const newErrors = {...prev};
-                    delete newErrors.photo;
-                    return newErrors;
-                });
+                setPhotoPreview(base64String);
+                setFormData(prev => ({ ...prev, photo: '' }));
+                setErrors(prev => { const newErrors = {...prev}; delete newErrors.photo; return newErrors; });
             };
             reader.readAsDataURL(file);
         }
@@ -281,130 +209,117 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         setFormData(prev => ({ ...prev, photo: '' }));
         setPhotoPreview(null);
         setPhotoFile(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ''; // Reset the file input
-        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
     
     const handleCaptureLocation = () => {
-        if (!navigator.geolocation) {
-            setLocationError("Geolocation is not supported by this browser.");
-            return;
-        }
+        if (!navigator.geolocation) { setLocationError("Geolocation is not supported by this browser."); return; }
         setIsCapturingLocation(true);
         setLocationError(null);
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                setFormData(prev => ({
-                    ...prev,
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
-                }));
+                setFormData(prev => ({ ...prev, latitude: position.coords.latitude, longitude: position.coords.longitude }));
                 setIsCapturingLocation(false);
             },
             (error) => {
-                switch (error.code) {
-                    case error.PERMISSION_DENIED:
-                        setLocationError("Permission to access location was denied.");
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        setLocationError("Location information is unavailable.");
-                        break;
-                    case error.TIMEOUT:
-                        setLocationError("The request to get user location timed out.");
-                        break;
-                    default:
-                        setLocationError("An unknown error occurred while getting location.");
-                        break;
-                }
+                let msg = "An unknown error occurred while getting location.";
+                if(error.code === error.PERMISSION_DENIED) msg = "Permission to access location was denied.";
+                if(error.code === error.POSITION_UNAVAILABLE) msg = "Location information is unavailable.";
+                if(error.code === error.TIMEOUT) msg = "The request to get user location timed out.";
+                setLocationError(msg);
                 setIsCapturingLocation(false);
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
     };
 
-    const validate = useCallback(() => {
+    const validateStep = (step: number) => {
         const newErrors: Record<string, string> = {};
-        if (!formData.fullName.trim()) newErrors.fullName = "Full Name is required.";
-        if (!formData.fatherHusbandName.trim()) newErrors.fatherHusbandName = "Father/Husband Name is required.";
-        if (!formData.address.trim()) newErrors.address = "Address is required.";
-        if (formData.aadhaarNumber.trim() && !/^\d{12}$/.test(formData.aadhaarNumber)) {
-            newErrors.aadhaarNumber = "If provided, Aadhaar must be 12 digits.";
+        if (step === 1) {
+            if (!formData.fullName.trim()) newErrors.fullName = "Full Name is required.";
+            if (!formData.fatherHusbandName.trim()) newErrors.fatherHusbandName = "Father/Husband Name is required.";
+            if (!formData.address.trim()) newErrors.address = "Address is required.";
+            if (formData.aadhaarNumber.trim() && !/^\d{12}$/.test(formData.aadhaarNumber)) newErrors.aadhaarNumber = "If provided, Aadhaar must be 12 digits.";
+            if (!/^[6-9]\d{9}$/.test(formData.mobileNumber)) newErrors.mobileNumber = "Mobile number must be 10 digits and start with 6-9.";
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            if (!formData.registrationDate) newErrors.registrationDate = "Registration date is required.";
+            else { const regDate = new Date(formData.registrationDate); if (isNaN(regDate.getTime())) newErrors.registrationDate = "Please enter a valid registration date."; else if (regDate > today) newErrors.registrationDate = "Registration date cannot be a future date."; }
         }
-        if (!/^[6-9]\d{9}$/.test(formData.mobileNumber)) {
-            newErrors.mobileNumber = "Mobile number must be 10 digits and start with 6-9.";
+        if (step === 2) {
+            if (!formData.district) newErrors.district = 'District is required.';
+            if (!formData.mandal) newErrors.mandal = 'Mandal is required.';
+            if (!formData.village) newErrors.village = 'Village is required.';
         }
-        if (!formData.district) newErrors.district = 'District is required.';
-        if (!formData.mandal) newErrors.mandal = 'Mandal is required.';
-        if (!formData.village) newErrors.village = 'Village is required.';
-        if (!formData.bankAccountNumber.trim()) newErrors.bankAccountNumber = "Bank Account Number is required.";
-        if (!formData.ifscCode.trim()) {
-            newErrors.ifscCode = "IFSC Code is required.";
-        } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode.toUpperCase())) {
-            newErrors.ifscCode = "Invalid IFSC code format (e.g., XXXX0000000).";
+        if (step === 3) {
+            if (!formData.bankAccountNumber.trim()) newErrors.bankAccountNumber = "Bank Account Number is required.";
+            if (!formData.ifscCode.trim()) newErrors.ifscCode = "IFSC Code is required.";
+            else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode.toUpperCase())) newErrors.ifscCode = "Invalid IFSC code format (e.g., XXXX0000000).";
         }
-        const appliedExtent = Number(formData.appliedExtent);
-        if (appliedExtent > 0) {
-            if (appliedExtent < 0.5) newErrors.appliedExtent = "Applied extent must be at least 0.5 acres.";
-            if (appliedExtent > 100) newErrors.appliedExtent = "Applied extent cannot exceed 100 acres.";
-        }
-        const approvedExtent = Number(formData.approvedExtent);
-        if (approvedExtent > 0) {
-            if (approvedExtent < 0.5) newErrors.approvedExtent = "Approved extent must be at least 0.5 acres.";
-            if (approvedExtent > 100) newErrors.approvedExtent = "Approved extent cannot exceed 100 acres.";
-        }
-        if (approvedExtent > 0 && appliedExtent > 0 && approvedExtent > appliedExtent) {
-            newErrors.approvedExtent = "Approved extent cannot be greater than applied extent.";
-        }
-        const numberOfPlants = Number(formData.numberOfPlants);
-        if (numberOfPlants > 0) {
-            if (numberOfPlants < 20) newErrors.numberOfPlants = "Number of plants must be at least 20 for a viable plantation.";
-            else if (numberOfPlants > 10000) newErrors.numberOfPlants = "Number of plants cannot exceed 10,000.";
-            if (approvedExtent > 0) {
-                const expectedPlants = approvedExtent * 57;
-                const tolerance = expectedPlants * 0.1; // 10% tolerance
-                if (numberOfPlants < expectedPlants - tolerance || numberOfPlants > expectedPlants + tolerance) {
-                    newErrors.numberOfPlants = `Number of plants seems incorrect for ${approvedExtent} acres. It should be around ${Math.round(expectedPlants)}.`;
+        if (step === 4) {
+            const appliedExtent = Number(formData.appliedExtent); if (appliedExtent > 0) { if (appliedExtent < 0.5) newErrors.appliedExtent = "Applied extent must be at least 0.5 acres."; if (appliedExtent > 100) newErrors.appliedExtent = "Applied extent cannot exceed 100 acres."; }
+            const approvedExtent = Number(formData.approvedExtent); if (approvedExtent > 0) { if (approvedExtent < 0.5) newErrors.approvedExtent = "Approved extent must be at least 0.5 acres."; if (approvedExtent > 100) newErrors.approvedExtent = "Approved extent cannot exceed 100 acres."; }
+            if (approvedExtent > 0 && appliedExtent > 0 && approvedExtent > appliedExtent) newErrors.approvedExtent = "Approved extent cannot be greater than applied extent.";
+            
+            const numberOfPlants = Number(formData.numberOfPlants) || 0;
+            if (numberOfPlants > 0) {
+                if (numberOfPlants < 20) newErrors.numberOfPlants = "Number of plants must be at least 20 for a viable plantation."; 
+                else if (numberOfPlants > 10000) newErrors.numberOfPlants = "Number of plants cannot exceed 10,000.";
+                
+                if (approvedExtent > 0) {
+                    const expectedPlants = approvedExtent * PLANT_DENSITY_PER_ACRE; 
+                    const tolerance = expectedPlants * 0.1; 
+                    if (numberOfPlants < expectedPlants - tolerance || numberOfPlants > expectedPlants + tolerance) newErrors.numberOfPlants = `Number of plants seems incorrect for ${approvedExtent} acres. It should be around ${Math.round(expectedPlants)}.`; 
+                }
+                
+                const mlrdPlants = Number(formData.mlrdPlants) || 0;
+                const fullCostPlants = Number(formData.fullCostPlants) || 0;
+                if (mlrdPlants + fullCostPlants > numberOfPlants) {
+                    newErrors.mlrdPlants = "Sum of MLRD and Full Cost plants cannot exceed total plants.";
                 }
             }
         }
-        if (numberOfPlants > 0 && ((Number(formData.mlrdPlants) || 0) + (Number(formData.fullCostPlants) || 0) > numberOfPlants)) {
-            newErrors.mlrdPlants = "Sum of MLRD and Full Cost plants cannot exceed total plants.";
+        
+        setErrors(prev => ({...prev, ...newErrors}));
+        const currentStepErrors = Object.keys(newErrors);
+        const hasErrors = currentStepErrors.length > 0;
+        if (!hasErrors) { // Clear errors for fields in the current step if valid
+            const fieldsInStep: (keyof Farmer)[] = [];
+            if (step === 1) fieldsInStep.push('fullName', 'fatherHusbandName', 'address', 'aadhaarNumber', 'mobileNumber', 'registrationDate');
+            if (step === 2) fieldsInStep.push('district', 'mandal', 'village');
+            if (step === 3) fieldsInStep.push('bankAccountNumber', 'ifscCode');
+            if (step === 4) fieldsInStep.push('appliedExtent', 'approvedExtent', 'numberOfPlants', 'mlrdPlants');
+            
+            const clearedErrors = {...errors};
+            fieldsInStep.forEach(field => delete clearedErrors[field]);
+            setErrors(clearedErrors);
         }
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        let registrationDateObj: Date | null = null;
-        if (!formData.registrationDate) {
-            newErrors.registrationDate = "Registration date is required.";
-        } else {
-            registrationDateObj = new Date(formData.registrationDate);
-            if (isNaN(registrationDateObj.getTime())) {
-                newErrors.registrationDate = "Please enter a valid registration date.";
-                registrationDateObj = null;
-            } else if (registrationDateObj > today) {
-                newErrors.registrationDate = "Registration date cannot be a future date.";
-            }
-        }
-        if (formData.plantationDate) {
-            const plantationDateObj = new Date(formData.plantationDate);
-            if (isNaN(plantationDateObj.getTime())) {
-                newErrors.plantationDate = "Invalid plantation date format.";
-            } else if (plantationDateObj > today) {
-                newErrors.plantationDate = "Plantation date cannot be in the future.";
-            } else if (registrationDateObj && plantationDateObj < registrationDateObj) {
-                newErrors.plantationDate = "Plantation date cannot be before the registration date.";
-            }
-        }
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    }, [formData, existingFarmers]);
+        
+        return !hasErrors;
+    };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (validate()) {
+    const handleNext = () => {
+        if (validateStep(currentStep)) {
+            if (currentStep < STEPS.length) {
+                setCurrentStep(prev => prev + 1);
+            }
+        }
+    };
+    const handlePrevious = () => setCurrentStep(prev => Math.max(1, prev - 1));
+
+    const validateAll = useCallback(() => {
+        // Run all step validations
+        const step1Valid = validateStep(1);
+        const step2Valid = validateStep(2);
+        const step3Valid = validateStep(3);
+        const step4Valid = validateStep(4);
+        return step1Valid && step2Valid && step3Valid && step4Valid;
+    }, [formData]);
+
+    const handleSubmit = (e?: React.FormEvent) => {
+        e?.preventDefault();
+        if (validateAll()) {
             const now = new Date().toISOString();
             let farmerData: Farmer;
-
             if (mode === 'create') {
                 const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
                 const farmersInVillage = existingFarmers.filter(f => f.village === formData.village && f.mandal === formData.mandal && f.district === formData.district);
@@ -413,25 +328,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
                 const applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
                 const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
-
-                farmerData = {
-                    ...formData,
-                    id: farmerId,
-                    farmerId,
-                    applicationId,
-                    asoId,
-                    createdAt: now,
-                    updatedAt: now,
-                };
-            } else { // mode === 'edit'
-                farmerData = {
-                    ...existingFarmer!,
-                    ...formData,
-                    updatedAt: now,
-                };
+                farmerData = { ...formData, id: farmerId, farmerId, applicationId, asoId, createdAt: now, updatedAt: now };
+            } else {
+                farmerData = { ...existingFarmer!, ...formData, updatedAt: now };
             }
             setPreparedFarmerData(farmerData);
-            setShowConfirmation(true);
+            // Show confirmation modal (which is now part of the ReviewStep)
+        } else {
+            // Find the first step with an error and navigate to it
+            for (let i = 1; i <= STEPS.length; i++) {
+                if (!validateStep(i)) {
+                    setCurrentStep(i);
+                    break;
+                }
+            }
         }
     };
     
@@ -440,10 +350,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             setIsSubmitting(true);
             try {
                 await onSubmit(preparedFarmerData, photoFile);
-                if (mode === 'create') {
-                    localStorage.removeItem(DRAFT_STORAGE_KEY);
-                }
-                setShowConfirmation(false);
+                if (mode === 'create') localStorage.removeItem(DRAFT_STORAGE_KEY);
                 setShowSuccess(true);
             } catch (error) {
                 console.error("Submission failed:", error);
@@ -454,26 +361,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         }
     };
 
-    const handleCancelConfirmation = () => {
-        setShowConfirmation(false);
-        setPreparedFarmerData(null);
-    };
-
-    const handleCancel = () => {
-        setShowCancelConfirmation(true);
-    };
-    
+    const handleCancel = () => setShowCancelConfirmation(true);
     const handleConfirmCancel = () => {
-        if (mode === 'create') {
-            localStorage.removeItem(DRAFT_STORAGE_KEY);
-        }
+        if (mode === 'create') localStorage.removeItem(DRAFT_STORAGE_KEY);
         setShowCancelConfirmation(false);
         onCancel();
     };
-
-    const handleAbortCancel = () => {
-        setShowCancelConfirmation(false);
-    };
+    const handleAbortCancel = () => setShowCancelConfirmation(false);
 
     const handleRestoreDraft = () => {
         const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
@@ -481,9 +375,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             try {
                 const draftData = JSON.parse(savedDraft);
                 setFormData(draftData);
-                if (draftData.photo) { // This field might contain old base64 data
-                    setPhotoPreview(draftData.photo);
-                }
+                if (draftData.photo) setPhotoPreview(draftData.photo);
             } catch (e) { console.error("Failed to parse draft for restore", e); }
         }
         setHasDraft(false);
@@ -501,36 +393,98 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         setErrors({});
         setShowSuccess(false);
         setPreparedFarmerData(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+        setCurrentStep(1);
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
     
     const getInputClass = (fieldName: keyof typeof errors) => `w-full p-2.5 bg-white border rounded-lg text-sm text-gray-900 focus:ring-2 transition ${errors[fieldName] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-green-500 focus:border-green-500'}`;
     const getSelectClass = (fieldName: keyof typeof errors) => `${getInputClass(fieldName)} appearance-none pr-10`;
 
+    const ProgressBar = ({ currentStep }: { currentStep: number }) => (
+        <nav aria-label="Progress">
+            <ol role="list" className="space-y-4 md:flex md:space-x-8 md:space-y-0">
+                {STEPS.map((step, index) => {
+                    const stepNumber = index + 1;
+                    const status = stepNumber < currentStep ? 'complete' : stepNumber === currentStep ? 'current' : 'upcoming';
+                    const canNavigate = stepNumber < currentStep;
+                    
+                    const content = (
+                        <>
+                            <span className={`text-xs font-semibold uppercase tracking-wide ${status === 'upcoming' ? 'text-gray-500' : 'text-green-600'}`}>Step {stepNumber}</span>
+                            <span className="text-sm font-medium">{step.name}</span>
+                        </>
+                    );
+                    
+                    const commonClasses = `group flex flex-col py-2 pl-4 md:pl-0 md:pt-4 md:pb-0 md:border-l-0 border-l-4`;
+                    const statusClasses = {
+                        complete: 'border-green-600 hover:border-green-800 md:border-t-4',
+                        current: 'border-green-600 md:border-t-4',
+                        upcoming: 'border-gray-200 md:border-t-4'
+                    };
+
+                    return (
+                        <li key={step.name} className="md:flex-1">
+                            <button type="button" onClick={() => canNavigate && setCurrentStep(stepNumber)} disabled={!canNavigate} className={`${commonClasses} ${statusClasses[status]} w-full text-left`}>
+                                {content}
+                            </button>
+                        </li>
+                    );
+                })}
+            </ol>
+        </nav>
+    );
+
+    const ReviewStep = () => (
+        <div>
+             <h3 className="text-lg font-semibold text-green-700 mb-4">Review Details</h3>
+             <p className="text-gray-600 mb-6">Please review the information below before saving.</p>
+            <div className="space-y-3 text-sm max-h-96 overflow-y-auto pr-4">
+                {preparedFarmerData && (
+                    <>
+                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Full Name:</span><span className="text-gray-900 font-medium">{preparedFarmerData.fullName}</span></div>
+                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Hap ID:</span><span className="text-gray-900 font-mono">{preparedFarmerData.farmerId}</span></div>
+                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Aadhaar:</span><span className="text-gray-900">{`**** **** ${preparedFarmerData.aadhaarNumber.slice(-4)}`}</span></div>
+                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Mobile:</span><span className="text-gray-900">{preparedFarmerData.mobileNumber}</span></div>
+                        <div className="flex justify-between border-b pb-2 items-start"><span className="font-semibold text-gray-600">Location:</span><span className="text-gray-900 text-right">{getGeoName('village', preparedFarmerData)},<br/>{getGeoName('mandal', preparedFarmerData)},<br/>{getGeoName('district', preparedFarmerData)}</span></div>
+                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Approved Extent:</span><span className="text-gray-900">{preparedFarmerData.approvedExtent} Acres</span></div>
+                        <div className="flex justify-between pb-2"><span className="font-semibold text-gray-600">Number of Plants:</span><span className="text-gray-900">{preparedFarmerData.numberOfPlants}</span></div>
+                    </>
+                )}
+            </div>
+            <div className="mt-6 flex justify-end">
+                <button
+                    type="button"
+                    onClick={() => setShowAiReview(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-semibold flex items-center gap-2"
+                    title="Use AI to check the form for potential errors or inconsistencies."
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
+                    Review with AI
+                </button>
+            </div>
+        </div>
+    );
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             {!showSuccess && (
-                 <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-full overflow-y-auto">
-                    <form onSubmit={handleSubmit} noValidate>
+                 <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-full flex flex-col">
+                    <form onSubmit={(e) => e.preventDefault()} noValidate>
                         <div className="p-6">
                             <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">{mode === 'create' ? 'New Farmer Registration' : 'Edit Farmer Details'}</h2>
                             
-                            {hasDraft && mode === 'create' && (
+                             {hasDraft && mode === 'create' && currentStep === 1 && (
                                 <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-r-lg" role="alert">
-                                    <p className="font-bold">Unsaved Draft Found</p>
-                                    <p>Would you like to continue where you left off?</p>
-                                    <div className="mt-3">
-                                        <button type="button" onClick={handleRestoreDraft} className="px-4 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold mr-2">Restore Draft</button>
-                                        <button type="button" onClick={handleDiscardDraft} className="px-4 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold">Discard</button>
-                                    </div>
+                                    <p className="font-bold">Unsaved Draft Found</p><p>Would you like to continue where you left off?</p>
+                                    <div className="mt-3"><button type="button" onClick={handleRestoreDraft} className="px-4 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold mr-2">Restore</button><button type="button" onClick={handleDiscardDraft} className="px-4 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-semibold">Discard</button></div>
                                 </div>
                             )}
 
-                            <section>
-                                <h3 className="text-lg font-semibold text-green-700 mb-4">1. Personal Details</h3>
-                                <FormRow><FormLabel required>Full Name</FormLabel><FormField><input type="text" name="fullName" value={formData.fullName} onChange={handleChange} className={getInputClass('fullName')} /><InputError message={errors.fullName} onDismiss={() => handleDismissError('fullName')} /></FormField></FormRow>
+                            <ProgressBar currentStep={currentStep} />
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto flex-1">
+                            {currentStep === 1 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">1. Personal Details</h3><FormRow><FormLabel required>Full Name</FormLabel><FormField><input type="text" name="fullName" value={formData.fullName} onChange={handleChange} className={getInputClass('fullName')} /><InputError message={errors.fullName} onDismiss={() => handleDismissError('fullName')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>Father/Husband Name</FormLabel><FormField><input type="text" name="fatherHusbandName" value={formData.fatherHusbandName} onChange={handleChange} className={getInputClass('fatherHusbandName')} /><InputError message={errors.fatherHusbandName} onDismiss={() => handleDismissError('fatherHusbandName')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Aadhaar Number</FormLabel><FormField><input type="text" name="aadhaarNumber" value={formData.aadhaarNumber} onChange={handleChange} className={getInputClass('aadhaarNumber')} maxLength={12} disabled={mode === 'edit'} title={mode === 'edit' ? 'Aadhaar number cannot be changed.' : ''} /><InputError message={errors.aadhaarNumber} onDismiss={() => handleDismissError('aadhaarNumber')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>Mobile Number</FormLabel><FormField><input type="text" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} className={getInputClass('mobileNumber')} maxLength={10} /><InputError message={errors.mobileNumber} onDismiss={() => handleDismissError('mobileNumber')} /></FormField></FormRow>
@@ -538,94 +492,45 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <FormRow><FormLabel required>Address</FormLabel><FormField><textarea name="address" value={formData.address} onChange={handleChange} className={getInputClass('address')} rows={3}></textarea><InputError message={errors.address} onDismiss={() => handleDismissError('address')} /></FormField></FormRow>
                                 <FormRow><FormLabel>PPB/ROFR ID</FormLabel><FormField><input type="text" name="ppbRofrId" value={formData.ppbRofrId} onChange={handleChange} className={getInputClass('ppbRofrId')} /><InputError message={errors.ppbRofrId} onDismiss={() => handleDismissError('ppbRofrId')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Registration Date</FormLabel><FormField><input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={getInputClass('registrationDate')} max={new Date().toISOString().split('T')[0]} /><InputError message={errors.registrationDate} onDismiss={() => handleDismissError('registrationDate')} /></FormField></FormRow>
-                                <FormRow>
-                                    <FormLabel>Photo</FormLabel>
-                                    <FormField>
-                                        {photoPreview ? (
-                                            <div className="flex items-center gap-4">
-                                                <img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/>
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div>
-                                                    <button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-md hover:bg-red-200 transition">Remove</button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <input ref={fileInputRef} type="file" accept="image/jpeg, image/png" onChange={handlePhotoChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />
-                                        )}
-                                        <InputError message={errors.photo} onDismiss={() => handleDismissError('photo')} />
-                                    </FormField>
-                                </FormRow>
-                            </section>
-                            
-                            <section className="mt-6">
-                                <h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3>
-                                <FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')} disabled={mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select District --</option>{districtsForSelect.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
+                                <FormRow><FormLabel>Photo</FormLabel><FormField>{photoPreview ? (<div className="flex items-center gap-4"><img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/><div className="flex flex-col gap-1"><div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div><button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-md hover:bg-red-200 transition">Remove</button></div></div>) : (<input ref={fileInputRef} type="file" accept="image/jpeg, image/png" onChange={handlePhotoChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />)}<InputError message={errors.photo} onDismiss={() => handleDismissError('photo')} /></FormField></FormRow>
+                            </section>}
+                            {currentStep === 2 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3><FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')} disabled={mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select District --</option>{districtsForSelect.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
                                 <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')}/></FormField></FormRow>
                                 <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleGeoChange} className={getSelectClass('village')} disabled={!formData.mandal || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
-                            </section>
-                            
-                            <section className="mt-6">
-                                <h3 className="text-lg font-semibold text-green-700 mb-4">3. Bank Details</h3>
-                                <FormRow><FormLabel required>Bank Account Number</FormLabel><FormField><input type="text" name="bankAccountNumber" value={formData.bankAccountNumber} onChange={handleChange} className={getInputClass('bankAccountNumber')} /><InputError message={errors.bankAccountNumber} onDismiss={() => handleDismissError('bankAccountNumber')} /></FormField></FormRow>
+                            </section>}
+                            {currentStep === 3 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">3. Bank Details</h3><FormRow><FormLabel required>Bank Account Number</FormLabel><FormField><input type="text" name="bankAccountNumber" value={formData.bankAccountNumber} onChange={handleChange} className={getInputClass('bankAccountNumber')} /><InputError message={errors.bankAccountNumber} onDismiss={() => handleDismissError('bankAccountNumber')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>IFSC Code</FormLabel><FormField><input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={getInputClass('ifscCode')} /><InputError message={errors.ifscCode} onDismiss={() => handleDismissError('ifscCode')} /></FormField></FormRow>
-                                <FormRow>
-                                    <FormLabel><div className="relative flex items-center gap-1.5 group cursor-help"><span>Account Verified</span><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">Indicates if the farmer's bank account details have been manually confirmed for accuracy before subsidy payments.</div></div></FormLabel>
-                                    <FormField><label className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-green-50 transition w-max"><input type="checkbox" name="accountVerified" checked={formData.accountVerified} onChange={handleChange} className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500" /><span className="ml-3 text-gray-700 font-medium">Mark as Verified</span></label></FormField>
-                                </FormRow>
-                            </section>
-
-                            <section className="mt-6">
-                                <h3 className="text-lg font-semibold text-green-700 mb-4">4. Land & Plantation Details</h3>
-                                <FormRow><FormLabel>Applied Extent (Acres)</FormLabel><FormField><input type="number" step="0.01" name="appliedExtent" value={formData.appliedExtent} onChange={handleChange} className={getInputClass('appliedExtent')} /><InputError message={errors.appliedExtent} onDismiss={() => handleDismissError('appliedExtent')} /></FormField></FormRow>
+                                <FormRow><FormLabel><div className="relative flex items-center gap-1.5 group cursor-help"><span>Account Verified</span><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">Indicates if the farmer's bank account details have been manually confirmed for accuracy before subsidy payments.</div></div></FormLabel><FormField><label className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-green-50 transition w-max"><input type="checkbox" name="accountVerified" checked={formData.accountVerified} onChange={handleChange} className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500" /><span className="ml-3 text-gray-700 font-medium">Mark as Verified</span></label></FormField></FormRow>
+                            </section>}
+                             {currentStep === 4 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">4. Land & Plantation Details</h3><FormRow><FormLabel>Applied Extent (Acres)</FormLabel><FormField><input type="number" step="0.01" name="appliedExtent" value={formData.appliedExtent} onChange={handleChange} className={getInputClass('appliedExtent')} /><InputError message={errors.appliedExtent} onDismiss={() => handleDismissError('appliedExtent')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Approved Extent (Acres)</FormLabel><FormField><input type="number" step="0.01" name="approvedExtent" value={formData.approvedExtent} onChange={handleChange} className={getInputClass('approvedExtent')} /><InputError message={errors.approvedExtent} onDismiss={() => handleDismissError('approvedExtent')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Number of Plants</FormLabel><FormField><input type="number" name="numberOfPlants" value={formData.numberOfPlants} onChange={handleChange} className={getInputClass('numberOfPlants')} /><InputError message={errors.numberOfPlants} onDismiss={() => handleDismissError('numberOfPlants')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Method of Plantation</FormLabel><FormField><div className="relative"><select name="methodOfPlantation" value={formData.methodOfPlantation} onChange={handleChange} className={getSelectClass('methodOfPlantation')}>{Object.values(PlantationMethod).map(s => <option key={s} value={s}>{s}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
                                 <FormRow><FormLabel>Plant Type</FormLabel><FormField><div className="relative"><select name="plantType" value={formData.plantType} onChange={handleChange} className={getSelectClass('plantType')}>{Object.values(PlantType).map(s => <option key={s} value={s}>{s}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
                                 <FormRow><FormLabel>MLRD Plants</FormLabel><FormField><input type="number" name="mlrdPlants" value={formData.mlrdPlants} onChange={handleChange} className={getInputClass('mlrdPlants')} /><InputError message={errors.mlrdPlants} onDismiss={() => handleDismissError('mlrdPlants')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Full Cost Plants</FormLabel><FormField><input type="number" name="fullCostPlants" value={formData.fullCostPlants} onChange={handleChange} className={getInputClass('fullCostPlants')} /></FormField></FormRow>
-                                <FormRow>
-                                    <FormLabel>Plantation Date</FormLabel>
-                                    <FormField><input type="date" name="plantationDate" value={formData.plantationDate} onChange={handleChange} className={`${getInputClass('plantationDate')} disabled:bg-gray-100 disabled:cursor-not-allowed`} min={formData.registrationDate} disabled={!formData.registrationDate} title={!formData.registrationDate ? "Please select a registration date first" : ""} /><InputError message={errors.plantationDate} onDismiss={() => handleDismissError('plantationDate')} /></FormField>
-                                </FormRow>
-                                <FormRow>
-                                    <FormLabel>Geolocation</FormLabel>
-                                    <FormField>
-                                        <div className="flex flex-col sm:flex-row gap-4">
-                                            <input type="number" step="any" name="latitude" placeholder="Latitude" value={formData.latitude ?? ''} onChange={handleChange} className={`${getInputClass('latitude')} flex-1`} />
-                                            <input type="number" step="any" name="longitude" placeholder="Longitude" value={formData.longitude ?? ''} onChange={handleChange} className={`${getInputClass('longitude')} flex-1`} />
-                                            <button type="button" onClick={handleCaptureLocation} disabled={isCapturingLocation} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2 disabled:bg-blue-300">
-                                                {isCapturingLocation ? (
-                                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                                ) : (
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
-                                                )}
-                                                <span>{isCapturingLocation ? 'Capturing...' : 'Capture'}</span>
-                                            </button>
-                                        </div>
-                                        {locationError && <p className="mt-2 text-sm text-red-600">{locationError}</p>}
-                                    </FormField>
-                                </FormRow>
-                            </section>
-                            
-                             <section className="mt-6">
-                                <h3 className="text-lg font-semibold text-green-700 mb-4">5. Application Status</h3>
-                                <FormRow><FormLabel>Current Status</FormLabel><FormField><div className="relative"><select name="status" value={formData.status} onChange={handleChange} className={getSelectClass('status')}>{Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
-                            </section>
+                                <FormRow><FormLabel>Plantation Date</FormLabel><FormField><input type="date" name="plantationDate" value={formData.plantationDate} onChange={handleChange} className={`${getInputClass('plantationDate')} disabled:bg-gray-100 disabled:cursor-not-allowed`} min={formData.registrationDate} disabled={!formData.registrationDate} title={!formData.registrationDate ? "Please select a registration date first" : ""} /><InputError message={errors.plantationDate} onDismiss={() => handleDismissError('plantationDate')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Geolocation</FormLabel><FormField><div className="flex flex-col sm:flex-row gap-4"><input type="number" step="any" name="latitude" placeholder="Latitude" value={formData.latitude ?? ''} onChange={handleChange} className={`${getInputClass('latitude')} flex-1`} /><input type="number" step="any" name="longitude" placeholder="Longitude" value={formData.longitude ?? ''} onChange={handleChange} className={`${getInputClass('longitude')} flex-1`} /><button type="button" onClick={handleCaptureLocation} disabled={isCapturingLocation} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2 disabled:bg-blue-300">{isCapturingLocation ? (<svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>)}<span>{isCapturingLocation ? 'Capturing...' : 'Capture'}</span></button></div>{locationError && <p className="mt-2 text-sm text-red-600">{locationError}</p>}</FormField></FormRow>
+                            </section>}
+                            {currentStep === 5 && <ReviewStep />}
                         </div>
-                        <div className="bg-gray-100 p-4 flex justify-end items-center gap-4 rounded-b-lg">
+                        
+                        <div className="bg-gray-100 p-4 flex justify-between items-center gap-4 rounded-b-lg">
                             <button type="button" onClick={handleCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Cancel</button>
-                            <button
-                                type="button"
-                                onClick={() => setShowAiReview(true)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-semibold flex items-center gap-2"
-                                title="Use AI to check the form for potential errors or inconsistencies."
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
-                                Review with AI
-                            </button>
-                            <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">
-                                {mode === 'create' ? 'Register Farmer' : 'Save Changes'}
-                            </button>
+                            
+                            <div className="flex items-center gap-4">
+                                {currentStep > 1 && (
+                                    <button type="button" onClick={handlePrevious} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Previous</button>
+                                )}
+                                
+                                {currentStep < STEPS.length ? (
+                                    <button type="button" onClick={handleNext} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Next</button>
+                                ) : (
+                                    <button type="button" onClick={handleSubmit} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">
+                                        {mode === 'create' ? 'Register Farmer' : 'Save Changes'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -633,30 +538,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
             
             {showAiReview && <AiReviewModal farmerData={formData} onClose={() => setShowAiReview(false)} />}
 
-            {showConfirmation && preparedFarmerData && (
+            {preparedFarmerData && currentStep === 5 && (
                 <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                         <div className="p-6">
                             <h3 className="text-2xl font-bold text-gray-800 mb-4">{mode === 'create' ? 'Confirm Details' : 'Confirm Changes'}</h3>
-                            <p className="text-gray-600 mb-6">Please review the information below before {mode === 'create' ? 'saving' : 'updating'}.</p>
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Full Name:</span><span className="text-gray-900 font-medium">{preparedFarmerData.fullName}</span></div>
-                                <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Hap ID:</span><span className="text-gray-900 font-mono">{preparedFarmerData.farmerId}</span></div>
-                                <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Aadhaar:</span><span className="text-gray-900">{`**** **** ${preparedFarmerData.aadhaarNumber.slice(-4)}`}</span></div>
-                                <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Mobile:</span><span className="text-gray-900">{preparedFarmerData.mobileNumber}</span></div>
-                                <div className="flex justify-between border-b pb-2 items-start">
-                                    <span className="font-semibold text-gray-600">Location:</span>
-                                    <span className="text-gray-900 text-right">
-                                        {getGeoName('village', { district: preparedFarmerData.district, mandal: preparedFarmerData.mandal, village: preparedFarmerData.village })},<br/>
-                                        {getGeoName('mandal', { district: preparedFarmerData.district, mandal: preparedFarmerData.mandal })},<br/>
-                                        {getGeoName('district', { district: preparedFarmerData.district })}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between pb-2"><span className="font-semibold text-gray-600">Approved Extent:</span><span className="text-gray-900">{preparedFarmerData.approvedExtent} Acres</span></div>
-                            </div>
+                            <p className="text-gray-600 mb-6">Are you sure you want to submit this information?</p>
                         </div>
                         <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
-                            <button type="button" onClick={handleCancelConfirmation} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition" disabled={isSubmitting}>Go Back & Edit</button>
+                            <button type="button" onClick={() => setPreparedFarmerData(null)} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition" disabled={isSubmitting}>Go Back & Edit</button>
                             <button type="button" onClick={handleConfirmSubmit} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold disabled:bg-green-400 disabled:cursor-wait" disabled={isSubmitting}>
                                 {isSubmitting ? (mode === 'create' ? 'Saving...' : 'Updating...') : (mode === 'create' ? 'Confirm & Save' : 'Confirm & Update')}
                             </button>
@@ -667,35 +557,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
 
             {showSuccess && preparedFarmerData && (
                  <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8 text-center animate-fade-in">
-                    <div className="text-green-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mx-auto" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                    </div>
+                    <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg></div>
                     <h3 className="text-2xl font-bold text-gray-800 mt-4">{mode === 'create' ? 'Registration Successful!' : 'Update Successful!'}</h3>
-                    <p className="text-gray-600 mt-2">
-                        Farmer <span className="font-semibold">{preparedFarmerData.fullName}</span> has been successfully {mode === 'create' ? 'registered' : 'updated'}.
-                    </p>
-                    <p className="text-gray-600 mt-1">
-                        Hap ID: <span className="font-mono bg-gray-100 p-1 rounded">{preparedFarmerData.farmerId}</span>
-                    </p>
+                    <p className="text-gray-600 mt-2">Farmer <span className="font-semibold">{preparedFarmerData.fullName}</span> has been successfully {mode === 'create' ? 'registered' : 'updated'}.</p>
+                    <p className="text-gray-600 mt-1">Hap ID: <span className="font-mono bg-gray-100 p-1 rounded">{preparedFarmerData.farmerId}</span></p>
                     <div className="mt-8 flex gap-4 justify-center">
-                        {mode === 'create' && (
-                            <button
-                                type="button"
-                                onClick={handleRegisterAnother}
-                                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold"
-                            >
-                                Register Another Farmer
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={onCancel}
-                            className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition"
-                        >
-                            Close
-                        </button>
+                        {mode === 'create' && (<button type="button" onClick={handleRegisterAnother} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Register Another Farmer</button>)}
+                        <button type="button" onClick={onCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Close</button>
                     </div>
                 </div>
             )}

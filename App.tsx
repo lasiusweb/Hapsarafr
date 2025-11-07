@@ -1,19 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import * as ReactDOM from 'react-dom/client';
-import { Farmer, User, Group, Permission, PaymentStage } from './types';
-import FilterBar, { Filters } from './components/FilterBar';
+import { Farmer, User, Group, Permission, PaymentStage, ActivityType, Filters } from './types';
+import FilterBar from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
 import { Q, Query, Model } from '@nozbe/watermelondb';
-import { FarmerModel, SubsidyPaymentModel } from './db';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel } from './db';
 import { initializeSupabase } from './lib/supabase';
 import { DEFAULT_GROUPS } from './data/permissionsData';
-import { AVATARS } from './data/avatars';
+import { MOCK_USERS } from './data/userData';
 import Sidebar from './components/Sidebar';
 import Notification from './components/Notification';
 import { synchronize } from './lib/sync';
 import { exportToExcel, exportToCsv } from './lib/export';
 import PrintView from './components/PrintView';
+import { farmerModelToPlain, getGeoName } from './lib/utils';
+import { useQuery } from './hooks/useQuery';
+import { useDebounce } from './hooks/useDebounce';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 
 // Lazily import components to enable code-splitting
 const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
@@ -41,6 +45,7 @@ const SubsidyManagementPage = lazy(() => import('./components/SubsidyManagementP
 const MapView = lazy(() => import('./components/MapView'));
 const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
 const ReportsPage = lazy(() => import('./components/ReportsPage'));
+const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerPage'));
 
 
 // Type declarations for CDN libraries
@@ -129,17 +134,7 @@ const AlertsPanel: React.FC<{
 };
 
 
-// Custom hooks to observe WatermelonDB queries
-const useQuery = <T extends Model>(query: Query<T>): T[] => {
-  const [data, setData] = useState<T[]>([]);
-  useEffect(() => {
-    const subscription = query.observe().subscribe(setData);
-    return () => subscription.unsubscribe();
-  }, [query]);
-  return data;
-};
-
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner';
 type ParsedHash = 
     | { view: View; params: {} }
     | { view: 'farmer-details'; params: { farmerId: string } }
@@ -155,7 +150,7 @@ const parseHash = (): ParsedHash => {
         return { view: 'farmer-details', params: { farmerId: id } };
     }
 
-    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports'];
+    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner'];
     if (simpleViews.includes(path as View)) {
         return { view: path as View, params: {} };
     }
@@ -173,70 +168,13 @@ const ModalLoader: React.FC = () => (
     </div>
 );
 
-// Custom hook to track online status
-const useOnlineStatus = () => {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-  return isOnline;
-};
-
-const farmerModelToPlain = (f: FarmerModel): Farmer => ({
-    id: f.id,
-    fullName: f.fullName,
-    fatherHusbandName: f.fatherHusbandName,
-    aadhaarNumber: f.aadhaarNumber,
-    mobileNumber: f.mobileNumber,
-    gender: f.gender,
-    address: f.address,
-    ppbRofrId: f.ppbRofrId,
-    photo: f.photo,
-    bankAccountNumber: f.bankAccountNumber,
-    ifscCode: f.ifscCode,
-    accountVerified: f.accountVerified,
-    appliedExtent: f.appliedExtent,
-    approvedExtent: f.approvedExtent,
-    numberOfPlants: f.numberOfPlants,
-    methodOfPlantation: f.methodOfPlantation,
-    plantType: f.plantType,
-    plantationDate: f.plantationDate,
-    mlrdPlants: f.mlrdPlants,
-    fullCostPlants: f.fullCostPlants,
-    latitude: f.latitude,
-    longitude: f.longitude,
-    applicationId: f.applicationId,
-    farmerId: f.farmerId,
-    proposedYear: f.proposedYear,
-    registrationDate: f.registrationDate,
-    asoId: f.asoId,
-    paymentUtrDd: f.paymentUtrDd,
-    status: f.status,
-    district: f.district,
-    mandal: f.mandal,
-    village: f.village,
-    syncStatus: f.syncStatusLocal,
-    createdBy: f.createdBy,
-    updatedBy: f.updatedBy,
-    createdAt: new Date(f.createdAt).toISOString(),
-    updatedAt: new Date(f.updatedAt).toISOString(),
-});
-
-
 const App: React.FC = () => {
     const database = useDatabase();
     const isOnline = useOnlineStatus();
     const [appState, setAppState] = useState<string>('APP'); 
     const [supabase, setSupabase] = useState<any | null>(null);
-    const [currentUser, setCurrentUser] = useState<User>({ id: 'user-1', name: 'Field Officer', groupId: 'group-data-entry', avatar: AVATARS[4]});
-    const [users, setUsers] = useState<User[]>([]);
+    const [users, setUsers] = useState<User[]>(MOCK_USERS);
+    const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[1]); // Default to Steve Rogers (Data Entry)
     const [groups, setGroups] = useState<Group[]>(DEFAULT_GROUPS);
   
     // UI State
@@ -251,6 +189,8 @@ const App: React.FC = () => {
     const [showBulkImportModal, setShowBulkImportModal] = useState(false);
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
     const [showRawDataView, setShowRawDataView] = useState(false);
+    const [showChangelog, setShowChangelog] = useState(false);
+    const [showPrivacy, setShowPrivacy] = useState(false);
   
     // Data and list state
     const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -277,7 +217,7 @@ const App: React.FC = () => {
     const paymentsQuery = useMemo(() => database.get<SubsidyPaymentModel>('subsidy_payments').query(), [database]);
     const allPayments = useQuery(paymentsQuery);
 
-    const allPlainFarmers = useMemo(() => allFarmers.map(farmerModelToPlain), [allFarmers]);
+    const allPlainFarmers = useMemo(() => allFarmers.map(f => farmerModelToPlain(f)).filter(Boolean) as Farmer[], [allFarmers]);
 
     useEffect(() => {
         const sup = initializeSupabase();
@@ -366,6 +306,14 @@ const App: React.FC = () => {
         window.location.hash = path;
     };
 
+    const handleNavigateWithFilter = (view: 'farmer-directory', newFilters: Partial<Filters>) => {
+        // Reset filters to initial state then apply the new ones to prevent conflicts
+        setFilters({ ...initialFilters, ...newFilters });
+        handleNavigate(view);
+        // Reset pagination for the new filtered view
+        setCurrentPage(1);
+    };
+
     const parsedHash = useMemo(() => parseHash(), [currentHash]);
 
     useEffect(() => {
@@ -381,6 +329,7 @@ const App: React.FC = () => {
 
     const handleSaveFarmer = useCallback(async (farmerData: Farmer, photoFile?: File) => {
         const farmersCollection = database.get<FarmerModel>('farmers');
+        const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
         let photoBase64 = farmerData.photo;
 
         if (photoFile) {
@@ -392,18 +341,37 @@ const App: React.FC = () => {
             });
         }
         
-        await database.write(async () => {
+        await database.write(async writer => {
             if (editingFarmer) {
                 const farmerToUpdate = await farmersCollection.find(editingFarmer.id);
+                const oldStatus = farmerToUpdate.status;
+
+                if (oldStatus !== farmerData.status) {
+                    await activityLogsCollection.create(log => {
+                        log.farmerId = farmerToUpdate.id;
+                        log.activityType = ActivityType.STATUS_CHANGE;
+                        log.description = `Status changed from ${oldStatus} to ${farmerData.status}.`;
+                        log.createdBy = currentUser?.id;
+                    }, writer);
+                }
+
                 await farmerToUpdate.update(record => {
                     const { id, createdAt, updatedAt, createdBy, ...updatableData } = farmerData;
                     Object.assign(record, { ...updatableData, photo: photoBase64, syncStatusLocal: 'pending', updatedBy: currentUser?.id });
-                });
+                }, writer);
             } else {
                 await farmersCollection.create(record => {
                     Object.assign(record, { ...farmerData, photo: photoBase64, syncStatusLocal: 'pending', createdBy: currentUser?.id, updatedBy: currentUser?.id });
                     record._raw.id = farmerData.id;
-                });
+                }, writer);
+
+                await activityLogsCollection.create(log => {
+                    log.farmerId = farmerData.id;
+                    log.activityType = ActivityType.REGISTRATION;
+                    const villageName = getGeoName('village', { district: farmerData.district, mandal: farmerData.mandal, village: farmerData.village });
+                    log.description = `Farmer registered in ${villageName}.`;
+                    log.createdBy = currentUser?.id;
+                }, writer);
                 setNewlyAddedFarmerId(farmerData.id);
             }
         });
@@ -520,10 +488,16 @@ const App: React.FC = () => {
     }, [allPlainFarmers, users]);
     
     // --- Data Processing for Farmer Directory ---
+    const debouncedSearchQuery = useDebounce(filters.searchQuery, 300);
+    const effectiveFilters = useMemo(() => ({
+      ...filters,
+      searchQuery: debouncedSearchQuery,
+    }), [filters, debouncedSearchQuery]);
+
     const processedFarmers = useMemo(() => {
         let filtered = [...allPlainFarmers];
 
-        const query = filters.searchQuery.toLowerCase().trim();
+        const query = effectiveFilters.searchQuery.toLowerCase().trim();
         if (query) {
             filtered = filtered.filter(f => 
                 f.fullName.toLowerCase().includes(query) ||
@@ -532,17 +506,17 @@ const App: React.FC = () => {
             );
         }
         
-        if (filters.district) filtered = filtered.filter(f => f.district === filters.district);
-        if (filters.mandal) filtered = filtered.filter(f => f.mandal === filters.mandal);
-        if (filters.village) filtered = filtered.filter(f => f.village === filters.village);
-        if (filters.status) filtered = filtered.filter(f => f.status === filters.status);
+        if (effectiveFilters.district) filtered = filtered.filter(f => f.district === effectiveFilters.district);
+        if (effectiveFilters.mandal) filtered = filtered.filter(f => f.mandal === effectiveFilters.mandal);
+        if (effectiveFilters.village) filtered = filtered.filter(f => f.village === effectiveFilters.village);
+        if (effectiveFilters.status) filtered = filtered.filter(f => f.status === effectiveFilters.status);
 
-        if (filters.registrationDateFrom) {
-            const fromDate = new Date(filters.registrationDateFrom).getTime();
+        if (effectiveFilters.registrationDateFrom) {
+            const fromDate = new Date(effectiveFilters.registrationDateFrom).getTime();
             filtered = filtered.filter(f => new Date(f.registrationDate).getTime() >= fromDate);
         }
-        if (filters.registrationDateTo) {
-            const toDate = new Date(filters.registrationDateTo).getTime();
+        if (effectiveFilters.registrationDateTo) {
+            const toDate = new Date(effectiveFilters.registrationDateTo).getTime();
             filtered = filtered.filter(f => new Date(f.registrationDate).getTime() <= toDate);
         }
         
@@ -557,7 +531,7 @@ const App: React.FC = () => {
         }
 
         return filtered;
-    }, [allPlainFarmers, filters, sortConfig]);
+    }, [allPlainFarmers, effectiveFilters, sortConfig]);
     
     const handleExportExcel = () => {
         if (processedFarmers.length === 0) {
@@ -607,11 +581,11 @@ const App: React.FC = () => {
     const renderContent = () => {
         switch (parsedHash.view) {
             case 'dashboard':
-                return <Dashboard supabase={supabase} />;
+                return <Dashboard farmers={allPlainFarmers} onNavigateWithFilter={handleNavigateWithFilter} />;
             case 'farmer-directory':
                 return (
                     <>
-                        <FilterBar onFilterChange={setFilters} />
+                        <FilterBar filters={filters} onFilterChange={setFilters} />
                         <FarmerList
                             farmers={paginatedFarmers}
                             users={users}
@@ -690,7 +664,6 @@ const App: React.FC = () => {
                             onRemove={(id) => setPrintQueue(q => q.filter(farmerId => farmerId !== id))}
                             onClear={() => setPrintQueue([])}
                             onBack={() => handleNavigate('farmer-directory')}
-                            database={database}
                        />;
             case 'help':
                 return <HelpPage 
@@ -699,6 +672,8 @@ const App: React.FC = () => {
                         />;
             case 'id-verification':
                 return <IdVerificationPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
+            case 'crop-health-scanner':
+                return <CropHealthScannerPage onBack={() => handleNavigate('dashboard')} />;
             default:
                 return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
         }
@@ -722,9 +697,9 @@ const App: React.FC = () => {
                     onImport={() => setShowBulkImportModal(true)}
                     onExportExcel={handleExportExcel}
                     onExportCsv={handleExportCsv}
-                    onViewRawData={() => setShowRawDataView(true)}
-                    onShowPrivacy={() => {}}
-                    onShowChangelog={() => {}}
+                    onViewRawData={() => setShowRawDataView(false)}
+                    onShowPrivacy={() => setShowPrivacy(true)}
+                    onShowChangelog={() => setShowChangelog(true)}
                     printQueueCount={printQueue.length}
                 />
                 <div className="flex-1 flex flex-col overflow-hidden">
@@ -784,6 +759,10 @@ const App: React.FC = () => {
                         onClose={() => setShowRawDataView(false)}
                     />
                 )}
+
+                {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+                {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} appContent={null} />}
+
                 {farmerForPrinting && <PrintView farmer={farmerForPrinting} users={users} />}
                 <div id="pdf-export-container" style={{ position: 'absolute', left: '-9999px', top: 0 }}></div>
             </div>
@@ -820,6 +799,7 @@ const Header: React.FC<{
         'help': 'Help & Support',
         'id-verification': 'ID Verification Tool',
         reports: 'Reports & Analytics',
+        'crop-health-scanner': 'Crop Health Scanner',
         'not-found': 'Page Not Found',
     };
 

@@ -1,31 +1,8 @@
 import { Farmer } from '../types';
-import { GEO_DATA } from '../data/geoData';
+import { getGeoName } from './utils';
 
 // For CDN xlsx library
 declare const XLSX: any;
-
-const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { district: string; mandal?: string; village?: string }) => {
-    try {
-        if (!codes.district) return codes.district || 'N/A';
-        const district = GEO_DATA.find(d => d.code === codes.district);
-        if (!district) return codes.district;
-        if (type === 'district') return district.name;
-
-        if (!codes.mandal) return 'N/A';
-        const mandal = district.mandals.find(m => m.code === codes.mandal);
-        if (!mandal) return codes.mandal;
-        if (type === 'mandal') return mandal.name;
-        
-        if (!codes.village) return 'N/A';
-        const village = mandal.villages.find(v => v.code === codes.village);
-        if (!village) return codes.village;
-        if (type === 'village') return village.name;
-    } catch {
-        return 'N/A';
-    }
-    return 'N/A';
-};
-
 
 // Function to convert an array of Farmer objects to a format suitable for export
 const prepareDataForExport = (farmers: Farmer[]) => {

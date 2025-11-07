@@ -12,6 +12,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-export const useDatabase = () => {
+export const useDatabase = (): Database => {
   return useContext(DatabaseContext);
 };

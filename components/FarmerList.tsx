@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Farmer, FarmerStatus, User } from '../types';
-import { GEO_DATA } from '../data/geoData';
+import { getGeoName } from '../lib/utils';
 
 interface FarmerListProps {
     farmers: Farmer[];
@@ -55,18 +55,6 @@ const FarmerList: React.FC<FarmerListProps> = ({
             [FarmerStatus.PaymentDone]: 'bg-purple-100 text-purple-800',
         };
         return <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status]}`}>{status}</span>;
-    };
-
-    const getGeoName = (type: 'district'|'mandal'|'village', farmer: Farmer) => {
-        try {
-            if(type === 'district') return GEO_DATA.find(d => d.code === farmer.district)?.name || farmer.district;
-            const district = GEO_DATA.find(d => d.code === farmer.district);
-            if(type === 'mandal') return district?.mandals.find(m => m.code === farmer.mandal)?.name || farmer.mandal;
-            const mandal = district?.mandals.find(m => m.code === farmer.mandal);
-            if(type === 'village') return mandal?.villages.find(v => v.code === farmer.village)?.name || farmer.village;
-        } catch(e) {
-            return 'N/A';
-        }
     };
     
     const getUserName = (userId?: string) => {
@@ -316,10 +304,16 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                                 </svg>
                                             </div>
                                         )}
-                                        <span>{farmer.fullName}</span>
+                                        <div>
+                                            <span>{farmer.fullName}</span>
+                                            <div className="md:hidden text-xs text-gray-500 font-normal">{farmer.mobileNumber}</div>
+                                        </div>
                                     </div>
                                 </td>
-                                <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</td>
+                                <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <div>{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</div>
+                                    <div className="md:hidden font-semibold text-gray-600">{farmer.approvedExtent} Acres</div>
+                                </td>
                                 <td data-label="Status" className="px-6 py-4 whitespace-nowrap text-sm">
                                     <StatusBadge status={farmer.status as FarmerStatus} />
                                 </td>
@@ -336,9 +330,6 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                     <button onClick={() => onPrint(farmer.id)} className="text-green-600 hover:text-green-900">Print</button>
                                     <button onClick={() => onExportToPdf(farmer.id)} className="text-blue-600 hover:text-blue-900">PDF</button>
                                 </td>
-                                {/* Hidden data for responsive view */}
-                                <td data-label="Mobile" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{farmer.mobileNumber}</td>
-                                <td data-label="Extent (Ac)" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center md:text-right">{farmer.approvedExtent}</td>
                             </tr>
                         );
                     }) : (

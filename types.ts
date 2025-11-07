@@ -125,6 +125,23 @@ export interface SubsidyPayment {
     syncStatus: 'synced' | 'pending';
 }
 
+export enum ActivityType {
+    REGISTRATION = 'REGISTRATION',
+    STATUS_CHANGE = 'STATUS_CHANGE',
+    PLANTATION_UPDATE = 'PLANTATION_UPDATE',
+    PAYMENT_RECORDED = 'PAYMENT_RECORDED',
+    DETAILS_EDITED = 'DETAILS_EDITED',
+}
+
+export interface ActivityLog {
+    id: string;
+    farmerId: string;
+    activityType: ActivityType;
+    description: string;
+    createdBy: string; // User ID
+    createdAt: string; // ISO string
+}
+
 
 export interface Village {
   code: string;
@@ -175,4 +192,14 @@ export interface AuditLogEntry {
     created_at: string;
     old_record_json: any;
     new_record_json: any;
+}
+
+export interface Filters {
+  searchQuery: string;
+  district: string;
+  mandal: string;
+  village: string;
+  status: string;
+  registrationDateFrom: string;
+  registrationDateTo: string;
 }

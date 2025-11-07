@@ -1,18 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { FarmerStatus, Mandal, Village } from '../types';
+import React, { useMemo } from 'react';
+import { FarmerStatus, Mandal, Village, Filters } from '../types';
 import { GEO_DATA } from '../data/geoData';
 
-export interface Filters {
-  searchQuery: string;
-  district: string;
-  mandal: string;
-  village: string;
-  status: string;
-  registrationDateFrom: string;
-  registrationDateTo: string;
-}
-
 interface FilterBarProps {
+  filters: Filters;
   onFilterChange: (filters: Filters) => void;
 }
 
@@ -26,51 +17,8 @@ const initialFilters: Filters = {
   registrationDateTo: '',
 };
 
-/**
- * A custom hook to debounce a value.
- * This prevents a function from being called too frequently by delaying its update.
- * @param value The value to debounce
- * @param delay The delay in milliseconds
- * @returns The debounced value
- */
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    // Cleanup function to clear the timeout if the value changes before the delay has passed
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-}
-
-const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
-  const [filters, setFilters] = useState<Filters>(initialFilters);
-  const debouncedSearchQuery = useDebounce(filters.searchQuery, 500);
-
-  // This single effect handles updating the parent component.
-  // It triggers immediately for dropdown/date changes, but debounces the text search.
-  useEffect(() => {
-    const newFiltersForParent = {
-      ...filters,
-      searchQuery: debouncedSearchQuery,
-    };
-    onFilterChange(newFiltersForParent);
-  }, [
-    debouncedSearchQuery,
-    filters.district,
-    filters.mandal,
-    filters.village,
-    filters.status,
-    filters.registrationDateFrom,
-    filters.registrationDateTo,
-    onFilterChange,
-  ]);
-
-  // Derive mandals and villages directly from filters state to avoid chained useEffect updates.
+const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
+  // Derive mandals and villages directly from filters prop.
   const mandals: Mandal[] = useMemo(() => {
     if (!filters.district) return [];
     const selectedDistrict = GEO_DATA.find(d => d.code === filters.district);
@@ -86,30 +34,30 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFilterChange }) => {
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
+    onFilterChange({ ...filters, [name]: value });
   };
   
   const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newDistrict = e.target.value;
-    setFilters(prev => ({
-        ...prev,
+    onFilterChange({
+        ...filters,
         district: newDistrict,
         mandal: '', // Reset mandal
         village: '', // Reset village
-    }));
+    });
   };
 
   const handleMandalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newMandal = e.target.value;
-      setFilters(prev => ({
-          ...prev,
+      onFilterChange({
+          ...filters,
           mandal: newMandal,
           village: '', // Reset village
-      }));
+      });
   };
 
   const clearFilters = () => {
-    setFilters(initialFilters);
+    onFilterChange(initialFilters);
   };
 
   const inputClass = "w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";

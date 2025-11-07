@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
-import { FarmerModel, SubsidyPaymentModel } from '../db';
-import { User, Permission, FarmerStatus, SubsidyPayment, Farmer } from '../types';
-import { GEO_DATA } from '../data/geoData';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel } from '../db';
+import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType } from '../types';
 import SubsidyPaymentForm from './SubsidyPaymentForm';
 import AiReviewModal from './AiReviewModal';
 import ConfirmationModal from './ConfirmationModal';
+import { farmerModelToPlain, getGeoName } from '../lib/utils';
+import { useDatabase } from '../DatabaseContext';
 
 const RegistrationForm = lazy(() => import('./RegistrationForm'));
 
@@ -20,72 +21,6 @@ interface FarmerDetailsPageProps {
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
-const modelToPlain = (f: FarmerModel | null): Farmer | null => {
-    if (!f) return null;
-    return {
-        id: f.id,
-        fullName: f.fullName,
-        fatherHusbandName: f.fatherHusbandName,
-        aadhaarNumber: f.aadhaarNumber,
-        mobileNumber: f.mobileNumber,
-        gender: f.gender,
-        address: f.address,
-        ppbRofrId: f.ppbRofrId,
-        photo: f.photo,
-        bankAccountNumber: f.bankAccountNumber,
-        ifscCode: f.ifscCode,
-        accountVerified: f.accountVerified,
-        appliedExtent: f.appliedExtent,
-        approvedExtent: f.approvedExtent,
-        numberOfPlants: f.numberOfPlants,
-        methodOfPlantation: f.methodOfPlantation,
-        plantType: f.plantType,
-        plantationDate: f.plantationDate,
-        mlrdPlants: f.mlrdPlants,
-        fullCostPlants: f.fullCostPlants,
-        latitude: f.latitude,
-        longitude: f.longitude,
-        applicationId: f.applicationId,
-        farmerId: f.farmerId,
-        proposedYear: f.proposedYear,
-        registrationDate: f.registrationDate,
-        asoId: f.asoId,
-        paymentUtrDd: f.paymentUtrDd,
-        status: f.status,
-        district: f.district,
-        mandal: f.mandal,
-        village: f.village,
-        syncStatus: f.syncStatusLocal,
-        createdBy: f.createdBy,
-        updatedBy: f.updatedBy,
-        createdAt: new Date(f.createdAt).toISOString(),
-        updatedAt: new Date(f.updatedAt).toISOString(),
-    };
-};
-
-
-const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { district: string; mandal?: string; village?: string }) => {
-    try {
-        const district = GEO_DATA.find(d => d.code === codes.district);
-        if (!district) return codes.district || 'N/A';
-        if (type === 'district') return district.name;
-
-        if (!codes.mandal) return 'N/A';
-        const mandal = district.mandals.find(m => m.code === codes.mandal);
-        if (!mandal) return codes.mandal || 'N/A';
-        if (type === 'mandal') return mandal.name;
-        
-        if (!codes.village) return 'N/A';
-        const village = mandal.villages.find(v => v.code === codes.village);
-        if (!village) return codes.village || 'N/A';
-        if (type === 'village') return village.name;
-    } catch (e) {
-        console.error("Error getting geo name:", e);
-        return 'N/A';
-    }
-    return codes[type] || 'N/A';
-};
-
 const DetailItem: React.FC<{ label: string, value: React.ReactNode }> = ({ label, value }) => (
     <div>
         <dt className="text-sm font-medium text-gray-500">{label}</dt>
@@ -93,9 +28,10 @@ const DetailItem: React.FC<{ label: string, value: React.ReactNode }> = ({ label
     </div>
 );
 
-const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: SubsidyPaymentModel[] } & Omit<FarmerDetailsPageProps, 'farmerId' | 'database'>> = ({
+const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: SubsidyPaymentModel[], activityLogs: ActivityLogModel[] } & Omit<FarmerDetailsPageProps, 'farmerId' | 'database'>> = ({
     farmer,
     subsidyPayments,
+    activityLogs,
     users,
     currentUser,
     onBack,
@@ -107,6 +43,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [editingPayment, setEditingPayment] = useState<SubsidyPaymentModel | null>(null);
     const [paymentToDelete, setPaymentToDelete] = useState<SubsidyPaymentModel | null>(null);
+    const database = useDatabase();
 
     const handleUpdateFarmer = useCallback(async (updatedFarmerData: Farmer, photoFile?: File) => {
         let photoBase64 = updatedFarmerData.photo;
@@ -119,7 +56,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             });
         }
 
-        await farmer.database.write(async () => {
+        await database.write(async () => {
             await farmer.update(record => {
                 const { id, createdAt, createdBy, farmerId, applicationId, asoId, ...updatableData } = updatedFarmerData;
                 Object.assign(record, {
@@ -132,14 +69,14 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
         });
         setIsEditModalOpen(false);
         setNotification({ message: 'Farmer details updated successfully.', type: 'success' });
-    }, [farmer, currentUser.id, setNotification]);
+    }, [database, farmer, currentUser.id, setNotification]);
 
 
     const handleSavePayment = useCallback(async (paymentData: Omit<SubsidyPayment, 'syncStatus' | 'createdAt' | 'createdBy' | 'farmerId'>) => {
-        const paymentsCollection = farmer.database.get<SubsidyPaymentModel>('subsidy_payments');
+        const paymentsCollection = database.get<SubsidyPaymentModel>('subsidy_payments');
         
         if (paymentData.id && editingPayment) { // This is an update
-            await farmer.database.write(async () => {
+            await database.write(async () => {
                 await editingPayment.update(rec => {
                     rec.paymentDate = paymentData.paymentDate;
                     rec.amount = paymentData.amount;
@@ -152,7 +89,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             setNotification({ message: 'Payment updated successfully.', type: 'success' });
             setEditingPayment(null);
         } else { // This is a create
-            await farmer.database.write(async () => {
+            await database.write(async writer => {
                 await paymentsCollection.create(rec => {
                     rec.farmerId = farmer.id;
                     rec.paymentDate = paymentData.paymentDate;
@@ -162,12 +99,20 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     rec.notes = paymentData.notes;
                     rec.createdBy = currentUser.id;
                     rec.syncStatusLocal = 'pending';
-                });
+                }, writer);
+
+                const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
+                await activityLogsCollection.create(log => {
+                    log.farmerId = farmer.id;
+                    log.activityType = ActivityType.PAYMENT_RECORDED;
+                    log.description = `${paymentData.paymentStage} of ₹${paymentData.amount.toLocaleString()} recorded.`;
+                    log.createdBy = currentUser.id;
+                }, writer);
             });
             setNotification({ message: 'Payment recorded successfully.', type: 'success' });
             setShowPaymentModal(false);
         }
-    }, [farmer, currentUser.id, setNotification, editingPayment]);
+    }, [database, farmer, currentUser.id, setNotification, editingPayment]);
 
     const handleDeletePayment = (payment: SubsidyPaymentModel) => {
         setPaymentToDelete(payment);
@@ -175,7 +120,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
 
     const handleConfirmDeletePayment = async () => {
         if (paymentToDelete) {
-            await farmer.database.write(async () => {
+            await database.write(async () => {
                 await paymentToDelete.destroyPermanently();
             });
             setNotification({ message: 'Payment record deleted.', type: 'success' });
@@ -196,6 +141,19 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             {label}
         </button>
     );
+    
+    const getTimelineIcon = (type: string) => {
+        switch (type) {
+            case ActivityType.REGISTRATION:
+                return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>;
+            case ActivityType.STATUS_CHANGE:
+                return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v1h-2V4H7v1H5V4zM5 7v10a2 2 0 002 2h6a2 2 0 002-2V7H5zm2 4h6a1 1 0 110 2H7a1 1 0 110-2z" /></svg>;
+            case ActivityType.PAYMENT_RECORDED:
+                return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.5 2.5 0 00-1.134 0V7.418zM12.5 8.5h-5a2.5 2.5 0 000 5h5a2.5 2.5 0 000-5zM11 10a1 1 0 11-2 0 1 1 0 012 0z" /><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8 6a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" /></svg>;
+            default:
+                return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>;
+        }
+    };
 
     return (
         <div className="bg-gray-50 min-h-full p-6">
@@ -224,6 +182,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                             <TabButton tab="land" label="Land & Plantation" />
                             <TabButton tab="bank" label="Bank Details" />
                             <TabButton tab="payments" label="Subsidy Payments" />
+                            <TabButton tab="timeline" label="Timeline" />
                         </nav>
                     </div>
                      <div className="mt-6 bg-white rounded-lg shadow-xl p-8">
@@ -316,6 +275,30 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                                 </div>
                             </div>
                         )}
+                        {activeTab === 'timeline' && (
+                             <div>
+                                <h3 className="text-lg font-semibold mb-4">Activity Timeline</h3>
+                                {activityLogs.length > 0 ? (
+                                    <div className="relative border-l-2 border-gray-200 ml-3">
+                                        {activityLogs.map((log) => (
+                                            <div key={log.id} className="mb-8 ml-6">
+                                                <span className="absolute -left-3.5 flex items-center justify-center w-7 h-7 bg-green-200 rounded-full ring-8 ring-white">
+                                                    {getTimelineIcon(log.activityType)}
+                                                </span>
+                                                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
+                                                    <p className="text-sm text-gray-800">{log.description}</p>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        By {getUserName(log.createdBy)} on {new Date(log.createdAt).toLocaleString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-500 text-center py-8">No activity recorded for this farmer yet.</p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -341,7 +324,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                  <React.Suspense fallback={<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div></div>}>
                     <RegistrationForm
                         mode="edit"
-                        existingFarmer={modelToPlain(farmer)}
+                        existingFarmer={farmerModelToPlain(farmer)}
                         onSubmit={handleUpdateFarmer}
                         onCancel={() => setIsEditModalOpen(false)}
                         existingFarmers={[]}
@@ -359,11 +342,16 @@ const enhance = withObservables(['farmerId'], ({ farmerId, database }: { farmerI
 const EnhancedFarmerDetailsPage = enhance(props => {
     const { farmer, ...rest } = props;
     const [subsidyPayments, setSubsidyPayments] = useState<SubsidyPaymentModel[]>([]);
+    const [activityLogs, setActivityLogs] = useState<ActivityLogModel[]>([]);
 
     useEffect(() => {
         if (farmer) {
-            const subscription = farmer.subsidyPayments.observe().subscribe(setSubsidyPayments);
-            return () => subscription.unsubscribe();
+            const sub1 = farmer.subsidyPayments.observe().subscribe(setSubsidyPayments);
+            const sub2 = farmer.activityLogs.observe().subscribe(setActivityLogs);
+            return () => {
+                sub1.unsubscribe();
+                sub2.unsubscribe();
+            };
         }
     }, [farmer]);
     
@@ -371,7 +359,7 @@ const EnhancedFarmerDetailsPage = enhance(props => {
       return <div>Loading farmer...</div>;
     }
 
-    return <InnerFarmerDetailsPage farmer={farmer} subsidyPayments={subsidyPayments} {...rest} />;
+    return <InnerFarmerDetailsPage farmer={farmer} subsidyPayments={subsidyPayments} activityLogs={activityLogs} {...rest} />;
 });
 
 
