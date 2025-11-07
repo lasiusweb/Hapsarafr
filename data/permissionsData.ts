@@ -11,6 +11,7 @@ export const PERMISSIONS_LIST: { id: Permission, description: string; category: 
     { id: Permission.CAN_MANAGE_GROUPS, description: 'Manage groups and permissions', category: 'Administration' },
     { id: Permission.CAN_INVITE_USERS, description: 'Invite new users via generating codes', category: 'Administration' },
     { id: Permission.CAN_MANAGE_CONTENT, description: 'Edit site content (Landing Page, FAQs)', category: 'Administration' },
+    { id: Permission.CAN_MANAGE_SCHEMA, description: 'Manage data schemas and dynamic forms', category: 'Super Administration' },
 ];
 
 export const DEFAULT_GROUPS: Group[] = [
@@ -18,6 +19,7 @@ export const DEFAULT_GROUPS: Group[] = [
         id: 'group-super-admin',
         name: 'Super Administrator',
         permissions: Object.values(Permission), // Super Admin gets all permissions
+        tenantId: 'default-tenant',
     },
     {
         id: 'group-admin',
@@ -34,6 +36,7 @@ export const DEFAULT_GROUPS: Group[] = [
             Permission.CAN_INVITE_USERS,
             // CAN_MANAGE_CONTENT is intentionally omitted for regular admins
         ],
+        tenantId: 'default-tenant',
     },
     {
         id: 'group-data-entry',
@@ -45,6 +48,7 @@ export const DEFAULT_GROUPS: Group[] = [
             Permission.CAN_EXPORT_DATA,
             Permission.CAN_SYNC_DATA,
         ],
+        tenantId: 'default-tenant',
     },
     {
         id: 'group-viewer',
@@ -52,5 +56,6 @@ export const DEFAULT_GROUPS: Group[] = [
         permissions: [
             Permission.CAN_EXPORT_DATA, // Viewers can only view and export data
         ],
+        tenantId: 'default-tenant',
     },
 ];

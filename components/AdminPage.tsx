@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, Group, Permission, Invitation } from '../types';
 import { PERMISSIONS_LIST } from '../data/permissionsData';
 import InvitationModal from './InvitationModal';
+import CustomSelect from './CustomSelect';
 
 interface AdminPageProps {
     users: User[];
@@ -12,7 +13,7 @@ interface AdminPageProps {
     onBack: () => void;
     invitations: Invitation[];
     onInviteUser: (email: string, groupId: string) => Promise<string>;
-    onNavigate: (view: 'content-manager' | 'geo-management') => void;
+    onNavigate: (view: 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management') => void;
 }
 
 const SUPER_ADMIN_GROUP_ID = 'group-super-admin';
@@ -52,6 +53,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     const visibleUsers = useMemo(() => isSuperAdmin ? editedUsers : editedUsers.filter(u => u.groupId !== SUPER_ADMIN_GROUP_ID), [editedUsers, isSuperAdmin]);
     const visibleGroups = useMemo(() => isSuperAdmin ? editedGroups : editedGroups.filter(g => g.id !== SUPER_ADMIN_GROUP_ID), [editedGroups, isSuperAdmin]);
     const assignableGroups = useMemo(() => isSuperAdmin ? groups : groups.filter(g => g.id !== SUPER_ADMIN_GROUP_ID), [groups, isSuperAdmin]);
+    const assignableGroupOptions = useMemo(() => assignableGroups.map(g => ({ value: g.id, label: g.name })), [assignableGroups]);
+
 
     const selectedGroup = useMemo(() => editedGroups.find(g => g.id === selectedGroupId) || null, [editedGroups, selectedGroupId]);
 
@@ -88,7 +91,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     
     const handleAddNewGroup = () => {
         const newGroupId = `group-${Date.now()}`;
-        const newGroup: Group = { id: newGroupId, name: 'New Group', permissions: [] };
+        const newGroup: Group = { id: newGroupId, name: 'New Group', permissions: [], tenantId: currentUser.tenantId };
         setEditedGroups(prev => [...prev, newGroup]);
         setSelectedGroupId(newGroupId);
     };
@@ -132,21 +135,25 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     
     const SystemManagementTab = () => (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <button onClick={() => onNavigate('content-manager' as any)} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
+            <button onClick={() => onNavigate('content-manager')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
                 <h4 className="font-bold text-gray-800">Manage Site Content</h4>
                 <p className="text-sm text-gray-600 mt-1">Edit the landing page, FAQs, and privacy policy.</p>
             </button>
-            <button onClick={() => onNavigate('geo-management' as any)} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
+            <button onClick={() => onNavigate('geo-management')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
                 <h4 className="font-bold text-gray-800">Manage Geography</h4>
                 <p className="text-sm text-gray-600 mt-1">Add, edit, or remove districts, mandals, and villages.</p>
+            </button>
+            <button onClick={() => onNavigate('schema-manager')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
+                <h4 className="font-bold text-gray-800">Schema & Form Manager</h4>
+                <p className="text-sm text-gray-600 mt-1">Add new fields and create dynamic forms for data entry.</p>
+            </button>
+            <button onClick={() => onNavigate('tenant-management')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
+                <h4 className="font-bold text-gray-800">Tenant Management</h4>
+                <p className="text-sm text-gray-600 mt-1">Onboard new organizations and manage subscriptions.</p>
             </button>
             <div className="p-6 bg-gray-100 rounded-lg border border-dashed text-left opacity-60">
                 <h4 className="font-bold text-gray-500">System Analytics</h4>
                 <p className="text-sm text-gray-500 mt-1">View cross-tenant usage and performance metrics (coming soon).</p>
-            </div>
-            <div className="p-6 bg-gray-100 rounded-lg border border-dashed text-left opacity-60">
-                <h4 className="font-bold text-gray-500">Tenant Management</h4>
-                <p className="text-sm text-gray-500 mt-1">Onboard new organizations and manage subscriptions (coming soon).</p>
             </div>
         </div>
     );
@@ -200,15 +207,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <select
+                                                        <CustomSelect
                                                             value={user.groupId}
-                                                            onChange={e => handleUserGroupChange(user.id, e.target.value)}
+                                                            onChange={value => handleUserGroupChange(user.id, value)}
+                                                            options={assignableGroupOptions}
                                                             disabled={user.id === currentUser.id && (user.groupId === 'group-admin' || user.groupId === SUPER_ADMIN_GROUP_ID)}
-                                                            title={user.id === currentUser.id ? "Administrators cannot change their own group." : ""}
-                                                            className="w-full max-w-xs p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-                                                        >
-                                                            {assignableGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                                                        </select>
+                                                            className="w-full max-w-xs"
+                                                        />
                                                     </td>
                                                 </tr>
                                             ))}
@@ -220,15 +225,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                         <div className="mt-8 pt-6 border-t">
                                             <h3 className="text-lg font-semibold text-gray-800 mb-4">Invite New User</h3>
                                             <form onSubmit={handleInviteSubmit} className="flex items-end gap-4 p-4 bg-gray-50 rounded-lg">
-                                                <div>
+                                                <div className="w-64">
                                                     <label htmlFor="inviteEmail" className="block text-sm font-medium text-gray-700">Email Address</label>
-                                                    <input type="email" id="inviteEmail" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required className="mt-1 p-2 border border-gray-300 rounded-md w-64" placeholder="user@example.com" />
+                                                    <input type="email" id="inviteEmail" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required className="mt-1 p-2 border border-gray-300 rounded-md w-full" placeholder="user@example.com" />
                                                 </div>
-                                                 <div>
+                                                 <div className="w-64">
                                                     <label htmlFor="inviteGroup" className="block text-sm font-medium text-gray-700">Assign to Group</label>
-                                                    <select id="inviteGroup" value={inviteGroup} onChange={e => setInviteGroup(e.target.value)} className="mt-1 p-2 border border-gray-300 rounded-md w-64">
-                                                        {assignableGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                                                    </select>
+                                                    <CustomSelect
+                                                        value={inviteGroup}
+                                                        onChange={setInviteGroup}
+                                                        options={assignableGroupOptions}
+                                                        className="mt-1"
+                                                    />
                                                 </div>
                                                 <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Generate Invitation</button>
                                             </form>

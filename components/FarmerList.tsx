@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Farmer, FarmerStatus, User } from '../types';
 import { getGeoName } from '../lib/utils';
+import StatusBadge from './StatusBadge';
+import FarmerCard from './FarmerCard';
 
 interface FarmerListProps {
     farmers: Farmer[];
@@ -26,6 +28,8 @@ interface FarmerListProps {
     isLoading: boolean;
     onAddToPrintQueue: (farmerIds: string[]) => void;
     onNavigate: (path: string) => void;
+    listViewMode: 'table' | 'grid';
+    onSetListViewMode: (mode: 'table' | 'grid') => void;
 }
 
 const FarmerList: React.FC<FarmerListProps> = ({ 
@@ -33,7 +37,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
     onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, 
     sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onBatchUpdate, onDeleteSelected,
     totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange, isLoading, onAddToPrintQueue,
-    onNavigate
+    onNavigate, listViewMode, onSetListViewMode
 }) => {
     
     useEffect(() => {
@@ -46,17 +50,6 @@ const FarmerList: React.FC<FarmerListProps> = ({
         }
     }, [newlyAddedFarmerId, onHighlightComplete]);
 
-
-    const StatusBadge: React.FC<{status: FarmerStatus}> = ({ status }) => {
-        const colors: Record<FarmerStatus, string> = {
-            [FarmerStatus.Registered]: 'bg-blue-100 text-blue-800',
-            [FarmerStatus.Sanctioned]: 'bg-yellow-100 text-yellow-800',
-            [FarmerStatus.Planted]: 'bg-green-100 text-green-800',
-            [FarmerStatus.PaymentDone]: 'bg-purple-100 text-purple-800',
-        };
-        return <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status]}`}>{status}</span>;
-    };
-    
     const getUserName = (userId?: string) => {
         if (!userId) return 'System';
         const user = users.find(u => u.id === userId);
@@ -198,7 +191,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
 
     return (
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
-             {selectedFarmerIds.length > 0 && (
+             {selectedFarmerIds.length > 0 ? (
                 <div className="p-4 bg-blue-50 border-b border-blue-200 flex justify-between items-center animate-fade-in-down">
                     <p className="text-sm font-semibold text-blue-800">
                         {selectedFarmerIds.length} farmer(s) selected
@@ -234,114 +227,134 @@ const FarmerList: React.FC<FarmerListProps> = ({
                         )}
                     </div>
                 </div>
-            )}
-             <div className="md:hidden px-4 pt-4">
-                <label className="inline-flex items-center">
-                    <input
-                        type="checkbox"
-                        className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                        checked={allVisibleSelected}
-                        onChange={(e) => onSelectAll(e.target.checked)}
-                        aria-label="Select all visible farmers"
-                    />
-                    <span className="ml-2 text-sm font-semibold text-gray-700">Select All Visible</span>
-                </label>
-            </div>
-            <div className="overflow-x-auto p-0 md:p-0">
-                <table className="min-w-full divide-y divide-gray-200 responsive-table">
-                    <thead className="bg-gray-50 hidden md:table-header-group">
-                        <tr>
-                            <th className="px-6 py-3">
-                                <input
-                                    type="checkbox"
-                                    className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                    checked={allVisibleSelected}
-                                    onChange={(e) => onSelectAll(e.target.checked)}
-                                    aria-label="Select all farmers"
-                                />
-                            </th>
-                            <SortableHeader sortKey="farmerId">Hap ID</SortableHeader>
-                            <SortableHeader sortKey="fullName">Name</SortableHeader>
-                            <SortableHeader sortKey="village">Location</SortableHeader>
-                            <SortableHeader sortKey="status">Status</SortableHeader>
-                            <SortableHeader sortKey="registrationDate">Reg. Date</SortableHeader>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200 md:divide-y-0">
-                    {farmers.length > 0 ? farmers.map(farmer => {
-                        const isSelected = selectedFarmerIds.includes(farmer.id);
-                        const isNewlyAdded = newlyAddedFarmerId === farmer.id;
-                        
-                        let rowBgClass = isNewlyAdded ? 'bg-green-200' : isSelected ? 'bg-green-50' : '';
+             ) : (
+                <div className="p-4 border-b flex justify-between items-center">
+                    <label className="inline-flex items-center">
+                        <input
+                            type="checkbox"
+                            className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                            checked={allVisibleSelected}
+                            onChange={(e) => onSelectAll(e.target.checked)}
+                            aria-label="Select all visible farmers"
+                        />
+                        <span className="ml-2 text-sm font-semibold text-gray-700">Select All Visible</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-500">View as:</span>
+                        <div className="flex items-center rounded-md border p-0.5 bg-gray-100">
+                             <button onClick={() => onSetListViewMode('table')} title="Table View" className={`p-1 rounded-md text-sm font-semibold ${listViewMode === 'table' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:bg-gray-200'}`}><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg></button>
+                             <button onClick={() => onSetListViewMode('grid')} title="Grid View" className={`p-1 rounded-md text-sm font-semibold ${listViewMode === 'grid' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:bg-gray-200'}`}><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg></button>
+                        </div>
+                    </div>
+                </div>
+             )}
+            
+            {listViewMode === 'table' ? (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 responsive-table">
+                        <thead className="bg-gray-50 hidden md:table-header-group">
+                            <tr>
+                                <th className="px-6 py-3"><!-- Empty for spacing --></th>
+                                <SortableHeader sortKey="farmerId">Hap ID</SortableHeader>
+                                <SortableHeader sortKey="fullName">Name</SortableHeader>
+                                <SortableHeader sortKey="village">Location</SortableHeader>
+                                <SortableHeader sortKey="status">Status</SortableHeader>
+                                <SortableHeader sortKey="registrationDate">Reg. Date</SortableHeader>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200 md:divide-y-0">
+                        {farmers.length > 0 ? farmers.map(farmer => {
+                            const isSelected = selectedFarmerIds.includes(farmer.id);
+                            const isNewlyAdded = newlyAddedFarmerId === farmer.id;
+                            
+                            let rowBgClass = isNewlyAdded ? 'bg-green-100' : isSelected ? 'bg-green-50' : '';
 
-                        return (
-                            <tr key={farmer.id} onClick={() => onNavigate(`farmer-details/${farmer.id}`)} className={`transition-colors duration-1000 cursor-pointer hover:bg-gray-50 ${rowBgClass}`}>
-                                <td data-label="" className="px-6 py-4 whitespace-nowrap td-checkbox" onClick={e => e.stopPropagation()}>
-                                    <input
-                                        type="checkbox"
-                                        className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                        checked={isSelected}
-                                        onChange={(e) => onSelectionChange(farmer.id, e.target.checked)}
-                                        aria-label={`Select farmer ${farmer.fullName}`}
-                                    />
-                                </td>
-                                <td data-label="Hap ID" className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
-                                <td data-label="Name" className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    <div className="flex items-center gap-2">
-                                        {farmer.syncStatus === 'synced' ? (
-                                            <div title="Synced with server" className="flex-shrink-0">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                </svg>
+                            return (
+                                <tr key={farmer.id} onClick={() => onNavigate(`farmer-details/${farmer.id}`)} className={`transition-colors duration-1000 cursor-pointer hover:bg-gray-50 ${rowBgClass}`}>
+                                    <td data-label="" className="px-6 py-4 whitespace-nowrap td-checkbox" onClick={e => e.stopPropagation()}>
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                            checked={isSelected}
+                                            onChange={(e) => onSelectionChange(farmer.id, e.target.checked)}
+                                            aria-label={`Select farmer ${farmer.fullName}`}
+                                        />
+                                    </td>
+                                    <td data-label="Hap ID" className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
+                                    <td data-label="Name" className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        <div className="flex items-center gap-2">
+                                            {farmer.syncStatus === 'synced' ? (
+                                                <div title="Synced with server" className="flex-shrink-0">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                            ) : (
+                                                <div title="Pending - Saved locally" className="flex-shrink-0">
+                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <span>{farmer.fullName}</span>
+                                                <div className="md:hidden text-xs text-gray-500 font-normal">{farmer.mobileNumber}</div>
                                             </div>
-                                        ) : (
-                                            <div title="Pending - Saved locally" className="flex-shrink-0">
-                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                        <div>
-                                            <span>{farmer.fullName}</span>
-                                            <div className="md:hidden text-xs text-gray-500 font-normal">{farmer.mobileNumber}</div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <div>{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</div>
-                                    <div className="md:hidden font-semibold text-gray-600">{farmer.approvedExtent} Acres</div>
-                                </td>
-                                <td data-label="Status" className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <StatusBadge status={farmer.status as FarmerStatus} />
-                                </td>
-                                 <td data-label="Reg. Date" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(farmer.registrationDate).toLocaleDateString()}</td>
-                                 <td data-label="Created" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <div>{getUserName(farmer.createdBy)}</div>
-                                    <div className="text-xs text-gray-400" title={new Date(farmer.createdAt).toLocaleString()}>{new Date(farmer.createdAt).toLocaleDateString()}</div>
-                                </td>
-                                <td data-label="Last Updated" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <div>{getUserName(farmer.updatedBy)}</div>
-                                    <div className="text-xs text-gray-400" title={new Date(farmer.updatedAt).toLocaleString()}>{new Date(farmer.updatedAt).toLocaleDateString()}</div>
-                                </td>
-                                <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2 td-actions" onClick={e => e.stopPropagation()}>
-                                    <button onClick={() => onPrint(farmer.id)} className="text-green-600 hover:text-green-900">Print</button>
-                                    <button onClick={() => onExportToPdf(farmer.id)} className="text-blue-600 hover:text-blue-900">PDF</button>
+                                    </td>
+                                    <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <div>{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</div>
+                                        <div className="md:hidden font-semibold text-gray-600">{farmer.approvedExtent} Acres</div>
+                                    </td>
+                                    <td data-label="Status" className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <StatusBadge status={farmer.status as FarmerStatus} />
+                                    </td>
+                                     <td data-label="Reg. Date" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(farmer.registrationDate).toLocaleDateString()}</td>
+                                     <td data-label="Created" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <div>{getUserName(farmer.createdBy)}</div>
+                                        <div className="text-xs text-gray-400" title={new Date(farmer.createdAt).toLocaleString()}>{new Date(farmer.createdAt).toLocaleDateString()}</div>
+                                    </td>
+                                    <td data-label="Last Updated" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <div>{getUserName(farmer.updatedBy)}</div>
+                                        <div className="text-xs text-gray-400" title={new Date(farmer.updatedAt).toLocaleString()}>{new Date(farmer.updatedAt).toLocaleDateString()}</div>
+                                    </td>
+                                    <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2 td-actions" onClick={e => e.stopPropagation()}>
+                                        <button onClick={() => onPrint(farmer.id)} className="text-green-600 hover:text-green-900">Print</button>
+                                        <button onClick={() => onExportToPdf(farmer.id)} className="text-blue-600 hover:text-blue-900">PDF</button>
+                                    </td>
+                                </tr>
+                            );
+                        }) : (
+                             <tr>
+                                <td colSpan={9} className="text-center py-10 text-gray-500">
+                                    No records match your current filters on this page.
                                 </td>
                             </tr>
-                        );
-                    }) : (
-                         <tr>
-                            <td colSpan={9} className="text-center py-10 text-gray-500">
-                                No records match your current filters on this page.
-                            </td>
-                        </tr>
-                    )}
-                    </tbody>
-                </table>
-            </div>
+                        )}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="p-4 md:p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {farmers.map(farmer => (
+                            <FarmerCard
+                                key={farmer.id}
+                                farmer={farmer}
+                                isSelected={selectedFarmerIds.includes(farmer.id)}
+                                onSelectionChange={onSelectionChange}
+                                onPrint={onPrint}
+                                onExportToPdf={onExportToPdf}
+                                onNavigate={onNavigate}
+                                isNewlyAdded={newlyAddedFarmerId === farmer.id}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
             <div className="p-4 border-t flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex-1 text-center md:text-left">
                     <label htmlFor="rowsPerPage" className="text-sm text-gray-600 mr-2">Rows per page:</label>

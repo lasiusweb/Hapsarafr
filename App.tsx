@@ -50,6 +50,8 @@ const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerP
 const SupabaseSettingsModal = lazy(() => import('./components/SupabaseSettingsModal'));
 const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
 const GeoManagementPage = lazy(() => import('./components/GeoManagementPage'));
+const SchemaManagerPage = lazy(() => import('./components/SchemaManagerPage'));
+const TenantManagementPage = lazy(() => import('./components/TenantManagementPage'));
 
 
 // Type declarations for CDN libraries
@@ -138,7 +140,7 @@ const AlertsPanel: React.FC<{
 };
 
 
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner' | 'data-health' | 'geo-management';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner' | 'data-health' | 'geo-management' | 'schema-manager' | 'tenant-management';
 type ParsedHash = 
     | { view: View; params: {} }
     | { view: 'farmer-details'; params: { farmerId: string } }
@@ -154,7 +156,7 @@ const parseHash = (): ParsedHash => {
         return { view: 'farmer-details', params: { farmerId: id } };
     }
 
-    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner', 'data-health', 'geo-management'];
+    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner', 'data-health', 'geo-management', 'schema-manager', 'tenant-management'];
     if (simpleViews.includes(path as View)) {
         return { view: path as View, params: {} };
     }
@@ -186,6 +188,8 @@ const getViewTitle = (view: View | 'farmer-details' | 'not-found'): string => {
         'crop-health-scanner': 'Crop Health Scanner',
         'data-health': 'Data Health',
         'geo-management': 'Geographic Management',
+        'schema-manager': 'Schema & Form Manager',
+        'tenant-management': 'Tenant Management',
         'not-found': 'Page Not Found',
     };
     return titles[view] || 'Hapsara';
@@ -210,6 +214,9 @@ const App: React.FC = () => {
     const [currentHash, setCurrentHash] = useState(window.location.hash);
     const [isShowingRegistrationForm, setIsShowingRegistrationForm] = useState(false);
     const [editingFarmer, setEditingFarmer] = useState<Farmer | null>(null);
+    const [listViewMode, setListViewMode] = useState<'table' | 'grid'>(
+        (localStorage.getItem('listViewMode') as 'table' | 'grid') || 'table'
+    );
   
     // Modals visibility
     const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
@@ -241,21 +248,55 @@ const App: React.FC = () => {
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
     
-    // --- WatermelonDB Queries ---
-    const farmersQuery = useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('syncStatus', Q.notEq('pending_delete'))), [database]);
+    const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
+    
+    // --- WatermelonDB Queries (Now Tenant-Scoped) ---
+    const farmersQuery = useMemo(() => {
+        const clauses = [Q.where('syncStatus', Q.notEq('pending_delete'))];
+        if (currentUser && !isSuperAdmin) {
+            clauses.push(Q.where('tenant_id', currentUser.tenantId));
+        }
+        return database.get<FarmerModel>('farmers').query(...clauses);
+    }, [database, currentUser, isSuperAdmin]);
     const allFarmers = useQuery(farmersQuery);
-    const paymentsQuery = useMemo(() => database.get<SubsidyPaymentModel>('subsidy_payments').query(), [database]);
+
+    const paymentsQuery = useMemo(() => {
+        const clauses = [];
+        if (currentUser && !isSuperAdmin) {
+            clauses.push(Q.where('tenant_id', currentUser.tenantId));
+        }
+        return database.get<SubsidyPaymentModel>('subsidy_payments').query(...clauses);
+    }, [database, currentUser, isSuperAdmin]);
     const allPayments = useQuery(paymentsQuery);
-    const usersQuery = useMemo(() => database.get<UserModel>('users').query(), [database]);
+
+    const usersQuery = useMemo(() => {
+        const clauses = [];
+        if (currentUser && !isSuperAdmin) {
+            clauses.push(Q.where('tenant_id', currentUser.tenantId));
+        }
+        return database.get<UserModel>('users').query(...clauses);
+    }, [database, currentUser, isSuperAdmin]);
     const dbUsers = useQuery(usersQuery);
-    const groupsQuery = useMemo(() => database.get<GroupModel>('groups').query(), [database]);
+
+    const groupsQuery = useMemo(() => {
+        const clauses = [];
+        if (currentUser && !isSuperAdmin) {
+            clauses.push(Q.where('tenant_id', currentUser.tenantId));
+        }
+        return database.get<GroupModel>('groups').query(...clauses);
+    }, [database, currentUser, isSuperAdmin]);
     const dbGroups = useQuery(groupsQuery);
 
-    const users = useMemo(() => dbUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar, groupId: u.groupId })), [dbUsers]);
-    const groups = useMemo(() => dbGroups.map(g => ({ id: g.id, name: g.name, permissions: g.parsedPermissions })), [dbGroups]);
+
+    const users = useMemo(() => dbUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar, groupId: u.groupId, tenantId: u.tenantId })), [dbUsers]);
+    const groups = useMemo(() => dbGroups.map(g => ({ id: g.id, name: g.name, permissions: g.parsedPermissions, tenantId: g.tenantId })), [dbGroups]);
 
     const allPlainFarmers = useMemo(() => allFarmers.map(f => farmerModelToPlain(f)).filter(Boolean) as Farmer[], [allFarmers]);
     
+     useEffect(() => {
+        localStorage.setItem('listViewMode', listViewMode);
+    }, [listViewMode]);
+
     // --- Database Seeding & Initialization Effect ---
     useEffect(() => {
         const initializeApp = async () => {
@@ -270,6 +311,7 @@ const App: React.FC = () => {
                                 (g as any)._raw.id = group.id;
                                 (g as GroupModel).name = group.name;
                                 (g as GroupModel).permissionsStr = JSON.stringify(group.permissions);
+                                (g as GroupModel).tenantId = group.tenantId;
                             });
                         }
                         const userCollection = database.collections.get('users');
@@ -279,6 +321,7 @@ const App: React.FC = () => {
                                 (u as UserModel).name = user.name;
                                 (u as UserModel).avatar = user.avatar;
                                 (u as UserModel).groupId = user.groupId;
+                                (u as UserModel).tenantId = user.tenantId;
                             });
                         }
                     });
@@ -340,12 +383,17 @@ const App: React.FC = () => {
 
 
     const handleLogin = (userId: string) => {
-        const user = users.find(u => u.id === userId);
-        if (user) {
-            setCurrentUser(user);
-            setAppState('APP');
-            window.location.hash = 'dashboard';
-        }
+        // In multi-tenant, we should find from ALL users, not just scoped ones.
+        const allUsersQuery = database.get<UserModel>('users').query();
+        allUsersQuery.fetch().then(allDbUsers => {
+            const userModel = allDbUsers.find(u => u.id === userId);
+            if (userModel) {
+                const user: User = { id: userModel.id, name: userModel.name, avatar: userModel.avatar, groupId: userModel.groupId, tenantId: userModel.tenantId };
+                setCurrentUser(user);
+                setAppState('APP');
+                window.location.hash = 'dashboard';
+            }
+        });
     };
 
     const handleLogout = () => {
@@ -563,6 +611,7 @@ const App: React.FC = () => {
                         log.activityType = ActivityType.STATUS_CHANGE;
                         log.description = `Status changed from ${oldStatus} to ${farmerData.status}.`;
                         log.createdBy = currentUser?.id;
+                        log.tenantId = farmerToUpdate.tenantId; // Carry over tenant ID
                     }, writer);
                 }
 
@@ -572,7 +621,7 @@ const App: React.FC = () => {
                 }, writer);
             } else {
                 await farmersCollection.create(record => {
-                    Object.assign(record, { ...farmerData, photo: photoBase64, syncStatusLocal: 'pending', createdBy: currentUser?.id, updatedBy: currentUser?.id });
+                    Object.assign(record, { ...farmerData, photo: photoBase64, tenantId: currentUser!.tenantId, syncStatusLocal: 'pending', createdBy: currentUser?.id, updatedBy: currentUser?.id });
                     record._raw.id = farmerData.id;
                 }, writer);
 
@@ -582,6 +631,7 @@ const App: React.FC = () => {
                     const villageName = getGeoName('village', { district: farmerData.district, mandal: farmerData.mandal, village: farmerData.village });
                     log.description = `Farmer registered in ${villageName}.`;
                     log.createdBy = currentUser?.id;
+                    log.tenantId = currentUser!.tenantId;
                 }, writer);
                 setNewlyAddedFarmerId(farmerData.id);
             }
@@ -612,6 +662,7 @@ const App: React.FC = () => {
                         log.activityType = ActivityType.STATUS_CHANGE;
                         log.description = `Status changed from ${oldStatus} to ${newStatus} in a batch update.`;
                         log.createdBy = currentUser.id;
+                        log.tenantId = farmer.tenantId;
                     }, writer);
                 }
             }
@@ -631,7 +682,7 @@ const App: React.FC = () => {
 
             for (const farmerData of newFarmers) {
                 await farmersCollection.create(record => {
-                    Object.assign(record, { ...farmerData, syncStatusLocal: 'pending', createdBy: currentUser.id, updatedBy: currentUser.id });
+                    Object.assign(record, { ...farmerData, tenantId: currentUser.tenantId, syncStatusLocal: 'pending', createdBy: currentUser.id, updatedBy: currentUser.id });
                     record._raw.id = farmerData.id;
                 }, writer);
 
@@ -641,6 +692,7 @@ const App: React.FC = () => {
                     const villageName = getGeoName('village', { district: farmerData.district, mandal: farmerData.mandal, village: farmerData.village });
                     log.description = `Farmer bulk imported into ${villageName}.`;
                     log.createdBy = currentUser.id;
+                    log.tenantId = currentUser.tenantId;
                 }, writer);
             }
         });
@@ -903,8 +955,6 @@ const App: React.FC = () => {
         localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
     };
     
-    const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
-
     const renderCurrentView = () => {
       if (!currentUser || !isDataInitialized) {
         return (
@@ -943,6 +993,8 @@ const App: React.FC = () => {
                     isLoading={allFarmers.length === 0 && pendingSyncCount > 0}
                     onAddToPrintQueue={handleAddToPrintQueue}
                     onNavigate={handleNavigate}
+                    listViewMode={listViewMode}
+                    onSetListViewMode={setListViewMode}
                 />
             </>;
         case 'farmer-details':
@@ -959,6 +1011,10 @@ const App: React.FC = () => {
             return <ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('admin')} />;
         case 'geo-management':
             return <GeoManagementPage onBack={() => handleNavigate('admin')} />;
+        case 'schema-manager':
+            return isSuperAdmin ? <SchemaManagerPage onBack={() => handleNavigate('admin')} /> : <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
+        case 'tenant-management':
+            return isSuperAdmin ? <TenantManagementPage onBack={() => handleNavigate('admin')} /> : <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
         case 'subscription-management':
             return <SubscriptionManagementPage currentUser={currentUser} onBack={() => handleNavigate('billing')} />;
         case 'print-queue':
@@ -1047,7 +1103,7 @@ const App: React.FC = () => {
                     </div>
                 )}
                 
-                {isShowingRegistrationForm && (
+                {isShowingRegistrationForm && currentUser && (
                     <RegistrationForm
                         onSubmit={handleSaveFarmer}
                         onCancel={() => setIsShowingRegistrationForm(false)}

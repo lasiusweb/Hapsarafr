@@ -7,7 +7,9 @@ interface LoginScreenProps {
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
-    const [selectedUserId, setSelectedUserId] = useState<string>(users[1]?.id || users[0]?.id || '');
+    // Find a non-super-admin user to select by default, otherwise select the first user.
+    const defaultUser = users.find(u => u.groupId !== 'group-super-admin') || users[0];
+    const [selectedUserId, setSelectedUserId] = useState<string>(defaultUser?.id || '');
 
     const handleLoginSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,24 +32,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
                     </div>
                     <h2 className="text-2xl font-semibold text-gray-700">Select User Profile</h2>
                 </div>
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                    <div>
-                        <label htmlFor="user-select" className="block text-sm font-medium text-gray-700">Log in as:</label>
-                        <select
-                            id="user-select"
-                            value={selectedUserId}
-                            onChange={e => setSelectedUserId(e.target.value)}
-                            className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white text-base focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        >
-                            {users.map(user => (
-                                <option key={user.id} value={user.id}>
-                                    {user.name}
-                                </option>
-                            ))}
-                        </select>
+                <form onSubmit={handleLoginSubmit} className="space-y-6">
+                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                        {users.map(user => (
+                            <button
+                                type="button"
+                                key={user.id}
+                                onClick={() => setSelectedUserId(user.id)}
+                                className={`w-full p-3 border rounded-lg flex items-center gap-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
+                                    ${selectedUserId === user.id 
+                                        ? 'bg-green-50 border-green-400 ring-2 ring-green-500' 
+                                        : 'bg-white border-gray-300 hover:border-green-400 hover:bg-green-50'
+                                    }`
+                                }
+                            >
+                                <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full object-cover" />
+                                <span className="font-semibold text-gray-800">{user.name}</span>
+                            </button>
+                        ))}
                     </div>
 
-                    <button type="submit" className="w-full mt-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-300">
+                    <button type="submit" className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-300" disabled={!selectedUserId}>
                         Log In
                     </button>
                 </form>

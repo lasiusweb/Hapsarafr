@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { FarmerModel } from '../db';
 import { Farmer } from '../types';
+import CustomSelect from './CustomSelect';
 
 // Component to render sort icons
 const SortIcon: React.FC<{ direction: 'ascending' | 'descending' | null }> = ({ direction }) => {
@@ -161,19 +162,19 @@ const RawDataView: React.FC<{ farmers: FarmerModel[]; onClose: () => void; }> = 
 
                 {/* Pagination */}
                 <div className="p-4 border-t flex justify-between items-center flex-shrink-0">
-                    <div>
-                         <label htmlFor="rowsPerPage" className="text-sm text-gray-600 mr-2">Rows per page:</label>
-                         <select 
-                            id="rowsPerPage"
-                            value={rowsPerPage} 
-                            onChange={e => {setRowsPerPage(Number(e.target.value)); setCurrentPage(1);}}
-                            className="p-1 border border-gray-300 rounded-md"
-                         >
-                            <option value={10}>10</option>
-                            <option value={25}>25</option>
-                            <option value={50}>50</option>
-                            <option value={100}>100</option>
-                         </select>
+                    <div className="flex items-center gap-2">
+                         <label htmlFor="rowsPerPage" className="text-sm text-gray-600">Rows per page:</label>
+                         <CustomSelect
+                            value={String(rowsPerPage)}
+                            onChange={(value) => { setRowsPerPage(Number(value)); setCurrentPage(1); }}
+                            options={[
+                                { value: '10', label: '10' },
+                                { value: '25', label: '25' },
+                                { value: '50', label: '50' },
+                                { value: '100', label: '100' },
+                            ]}
+                            className="w-24"
+                         />
                     </div>
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-gray-600">Page {totalPages > 0 ? currentPage : 0} of {totalPages}</span>

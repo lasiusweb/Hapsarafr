@@ -6,8 +6,6 @@ import { Database } from '@nozbe/watermelondb';
 export const farmerModelToPlain = (f: FarmerModel | null): Farmer | null => {
     if (!f) return null;
     return {
-        // FIX: Property 'id' does not exist on type 'FarmerModel'. Cast to 'any' to bypass typing issue.
-        // FIX: Cast FarmerModel to `any` to access the `id` property, which is not exposed in the base Model type.
         id: (f as any).id,
         fullName: f.fullName,
         fatherHusbandName: f.fatherHusbandName,
@@ -45,6 +43,7 @@ export const farmerModelToPlain = (f: FarmerModel | null): Farmer | null => {
         updatedBy: f.updatedBy,
         createdAt: new Date(f.createdAt).toISOString(),
         updatedAt: new Date(f.updatedAt).toISOString(),
+        customFields: f.customFields,
     };
 };
 

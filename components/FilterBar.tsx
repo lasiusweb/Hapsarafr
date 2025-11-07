@@ -4,6 +4,7 @@ import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { DistrictModel, MandalModel, VillageModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
+import CustomSelect from './CustomSelect';
 
 interface FilterBarProps {
   filters: Filters;
@@ -42,34 +43,30 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
   const villages = useQuery(villagesQuery || database.get<VillageModel>('villages').query(Q.where('id', 'null')));
 
   
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     onFilterChange({ ...filters, [name]: value });
   };
   
-  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newDistrictCode = e.target.value;
-    const district = districts.find(d => d.code === newDistrictCode) || null;
-    setSelectedDistrict(district);
-    setSelectedMandal(null);
-    onFilterChange({
-        ...filters,
-        district: newDistrictCode,
-        mandal: '',
-        village: '',
-    });
+  const handleCustomSelectChange = (name: keyof Omit<Filters, 'searchQuery' | 'registrationDateFrom' | 'registrationDateTo'>, value: string) => {
+    const newFilters = { ...filters, [name]: value };
+
+    if (name === 'district') {
+        const district = districts.find(d => d.code === value) || null;
+        setSelectedDistrict(district);
+        setSelectedMandal(null);
+        newFilters.mandal = '';
+        newFilters.village = '';
+    }
+    if (name === 'mandal') {
+        const mandal = mandals.find(m => m.code === value) || null;
+        setSelectedMandal(mandal);
+        newFilters.village = '';
+    }
+    
+    onFilterChange(newFilters);
   };
 
-  const handleMandalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const newMandalCode = e.target.value;
-      const mandal = mandals.find(m => m.code === newMandalCode) || null;
-      setSelectedMandal(mandal);
-      onFilterChange({
-          ...filters,
-          mandal: newMandalCode,
-          village: '',
-      });
-  };
 
   const clearFilters = () => {
     onFilterChange(initialFilters);
@@ -78,7 +75,6 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
   };
 
   const inputClass = "w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition";
-  const selectInputClass = `${inputClass} appearance-none pr-10`;
 
   return (
     <div className="bg-white shadow-md rounded-lg p-4 mb-6">
@@ -99,51 +95,41 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, onFilterChange }) => {
             {/* Geo Filters */}
             <div>
                 <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">District</label>
-                 <div className="relative">
-                    <select id="district" name="district" value={filters.district} onChange={handleDistrictChange} className={selectInputClass} title="Filter farmers by their district.">
-                        <option value="">All Districts</option>
-                        {districts.map(d => <option key={d.id} value={d.code}>{d.name}</option>)}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
-                </div>
+                <CustomSelect
+                    placeholder='All Districts'
+                    value={filters.district}
+                    onChange={(value) => handleCustomSelectChange('district', value)}
+                    options={[{ value: '', label: 'All Districts' }, ...districts.map(d => ({ value: d.code, label: d.name }))]}
+                />
             </div>
             <div>
                 <label htmlFor="mandal" className="block text-sm font-medium text-gray-700 mb-1">Mandal</label>
-                 <div className="relative">
-                    <select id="mandal" name="mandal" value={filters.mandal} onChange={handleMandalChange} className={selectInputClass} disabled={!filters.district} title="Filter farmers by their mandal. A district must be selected first.">
-                        <option value="">All Mandals</option>
-                        {mandals.map(m => <option key={m.id} value={m.code}>{m.name}</option>)}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
-                </div>
+                <CustomSelect
+                    placeholder='All Mandals'
+                    value={filters.mandal}
+                    onChange={(value) => handleCustomSelectChange('mandal', value)}
+                    options={[{ value: '', label: 'All Mandals' }, ...mandals.map(m => ({ value: m.code, label: m.name }))]}
+                    disabled={!filters.district}
+                />
             </div>
             <div>
                 <label htmlFor="village" className="block text-sm font-medium text-gray-700 mb-1">Village</label>
-                <div className="relative">
-                    <select id="village" name="village" value={filters.village} onChange={handleInputChange} className={selectInputClass} disabled={!filters.mandal} title="Filter farmers by their village. A mandal must be selected first.">
-                        <option value="">All Villages</option>
-                        {villages.map(v => <option key={v.id} value={v.code}>{v.name}</option>)}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
-                </div>
+                <CustomSelect
+                    placeholder='All Villages'
+                    value={filters.village}
+                    onChange={(value) => handleCustomSelectChange('village', value)}
+                    options={[{ value: '', label: 'All Villages' }, ...villages.map(v => ({ value: v.code, label: v.name }))]}
+                    disabled={!filters.mandal}
+                />
             </div>
             <div>
                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <div className="relative">
-                    <select id="status" name="status" value={filters.status} onChange={handleInputChange} className={selectInputClass} title="Filter farmers by their current registration status.">
-                        <option value="">All Statuses</option>
-                        {Object.values(FarmerStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
-                </div>
+                <CustomSelect
+                    placeholder='All Statuses'
+                    value={filters.status}
+                    onChange={(value) => handleCustomSelectChange('status', value)}
+                    options={[{ value: '', label: 'All Statuses' }, ...Object.values(FarmerStatus).map(s => ({ value: s, label: s }))]}
+                />
             </div>
             <div>
                  <label htmlFor="registrationDateFrom" className="block text-sm font-medium text-gray-700 mb-1">Reg. Date From</label>

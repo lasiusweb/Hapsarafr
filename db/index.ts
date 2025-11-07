@@ -1,11 +1,11 @@
 import { appSchema, tableSchema, Model, Database, Q, CollectionMap } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
-import { field, date, lazy, writer, readonly } from '@nozbe/watermelondb/decorators';
+import { field, date, lazy, writer, readonly, text } from '@nozbe/watermelondb/decorators';
 import { FarmerStatus, PlantationMethod, PlantType, PaymentStage, Permission, Group } from '../types';
 
 // 1. Define the Schema
 export const mySchema = appSchema({
-  version: 4,
+  version: 6,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -42,6 +42,8 @@ export const mySchema = appSchema({
         { name: 'mandal', type: 'string', isIndexed: true },
         { name: 'village', type: 'string', isIndexed: true },
         { name: 'syncStatus', type: 'string', isIndexed: true },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'custom_fields', type: 'string', isOptional: true },
         { name: 'created_by', type: 'string', isOptional: true },
         { name: 'updated_by', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number' },
@@ -60,6 +62,7 @@ export const mySchema = appSchema({
             { name: 'syncStatus', type: 'string', isIndexed: true },
             { name: 'created_by', type: 'string' },
             { name: 'created_at', type: 'number' },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
         ],
     }),
     tableSchema({
@@ -70,6 +73,7 @@ export const mySchema = appSchema({
             { name: 'description', type: 'string' },
             { name: 'created_by', type: 'string' },
             { name: 'created_at', type: 'number' },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
         ],
     }),
     tableSchema({
@@ -78,6 +82,7 @@ export const mySchema = appSchema({
             { name: 'name', type: 'string' },
             { name: 'avatar', type: 'string' },
             { name: 'group_id', type: 'string', isIndexed: true },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
         ]
     }),
     tableSchema({
@@ -85,7 +90,16 @@ export const mySchema = appSchema({
         columns: [
             { name: 'name', type: 'string' },
             { name: 'permissions_str', type: 'string' },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
         ]
+    }),
+    tableSchema({
+      name: 'tenants',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'subscription_status', type: 'string' },
+        { name: 'created_at', type: 'number' },
+      ],
     }),
     tableSchema({
       name: 'app_content_cache',
@@ -117,6 +131,20 @@ export const mySchema = appSchema({
         { name: 'mandal_id', type: 'string', isIndexed: true },
       ],
     }),
+    tableSchema({
+      name: 'custom_field_definitions',
+      columns: [
+        { name: 'model_name', type: 'string', isIndexed: true },
+        { name: 'field_name', type: 'string' },
+        { name: 'field_label', type: 'string' },
+        { name: 'field_type', type: 'string' },
+        { name: 'options_json', type: 'string', isOptional: true },
+        { name: 'is_required', type: 'boolean' },
+        { name: 'sort_order', type: 'number' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ]
+    }),
   ],
 });
 
@@ -134,6 +162,10 @@ export class GroupModel extends Model {
 
     @field('name') name!: string;
     @field('permissions_str') permissionsStr!: string;
+    @field('tenant_id') tenantId!: string;
+
+    // FIX: Add declaration for inherited properties from `Model` to satisfy TypeScript.
+    update!: (recordUpdater: (record: this) => void) => Promise<void>;
 
     get parsedPermissions(): Permission[] {
         try {
@@ -143,11 +175,6 @@ export class GroupModel extends Model {
         }
     }
 
-    // This method modifies the database, so it must be decorated with @writer.
-    // Error on line 149: Property 'update' does not exist on type 'GroupModel'.
-    // This is fixed by adding the @writer decorator and making the method async.
-    // FIX: Added @writer decorator and made the method async to allow database updates.
-    // FIX: Added @writer decorator to allow database mutation.
     @writer
     async updatePermissions(newPermissions: Permission[]) {
         await this.update(g => {
@@ -156,28 +183,40 @@ export class GroupModel extends Model {
     }
 }
 
+export class TenantModel extends Model {
+    static table = 'tenants';
+
+    @field('name') name!: string;
+    @field('subscription_status') subscriptionStatus!: 'active' | 'trial' | 'inactive';
+    @readonly @date('created_at') createdAt!: Date;
+    
+    // FIX: Add declaration for inherited properties from `Model` to satisfy TypeScript.
+    update!: (recordUpdater: (record: this) => void) => Promise<void>;
+
+    @writer
+    async updateSubscriptionStatus(newStatus: 'active' | 'trial' | 'inactive') {
+        await this.update(record => {
+            record.subscriptionStatus = newStatus;
+        });
+    }
+}
+
 export class UserModel extends Model {
     static table = 'users';
     static associations = {
-        groups: { type: 'belongs_to', key: 'group_id' },
+        group: { type: 'belongs_to', key: 'group_id' },
     } as const;
 
     @field('name') name!: string;
     @field('avatar') avatar!: string;
     @field('group_id') groupId!: string;
-
-    // Property 'collections' does not exist. Use 'this.collection.database.get' to access other collections.
-    // Error on line 166: Property 'collection' does not exist on type 'UserModel'.
-    // The original code used `this.collections`, which is incorrect. Fixed to `this.collection.database`.
-    // FIX: The error indicates 'collection' does not exist. The correct WatermelonDB syntax is this.collections.get().
-    // FIX: Corrected `this.collections.get` to `this.collection.database.get` to access other collections.
-    @lazy get group() { return this.collection.database.get<GroupModel>('groups').find(this.groupId); }
+    @field('tenant_id') tenantId!: string;
 }
 
 export class SubsidyPaymentModel extends Model {
     static table = 'subsidy_payments';
     static associations = {
-        farmers: { type: 'belongs_to', key: 'farmer_id' },
+        farmer: { type: 'belongs_to', key: 'farmer_id' },
     } as const;
 
     @field('farmer_id') farmerId!: string;
@@ -189,12 +228,13 @@ export class SubsidyPaymentModel extends Model {
     @field('syncStatus') syncStatusLocal!: 'synced' | 'pending';
     @field('created_by') createdBy!: string;
     @date('created_at') createdAt!: Date;
+    @field('tenant_id') tenantId!: string;
 }
 
 export class ActivityLogModel extends Model {
     static table = 'activity_logs';
     static associations = {
-        farmers: { type: 'belongs_to', key: 'farmer_id' },
+        farmer: { type: 'belongs_to', key: 'farmer_id' },
     } as const;
 
     @field('farmer_id') farmerId!: string;
@@ -202,6 +242,7 @@ export class ActivityLogModel extends Model {
     @field('description') description!: string;
     @field('created_by') createdBy!: string;
     @date('created_at') createdAt!: Date;
+    @field('tenant_id') tenantId!: string;
 }
 
 export class FarmerModel extends Model {
@@ -239,49 +280,61 @@ export class FarmerModel extends Model {
   @field('mandal') mandal!: string;
   @field('village') village!: string;
   @field('syncStatus') syncStatusLocal!: 'synced' | 'pending' | 'pending_delete';
+  @field('tenant_id') tenantId!: string;
+  @field('custom_fields') customFieldsJson?: string;
   @field('created_by') createdBy?: string;
   @field('updated_by') updatedBy?: string;
   @date('created_at') createdAt!: Date;
   @date('updated_at') updatedAt!: Date;
   
-  // Property 'collections' does not exist. Use 'this.collection.database.get'. Also, cast `this` to `any` to access the `id` property due to a typing issue.
-  // Error on line 240: Property 'collection' does not exist on type 'FarmerModel'.
-  // The original code used `this.collections`, which is incorrect. Fixed to `this.collection.database`.
-  // FIX: The error indicates 'collection' does not exist. The correct WatermelonDB syntax is this.collections.get().
-  // FIX: Corrected `this.collections.get` to `this.collection.database.get` to access other collections.
-  @lazy get subsidyPayments() { return this.collection.database.get<SubsidyPaymentModel>('subsidy_payments').query(
-      Q.where('farmer_id', (this as any).id),
+  // FIX: Add declarations for inherited properties from `Model` to satisfy TypeScript.
+  readonly id!: string;
+  readonly database!: Database;
+  update!: (recordUpdater?: (record: this) => void) => Promise<void>;
+  
+  @lazy get subsidyPayments() { return this.database.get<SubsidyPaymentModel>('subsidy_payments').query(
+      Q.where('farmer_id', this.id),
       Q.sortBy('paymentDate', Q.desc)
   ); }
   
-  // Property 'collections' does not exist. Use 'this.collection.database.get'. Also, cast `this` to `any` to access the `id` property due to a typing issue.
-  // Error on line 246: Property 'collection' does not exist on type 'FarmerModel'.
-  // The original code used `this.collections`, which is incorrect. Fixed to `this.collection.database`.
-  // FIX: The error indicates 'collection' does not exist. The correct WatermelonDB syntax is this.collections.get().
-  // FIX: Corrected `this.collections.get` to `this.collection.database.get` to access other collections.
-  @lazy get activityLogs() { return this.collection.database.get<ActivityLogModel>('activity_logs').query(
-      Q.where('farmer_id', (this as any).id),
+  @lazy get activityLogs() { return this.database.get<ActivityLogModel>('activity_logs').query(
+      Q.where('farmer_id', this.id),
       Q.sortBy('created_at', Q.desc)
   ); }
+
+  get customFields(): Record<string, any> {
+      try {
+          return this.customFieldsJson ? JSON.parse(this.customFieldsJson) : {};
+      } catch {
+          return {};
+      }
+  }
+
+  @writer
+  async setCustomField(key: string, value: any) {
+      const fields = this.customFields;
+      fields[key] = value;
+      await this.update(record => {
+          record.customFieldsJson = JSON.stringify(fields);
+      });
+  }
 }
 
-// --- New Geo Models ---
 export class DistrictModel extends Model {
   static table = 'districts';
   static associations = {
     mandals: { type: 'has_many', foreignKey: 'district_id' },
   } as const;
 
+  // FIX: Add declarations for inherited properties from `Model` to satisfy TypeScript.
+  readonly id!: string;
+  readonly database!: Database;
+
   @field('code') code!: string;
   @field('name') name!: string;
 
-  // Property 'collections' does not exist. Use 'this.collection.database.get'. Also, cast `this` to `any` to access the `id` property due to a typing issue.
-  // Error on line 263: Property 'collection' does not exist on type 'DistrictModel'.
-  // The original code used `this.collections`, which is incorrect. Fixed to `this.collection.database`.
-  // FIX: The error indicates 'collection' does not exist. The correct WatermelonDB syntax is this.collections.get().
-  // FIX: Corrected `this.collections.get` to `this.collection.database.get` to access other collections.
-  @lazy get mandals() { return this.collection.database.get<MandalModel>('mandals').query(
-    Q.where('district_id', (this as any).id)
+  @lazy get mandals() { return this.database.get<MandalModel>('mandals').query(
+    Q.where('district_id', this.id)
   ); }
 }
 
@@ -292,23 +345,16 @@ export class MandalModel extends Model {
     villages: { type: 'has_many', foreignKey: 'mandal_id' },
   } as const;
 
+  // FIX: Add declarations for inherited properties from `Model` to satisfy TypeScript.
+  readonly id!: string;
+  readonly database!: Database;
+
   @field('code') code!: string;
   @field('name') name!: string;
   @field('district_id') districtId!: string;
 
-  // Property 'collections' does not exist. Use 'this.collection.database.get'.
-  // Error on line 280: Property 'collection' does not exist on type 'MandalModel'.
-  // The original code used `this.collections`, which is incorrect. Fixed to `this.collection.database`.
-  // FIX: The error indicates 'collection' does not exist. The correct WatermelonDB syntax is this.collections.get().
-  // FIX: Corrected `this.collections.get` to `this.collection.database.get` to access other collections.
-  @lazy get district() { return this.collection.database.get<DistrictModel>('districts').find(this.districtId); }
-  // Property 'collections' does not exist. Use 'this.collection.database.get'. Also, cast `this` to `any` to access the `id` property due to a typing issue.
-  // Error on line 282: Property 'collection' does not exist on type 'MandalModel'.
-  // The original code used `this.collections`, which is incorrect. Fixed to `this.collection.database`.
-  // FIX: The error indicates 'collection' does not exist. The correct WatermelonDB syntax is this.collections.get().
-  // FIX: Corrected `this.collections.get` to `this.collection.database.get` to access other collections.
-  @lazy get villages() { return this.collection.database.get<VillageModel>('villages').query(
-    Q.where('mandal_id', (this as any).id)
+  @lazy get villages() { return this.database.get<VillageModel>('villages').query(
+    Q.where('mandal_id', this.id)
   ); }
 }
 
@@ -321,15 +367,29 @@ export class VillageModel extends Model {
   @field('code') code!: string;
   @field('name') name!: string;
   @field('mandal_id') mandalId!: string;
-
-  // Property 'collections' does not exist. Use 'this.collection.database.get'.
-  // Error on line 298: Property 'collection' does not exist on type 'VillageModel'.
-  // The original code used `this.collections`, which is incorrect. Fixed to `this.collection.database`.
-  // FIX: The error indicates 'collection' does not exist. The correct WatermelonDB syntax is this.collections.get().
-  // FIX: Corrected `this.collections.get` to `this.collection.database.get` to access other collections.
-  @lazy get mandal() { return this.collection.database.get<MandalModel>('mandals').find(this.mandalId); }
 }
 
+export class CustomFieldDefinitionModel extends Model {
+    static table = 'custom_field_definitions';
+
+    @field('model_name') modelName!: 'farmer';
+    @field('field_name') fieldName!: string;
+    @field('field_label') fieldLabel!: string;
+    @field('field_type') fieldType!: 'text' | 'number' | 'date' | 'dropdown';
+    @field('options_json') optionsJson?: string;
+    @field('is_required') isRequired!: boolean;
+    @field('sort_order') sortOrder!: number;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+
+    get options(): string[] {
+        try {
+            return this.optionsJson ? JSON.parse(this.optionsJson) : [];
+        } catch {
+            return [];
+        }
+    }
+}
 
 // 3. Create the Database Adapter
 const adapter = new LokiJSAdapter({
@@ -338,8 +398,8 @@ const adapter = new LokiJSAdapter({
   useIncrementalIDB: true,
   dbName: 'hapsara-watermelon',
   migrations: {
-      from: 3,
-      to: 4,
+      from: 5,
+      to: 6,
       steps: []
   },
   onIndexedDBVersionChange: () => {
@@ -365,10 +425,12 @@ const database = new Database({
     ActivityLogModel, 
     UserModel, 
     GroupModel, 
+    TenantModel,
     AppContentCacheModel,
     DistrictModel,
     MandalModel,
-    VillageModel
+    VillageModel,
+    CustomFieldDefinitionModel,
   ],
 });
 

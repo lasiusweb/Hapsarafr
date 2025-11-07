@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SubsidyPayment, PaymentStage } from '../types';
 import { SubsidyPaymentModel } from '../db';
+import CustomSelect from './CustomSelect';
 
 interface SubsidyPaymentFormProps {
     onClose: () => void;
@@ -32,7 +33,7 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
         }
     }, [isEditMode, existingPayment]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -59,6 +60,8 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
             setIsSubmitting(false);
         }
     };
+    
+    const paymentStageOptions = Object.values(PaymentStage).map(stage => ({ value: stage, label: stage }));
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -77,9 +80,11 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                     </div>
                     <div>
                         <label htmlFor="paymentStage" className="block text-sm font-medium text-gray-700">Payment Stage</label>
-                        <select id="paymentStage" name="paymentStage" value={formData.paymentStage} onChange={handleChange} required className="mt-1 w-full p-2 border border-gray-300 rounded-md bg-white">
-                            {Object.values(PaymentStage).map(stage => <option key={stage} value={stage}>{stage}</option>)}
-                        </select>
+                        <CustomSelect
+                            value={formData.paymentStage}
+                            onChange={(value) => setFormData(prev => ({ ...prev, paymentStage: value as PaymentStage }))}
+                            options={paymentStageOptions}
+                        />
                     </div>
                     <div>
                         <label htmlFor="utrNumber" className="block text-sm font-medium text-gray-700">UTR/DD Number</label>

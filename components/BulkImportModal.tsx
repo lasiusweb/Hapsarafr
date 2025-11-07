@@ -149,6 +149,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         paymentUtrDd: '', status: FarmerStatus.Registered,
                         district: districtCode, mandal: mandalCode, village: villageCode,
                         syncStatus: 'pending', createdAt: now, updatedAt: now,
+                        tenantId: '', // Will be filled by parent
                     };
                 }).filter((r): r is NewRecord => r !== null);
                 

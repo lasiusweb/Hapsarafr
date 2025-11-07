@@ -49,7 +49,8 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
     district: '',
     mandal: '',
     village: '',
-    syncStatus: 'pending'
+    syncStatus: 'pending',
+    tenantId: '', // Added for multi-tenancy
 };
 
 const DRAFT_STORAGE_KEY = 'hapsara-farmer-registration-draft';
@@ -62,6 +63,63 @@ const STEPS = [
     { id: 4, name: 'Land & Plantation' },
     { id: 5, name: 'Review & Submit' },
 ];
+
+const FIELDS_BY_STEP: (keyof Farmer)[][] = [
+    [], // 1-based index
+    ['fullName', 'fatherHusbandName', 'address', 'aadhaarNumber', 'mobileNumber', 'registrationDate'],
+    ['district', 'mandal', 'village'],
+    ['bankAccountNumber', 'ifscCode'],
+    ['appliedExtent', 'approvedExtent', 'numberOfPlants', 'mlrdPlants'],
+];
+
+const runValidationForStep = (step: number, data: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>): Record<string, string> => {
+    const newErrors: Record<string, string> = {};
+    if (step === 1) {
+        if (!data.fullName.trim()) newErrors.fullName = "Full Name is required.";
+        if (!data.fatherHusbandName.trim()) newErrors.fatherHusbandName = "Father/Husband Name is required.";
+        if (!data.address.trim()) newErrors.address = "Address is required.";
+        if (data.aadhaarNumber.trim() && !/^\d{12}$/.test(data.aadhaarNumber)) newErrors.aadhaarNumber = "If provided, Aadhaar must be 12 digits.";
+        if (!/^[6-9]\d{9}$/.test(data.mobileNumber)) newErrors.mobileNumber = "Mobile number must be 10 digits and start with 6-9.";
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        if (!data.registrationDate) newErrors.registrationDate = "Registration date is required.";
+        else { const regDate = new Date(data.registrationDate); if (isNaN(regDate.getTime())) newErrors.registrationDate = "Please enter a valid registration date."; else if (regDate > today) newErrors.registrationDate = "Registration date cannot be a future date."; }
+    }
+    if (step === 2) {
+        if (!data.district) newErrors.district = 'District is required.';
+        if (!data.mandal) newErrors.mandal = 'Mandal is required.';
+        if (!data.village) newErrors.village = 'Village is required.';
+    }
+    if (step === 3) {
+        if (!data.bankAccountNumber.trim()) newErrors.bankAccountNumber = "Bank Account Number is required.";
+        if (!data.ifscCode.trim()) newErrors.ifscCode = "IFSC Code is required.";
+        else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(data.ifscCode.toUpperCase())) newErrors.ifscCode = "Invalid IFSC code format (e.g., XXXX0000000).";
+    }
+    if (step === 4) {
+        const appliedExtent = Number(data.appliedExtent); if (appliedExtent > 0) { if (appliedExtent < 0.5) newErrors.appliedExtent = "Applied extent must be at least 0.5 acres."; if (appliedExtent > 100) newErrors.appliedExtent = "Applied extent cannot exceed 100 acres."; }
+        const approvedExtent = Number(data.approvedExtent); if (approvedExtent > 0) { if (approvedExtent < 0.5) newErrors.approvedExtent = "Approved extent must be at least 0.5 acres."; if (approvedExtent > 100) newErrors.approvedExtent = "Approved extent cannot exceed 100 acres."; }
+        if (approvedExtent > 0 && appliedExtent > 0 && approvedExtent > appliedExtent) newErrors.approvedExtent = "Approved extent cannot be greater than applied extent.";
+        
+        const numberOfPlants = Number(data.numberOfPlants) || 0;
+        if (numberOfPlants > 0) {
+            if (numberOfPlants < 20) newErrors.numberOfPlants = "Number of plants must be at least 20 for a viable plantation."; 
+            else if (numberOfPlants > 10000) newErrors.numberOfPlants = "Number of plants cannot exceed 10,000.";
+            
+            if (approvedExtent > 0) {
+                const expectedPlants = approvedExtent * PLANT_DENSITY_PER_ACRE; 
+                const tolerance = expectedPlants * 0.1; 
+                if (numberOfPlants < expectedPlants - tolerance || numberOfPlants > expectedPlants + tolerance) newErrors.numberOfPlants = `Number of plants seems incorrect for ${approvedExtent} acres. It should be around ${Math.round(expectedPlants)}.`; 
+            }
+            
+            const mlrdPlants = Number(data.mlrdPlants) || 0;
+            const fullCostPlants = Number(data.fullCostPlants) || 0;
+            if (mlrdPlants + fullCostPlants > numberOfPlants) {
+                newErrors.mlrdPlants = "Sum of MLRD and Full Cost plants cannot exceed total plants.";
+            }
+        }
+    }
+    return newErrors;
+};
+
 
 type FormRowProps = { children?: React.ReactNode };
 const FormRow = ({ children }: FormRowProps) => <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-center">{children}</div>;
@@ -260,68 +318,22 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     };
 
     const validateStep = (step: number) => {
-        const newErrors: Record<string, string> = {};
-        if (step === 1) {
-            if (!formData.fullName.trim()) newErrors.fullName = "Full Name is required.";
-            if (!formData.fatherHusbandName.trim()) newErrors.fatherHusbandName = "Father/Husband Name is required.";
-            if (!formData.address.trim()) newErrors.address = "Address is required.";
-            if (formData.aadhaarNumber.trim() && !/^\d{12}$/.test(formData.aadhaarNumber)) newErrors.aadhaarNumber = "If provided, Aadhaar must be 12 digits.";
-            if (!/^[6-9]\d{9}$/.test(formData.mobileNumber)) newErrors.mobileNumber = "Mobile number must be 10 digits and start with 6-9.";
-            const today = new Date(); today.setHours(0, 0, 0, 0);
-            if (!formData.registrationDate) newErrors.registrationDate = "Registration date is required.";
-            else { const regDate = new Date(formData.registrationDate); if (isNaN(regDate.getTime())) newErrors.registrationDate = "Please enter a valid registration date."; else if (regDate > today) newErrors.registrationDate = "Registration date cannot be a future date."; }
-        }
-        if (step === 2) {
-            if (!formData.district) newErrors.district = 'District is required.';
-            if (!formData.mandal) newErrors.mandal = 'Mandal is required.';
-            if (!formData.village) newErrors.village = 'Village is required.';
-        }
-        if (step === 3) {
-            if (!formData.bankAccountNumber.trim()) newErrors.bankAccountNumber = "Bank Account Number is required.";
-            if (!formData.ifscCode.trim()) newErrors.ifscCode = "IFSC Code is required.";
-            else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode.toUpperCase())) newErrors.ifscCode = "Invalid IFSC code format (e.g., XXXX0000000).";
-        }
-        if (step === 4) {
-            const appliedExtent = Number(formData.appliedExtent); if (appliedExtent > 0) { if (appliedExtent < 0.5) newErrors.appliedExtent = "Applied extent must be at least 0.5 acres."; if (appliedExtent > 100) newErrors.appliedExtent = "Applied extent cannot exceed 100 acres."; }
-            const approvedExtent = Number(formData.approvedExtent); if (approvedExtent > 0) { if (approvedExtent < 0.5) newErrors.approvedExtent = "Approved extent must be at least 0.5 acres."; if (approvedExtent > 100) newErrors.approvedExtent = "Approved extent cannot exceed 100 acres."; }
-            if (approvedExtent > 0 && appliedExtent > 0 && approvedExtent > appliedExtent) newErrors.approvedExtent = "Approved extent cannot be greater than applied extent.";
-            
-            const numberOfPlants = Number(formData.numberOfPlants) || 0;
-            if (numberOfPlants > 0) {
-                if (numberOfPlants < 20) newErrors.numberOfPlants = "Number of plants must be at least 20 for a viable plantation."; 
-                else if (numberOfPlants > 10000) newErrors.numberOfPlants = "Number of plants cannot exceed 10,000.";
-                
-                if (approvedExtent > 0) {
-                    const expectedPlants = approvedExtent * PLANT_DENSITY_PER_ACRE; 
-                    const tolerance = expectedPlants * 0.1; 
-                    if (numberOfPlants < expectedPlants - tolerance || numberOfPlants > expectedPlants + tolerance) newErrors.numberOfPlants = `Number of plants seems incorrect for ${approvedExtent} acres. It should be around ${Math.round(expectedPlants)}.`; 
-                }
-                
-                const mlrdPlants = Number(formData.mlrdPlants) || 0;
-                const fullCostPlants = Number(formData.fullCostPlants) || 0;
-                if (mlrdPlants + fullCostPlants > numberOfPlants) {
-                    newErrors.mlrdPlants = "Sum of MLRD and Full Cost plants cannot exceed total plants.";
-                }
-            }
-        }
-        
-        setErrors(prev => ({...prev, ...newErrors}));
-        const currentStepErrors = Object.keys(newErrors);
-        const hasErrors = currentStepErrors.length > 0;
-        if (!hasErrors) { // Clear errors for fields in the current step if valid
-            const fieldsInStep: (keyof Farmer)[] = [];
-            if (step === 1) fieldsInStep.push('fullName', 'fatherHusbandName', 'address', 'aadhaarNumber', 'mobileNumber', 'registrationDate');
-            if (step === 2) fieldsInStep.push('district', 'mandal', 'village');
-            if (step === 3) fieldsInStep.push('bankAccountNumber', 'ifscCode');
-            if (step === 4) fieldsInStep.push('appliedExtent', 'approvedExtent', 'numberOfPlants', 'mlrdPlants');
-            
-            const clearedErrors = {...errors};
-            fieldsInStep.forEach(field => delete clearedErrors[field]);
-            setErrors(clearedErrors);
+        const stepErrors = runValidationForStep(step, formData);
+        const hasErrors = Object.keys(stepErrors).length > 0;
+    
+        if (hasErrors) {
+            setErrors(prev => ({ ...prev, ...stepErrors }));
+        } else {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                FIELDS_BY_STEP[step].forEach(field => delete newErrors[field]);
+                return newErrors;
+            });
         }
         
         return !hasErrors;
     };
+
 
     const handleNext = () => {
         if (validateStep(currentStep)) {
@@ -332,18 +344,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
     };
     const handlePrevious = () => setCurrentStep(prev => Math.max(1, prev - 1));
 
-    const validateAll = useCallback(() => {
-        // Run all step validations
-        const step1Valid = validateStep(1);
-        const step2Valid = validateStep(2);
-        const step3Valid = validateStep(3);
-        const step4Valid = validateStep(4);
-        return step1Valid && step2Valid && step3Valid && step4Valid;
-    }, [formData]);
-
     const handleSubmit = (e?: React.FormEvent) => {
         e?.preventDefault();
-        if (validateAll()) {
+
+        const allErrors = [1, 2, 3, 4].reduce((acc, step) => {
+            return { ...acc, ...runValidationForStep(step, formData) };
+        }, {});
+
+        setErrors(allErrors);
+
+        if (Object.keys(allErrors).length === 0) {
             const now = new Date().toISOString();
             let farmerData: Farmer;
             if (mode === 'create') {
@@ -359,11 +369,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 farmerData = { ...existingFarmer!, ...formData, updatedAt: now };
             }
             setPreparedFarmerData(farmerData);
-            // Show confirmation modal (which is now part of the ReviewStep)
         } else {
             // Find the first step with an error and navigate to it
-            for (let i = 1; i <= STEPS.length; i++) {
-                if (!validateStep(i)) {
+            for (let i = 1; i <= 4; i++) {
+                if (FIELDS_BY_STEP[i].some(field => allErrors[field as string])) {
                     setCurrentStep(i);
                     break;
                 }
@@ -460,36 +469,90 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         </nav>
     );
 
-    const ReviewStep = () => (
-        <div>
-             <h3 className="text-lg font-semibold text-green-700 mb-4">Review Details</h3>
-             <p className="text-gray-600 mb-6">Please review the information below before saving.</p>
-            <div className="space-y-3 text-sm max-h-96 overflow-y-auto pr-4">
-                {preparedFarmerData && (
-                    <>
-                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Full Name:</span><span className="text-gray-900 font-medium">{preparedFarmerData.fullName}</span></div>
-                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Hap ID:</span><span className="text-gray-900 font-mono">{preparedFarmerData.farmerId}</span></div>
-                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Aadhaar:</span><span className="text-gray-900">{`**** **** ${preparedFarmerData.aadhaarNumber.slice(-4)}`}</span></div>
-                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Mobile:</span><span className="text-gray-900">{preparedFarmerData.mobileNumber}</span></div>
-                        <div className="flex justify-between border-b pb-2 items-start"><span className="font-semibold text-gray-600">Location:</span><span className="text-gray-900 text-right">{getGeoName('village', preparedFarmerData)},<br/>{getGeoName('mandal', preparedFarmerData)},<br/>{getGeoName('district', preparedFarmerData)}</span></div>
-                        <div className="flex justify-between border-b pb-2"><span className="font-semibold text-gray-600">Approved Extent:</span><span className="text-gray-900">{preparedFarmerData.approvedExtent} Acres</span></div>
-                        <div className="flex justify-between pb-2"><span className="font-semibold text-gray-600">Number of Plants:</span><span className="text-gray-900">{preparedFarmerData.numberOfPlants}</span></div>
-                    </>
-                )}
+    const ReviewStep = () => {
+        if (!preparedFarmerData) return null;
+    
+        const DetailItem: React.FC<{ label: string, value?: React.ReactNode }> = ({ label, value }) => {
+            if (value === null || value === undefined || value === '' || (typeof value === 'number' && value === 0)) return null;
+            return (
+                <div className="flex justify-between border-b py-2 text-sm">
+                    <span className="font-semibold text-gray-600">{label}:</span>
+                    <span className="text-gray-900 text-right font-medium">{String(value)}</span>
+                </div>
+            );
+        };
+    
+        return (
+            <div>
+                <h3 className="text-lg font-semibold text-green-700 mb-4">Review Details</h3>
+                <p className="text-gray-600 mb-6">Please review all the information below before saving.</p>
+                <div className="space-y-6 max-h-[50vh] overflow-y-auto pr-4">
+                    
+                    {/* Generated IDs */}
+                    <div className="mb-4">
+                        <h4 className="font-bold text-gray-800 mb-2">Generated IDs</h4>
+                        <DetailItem label="Hap ID" value={preparedFarmerData.farmerId} />
+                        <DetailItem label="Application ID" value={preparedFarmerData.applicationId} />
+                    </div>
+    
+                    {/* Personal Details */}
+                    <div className="mb-4">
+                        <h4 className="font-bold text-gray-800 mb-2">Personal Details</h4>
+                        <DetailItem label="Full Name" value={preparedFarmerData.fullName} />
+                        <DetailItem label="Father/Husband Name" value={preparedFarmerData.fatherHusbandName} />
+                        <DetailItem label="Gender" value={preparedFarmerData.gender} />
+                        <DetailItem label="Mobile Number" value={preparedFarmerData.mobileNumber} />
+                        <DetailItem label="Aadhaar Number" value={preparedFarmerData.aadhaarNumber ? `**** **** ${preparedFarmerData.aadhaarNumber.slice(-4)}` : 'N/A'} />
+                        <DetailItem label="Address" value={preparedFarmerData.address} />
+                        <DetailItem label="PPB/ROFR ID" value={preparedFarmerData.ppbRofrId} />
+                        <DetailItem label="Registration Date" value={new Date(preparedFarmerData.registrationDate).toLocaleDateString()} />
+                    </div>
+                    
+                    {/* Geographic Details */}
+                    <div className="mb-4">
+                        <h4 className="font-bold text-gray-800 mb-2">Geographic Details</h4>
+                        <DetailItem label="District" value={getGeoName('district', preparedFarmerData)} />
+                        <DetailItem label="Mandal" value={getGeoName('mandal', preparedFarmerData)} />
+                        <DetailItem label="Village" value={getGeoName('village', preparedFarmerData)} />
+                    </div>
+    
+                    {/* Bank Details */}
+                     <div className="mb-4">
+                        <h4 className="font-bold text-gray-800 mb-2">Bank Details</h4>
+                        <DetailItem label="Bank Account No." value={preparedFarmerData.bankAccountNumber ? `...${preparedFarmerData.bankAccountNumber.slice(-4)}` : 'N/A'} />
+                        <DetailItem label="IFSC Code" value={preparedFarmerData.ifscCode} />
+                        <DetailItem label="Account Verified" value={preparedFarmerData.accountVerified ? 'Yes' : 'No'} />
+                    </div>
+                    
+                    {/* Land & Plantation */}
+                    <div>
+                        <h4 className="font-bold text-gray-800 mb-2">Land & Plantation Details</h4>
+                        <DetailItem label="Applied Extent (Acres)" value={preparedFarmerData.appliedExtent} />
+                        <DetailItem label="Approved Extent (Acres)" value={preparedFarmerData.approvedExtent} />
+                        <DetailItem label="No. of Plants" value={preparedFarmerData.numberOfPlants} />
+                        <DetailItem label="MLRD Plants" value={preparedFarmerData.mlrdPlants} />
+                        <DetailItem label="Full Cost Plants" value={preparedFarmerData.fullCostPlants} />
+                        <DetailItem label="Plantation Method" value={preparedFarmerData.methodOfPlantation} />
+                        <DetailItem label="Plant Type" value={preparedFarmerData.plantType} />
+                        <DetailItem label="Plantation Date" value={preparedFarmerData.plantationDate ? new Date(preparedFarmerData.plantationDate).toLocaleDateString() : 'Not Set'} />
+                        <DetailItem label="Latitude" value={preparedFarmerData.latitude} />
+                        <DetailItem label="Longitude" value={preparedFarmerData.longitude} />
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end">
+                    <button
+                        type="button"
+                        onClick={() => setShowAiReview(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-semibold flex items-center gap-2"
+                        title="Use AI to check the form for potential errors or inconsistencies."
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
+                        Review with AI
+                    </button>
+                </div>
             </div>
-            <div className="mt-6 flex justify-end">
-                <button
-                    type="button"
-                    onClick={() => setShowAiReview(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-semibold flex items-center gap-2"
-                    title="Use AI to check the form for potential errors or inconsistencies."
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
-                    Review with AI
-                </button>
-            </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">

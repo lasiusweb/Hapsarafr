@@ -98,7 +98,7 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, onClose }) =>
                     </div>
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">AI Data Assistant</h2>
-                        <p className="text-sm text-gray-500">Powered by Gemini</p>
+                        <p className="text-sm text-gray-500">Powered by HapsaraAI</p>
                     </div>
                 </div>
                 <div className="p-6 min-h-[200px]">

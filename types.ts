@@ -1,4 +1,3 @@
-
 export enum PlantationMethod {
   Square = 'Square',
   Triangle = 'Triangle',
@@ -27,12 +26,21 @@ export enum Permission {
   CAN_MANAGE_GROUPS = 'CAN_MANAGE_GROUPS',
   CAN_INVITE_USERS = 'CAN_INVITE_USERS',
   CAN_MANAGE_CONTENT = 'CAN_MANAGE_CONTENT',
+  CAN_MANAGE_SCHEMA = 'CAN_MANAGE_SCHEMA',
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  subscriptionStatus: 'active' | 'trial' | 'inactive';
+  createdAt: string;
 }
 
 export interface Group {
   id: string;
   name: string;
   permissions: Permission[];
+  tenantId: string;
 }
 
 export interface User {
@@ -40,6 +48,7 @@ export interface User {
   name: string;
   groupId: string;
   avatar: string;
+  tenantId: string;
 }
 
 export interface Invitation {
@@ -97,12 +106,18 @@ export interface Farmer {
 
   // Sync status
   syncStatus: 'synced' | 'pending' | 'pending_delete';
+
+  // Multi-tenancy
+  tenantId: string;
   
   // Audit fields
   createdBy?: string; // User ID
   updatedBy?: string; // User ID
   createdAt: string;
   updatedAt: string;
+
+  // Dynamic fields
+  customFields?: Record<string, any>;
 }
 
 export enum PaymentStage {
@@ -124,6 +139,7 @@ export interface SubsidyPayment {
     createdBy: string; // User ID
     createdAt: string; // ISO string
     syncStatus: 'synced' | 'pending';
+    tenantId: string;
 }
 
 export enum ActivityType {
@@ -141,6 +157,7 @@ export interface ActivityLog {
     description: string;
     createdBy: string; // User ID
     createdAt: string; // ISO string
+    tenantId: string;
 }
 
 
@@ -208,4 +225,17 @@ export interface Filters {
   status: string;
   registrationDateFrom: string;
   registrationDateTo: string;
+}
+
+export type CustomFieldType = 'text' | 'number' | 'date' | 'dropdown';
+
+export interface CustomFieldDefinition {
+  id: string;
+  modelName: 'farmer';
+  fieldName: string;
+  fieldLabel: string;
+  fieldType: CustomFieldType;
+  options?: string[];
+  isRequired: boolean;
+  sortOrder: number;
 }

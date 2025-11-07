@@ -8,6 +8,7 @@ import AiReviewModal from './AiReviewModal';
 import ConfirmationModal from './ConfirmationModal';
 import { farmerModelToPlain, getGeoName } from '../lib/utils';
 import { useDatabase } from '../DatabaseContext';
+import { Q } from '@nozbe/watermelondb';
 
 const RegistrationForm = lazy(() => import('./RegistrationForm'));
 
@@ -72,7 +73,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     }, [database, farmer, currentUser.id, setNotification]);
 
 
-    const handleSavePayment = useCallback(async (paymentData: Omit<SubsidyPayment, 'syncStatus' | 'createdAt' | 'createdBy' | 'farmerId'>) => {
+    const handleSavePayment = useCallback(async (paymentData: Omit<SubsidyPayment, 'syncStatus' | 'createdAt' | 'createdBy' | 'farmerId' | 'tenantId'>) => {
         const paymentsCollection = database.get<SubsidyPaymentModel>('subsidy_payments');
         
         if (paymentData.id && editingPayment) { // This is an update
@@ -99,6 +100,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     rec.notes = paymentData.notes;
                     rec.createdBy = currentUser.id;
                     rec.syncStatusLocal = 'pending';
+                    rec.tenantId = farmer.tenantId; // Assign tenant ID
                 }, writer);
 
                 const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
@@ -107,6 +109,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     log.activityType = ActivityType.PAYMENT_RECORDED;
                     log.description = `${paymentData.paymentStage} of ₹${paymentData.amount.toLocaleString()} recorded.`;
                     log.createdBy = currentUser.id;
+                    log.tenantId = farmer.tenantId; // Assign tenant ID
                 }, writer);
             });
             setNotification({ message: 'Payment recorded successfully.', type: 'success' });
@@ -131,7 +134,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const getUserName = (userId?: string) => users.find(u => u.id === userId)?.name || 'System';
     const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
 
-    if (!farmer) return <div className="text-center p-10">Farmer not found.</div>;
+    if (!farmer) return <div className="text-center p-10">Farmer not found or you do not have permission to view them.</div>;
 
     const TabButton: React.FC<{ tab: string, label: string }> = ({ tab, label }) => (
         <button
@@ -335,12 +338,21 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     );
 };
 
-const enhance = withObservables(['farmerId'], ({ farmerId, database }: { farmerId: string, database: Database }) => ({
-    farmer: database.get<FarmerModel>('farmers').findAndObserve(farmerId),
-}));
+const enhance = withObservables(['farmerId', 'currentUser'], ({ farmerId, database, currentUser }: { farmerId: string; database: Database; currentUser: User; }) => {
+    const isSuperAdmin = currentUser.groupId === 'group-super-admin';
+    const clauses = [Q.where('id', farmerId)];
+    if (!isSuperAdmin) {
+        clauses.push(Q.where('tenant_id', currentUser.tenantId));
+    }
+    return {
+        farmers: database.get<FarmerModel>('farmers').query(...clauses).observe(),
+    };
+});
 
-const EnhancedFarmerDetailsPage = enhance(props => {
-    const { farmer, ...rest } = props;
+
+const EnhancedFarmerDetailsPage: React.FC<Omit<FarmerDetailsPageProps, 'database'>> = enhance((props) => {
+    const { farmers, ...rest } = props as { farmers: FarmerModel[] } & Omit<FarmerDetailsPageProps, 'database'>;
+    const farmer = farmers?.[0]; // The query will return an array with 0 or 1 item.
     const [subsidyPayments, setSubsidyPayments] = useState<SubsidyPaymentModel[]>([]);
     const [activityLogs, setActivityLogs] = useState<ActivityLogModel[]>([]);
 
@@ -355,11 +367,9 @@ const EnhancedFarmerDetailsPage = enhance(props => {
         }
     }, [farmer]);
     
-    if (!farmer) {
-      return <div>Loading farmer...</div>;
-    }
-
-    return <InnerFarmerDetailsPage farmer={farmer} subsidyPayments={subsidyPayments} activityLogs={activityLogs} {...rest} />;
+    // The component will re-render when `farmer` changes. If it becomes undefined (e.g., user navigated to a farmer they can't see),
+    // `InnerFarmerDetailsPage` will correctly show the "not found" message.
+    return <InnerFarmerDetailsPage farmer={farmer!} subsidyPayments={subsidyPayments} activityLogs={activityLogs} {...rest} />;
 });
 
 
