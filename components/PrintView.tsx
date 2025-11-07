@@ -1,16 +1,17 @@
 import React, { useEffect, useRef } from 'react';
-import { Farmer, User } from '../types';
+import { Farmer, User, Plot } from '../types';
 
 declare var JsBarcode: any;
 declare var QRCode: any;
 
 interface PrintViewProps {
   farmer: Farmer | null;
+  plots: Plot[];
   users: User[];
   isForPdf?: boolean;
 }
 
-const PrintView: React.FC<PrintViewProps> = ({ farmer, users, isForPdf = false }) => {
+const PrintView: React.FC<PrintViewProps> = ({ farmer, plots, users, isForPdf = false }) => {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const qrCodeRef = useRef<HTMLCanvasElement>(null);
 
@@ -99,33 +100,47 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, users, isForPdf = false }
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-8 mt-6">
-        <div>
-          <h3 className="text-xl font-bold mb-3 border-b border-gray-400 pb-1">Bank Details</h3>
-          <table className="w-full text-left">
-            <tbody>
-              <DetailRow label="Bank Account No." value={`...${farmer.bankAccountNumber.slice(-4)}`} />
-              <DetailRow label="IFSC Code" value={farmer.ifscCode} />
-              <DetailRow label="Account Verified" value={farmer.accountVerified ? 'Yes' : 'No'} />
-            </tbody>
-          </table>
-        </div>
-        <div>
-          <h3 className="text-xl font-bold mb-3 border-b border-gray-400 pb-1">Plantation Details</h3>
-          <table className="w-full text-left">
-            <tbody>
-              <DetailRow label="Applied Extent (Acres)" value={farmer.appliedExtent} />
-              <DetailRow label="Approved Extent (Acres)" value={farmer.approvedExtent} />
-              <DetailRow label="No. of Plants" value={farmer.numberOfPlants} />
-              <DetailRow label="Plantation Method" value={farmer.methodOfPlantation} />
-              <DetailRow label="Plants Type" value={farmer.plantType} />
-              <DetailRow label="Plantation Date" value={new Date(farmer.plantationDate).toLocaleDateString()} />
-              <DetailRow label="Latitude" value={farmer.latitude || 'N/A'} />
-              <DetailRow label="Longitude" value={farmer.longitude || 'N/A'} />
-            </tbody>
-          </table>
-        </div>
+      <div className="mt-6">
+        <h3 className="text-xl font-bold mb-3 border-b border-gray-400 pb-1">Bank Details</h3>
+        <table className="w-full text-left max-w-md">
+          <tbody>
+            <DetailRow label="Bank Account No." value={`...${farmer.bankAccountNumber.slice(-4)}`} />
+            <DetailRow label="IFSC Code" value={farmer.ifscCode} />
+            <DetailRow label="Account Verified" value={farmer.accountVerified ? 'Yes' : 'No'} />
+          </tbody>
+        </table>
       </div>
+
+      <div className="mt-6">
+          <h3 className="text-xl font-bold mb-3 border-b border-gray-400 pb-1">Plot & Plantation Details</h3>
+          {plots.length > 0 ? (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="py-2 px-3 border border-gray-300">Acreage</th>
+                  <th className="py-2 px-3 border border-gray-300">Soil Type</th>
+                  <th className="py-2 px-3 border border-gray-300">No. of Plants</th>
+                  <th className="py-2 px-3 border border-gray-300">Plantation Method</th>
+                  <th className="py-2 px-3 border border-gray-300">Plantation Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plots.map((plot) => (
+                  <tr key={plot.id} className="border-b">
+                    <td className="py-2 px-3 border border-gray-300">{plot.acreage}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.soilType || 'N/A'}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.numberOfPlants}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.methodOfPlantation}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.plantationDate ? new Date(plot.plantationDate).toLocaleDateString() : 'N/A'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-gray-600">No plots have been registered for this farmer.</p>
+          )}
+      </div>
+
        <footer className="mt-12 text-sm text-gray-600">
         <div className="flex justify-between pt-16">
             <div className="text-center">

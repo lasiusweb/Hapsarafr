@@ -8,6 +8,32 @@ export enum PlantType {
   Indigenous = 'Indigenous',
 }
 
+export enum SoilType {
+  Alluvial = 'Alluvial',
+  Clay = 'Clay',
+  Loamy = 'Loamy',
+  Sandy = 'Sandy',
+  Other = 'Other',
+}
+
+export interface Plot {
+  id: string;
+  farmerId: string;
+  acreage: number;
+  soilType?: SoilType;
+  plantationDate?: string;
+  geojson?: string; // Stored as a string
+  numberOfPlants: number;
+  methodOfPlantation: PlantationMethod;
+  plantType: PlantType;
+  mlrdPlants: number;
+  fullCostPlants: number;
+  syncStatus: 'synced' | 'pending';
+  tenantId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export enum FarmerStatus {
   Registered = 'Registered',
   Sanctioned = 'Sanctioned',
@@ -70,18 +96,6 @@ export interface Farmer {
   ifscCode: string;
   accountVerified: boolean;
 
-  // Land & Plantation Details
-  appliedExtent: number;
-  approvedExtent: number;
-  numberOfPlants: number;
-  methodOfPlantation: PlantationMethod;
-  plantType: PlantType;
-  plantationDate: string;
-  mlrdPlants: number;
-  fullCostPlants: number;
-  latitude?: number;
-  longitude?: number;
-
   // Application Workflow
   applicationId: string;
   farmerId: string;
@@ -110,13 +124,36 @@ export interface Farmer {
 
   // Dynamic fields
   customFields?: Record<string, any>;
+
+  // FIX: Add optional plot-related fields to support form data transfer and UI components.
+  // These fields were moved to the Plot model but are still expected on the Farmer object in many places.
+  appliedExtent?: number;
+  approvedExtent?: number;
+  numberOfPlants?: number;
+  methodOfPlantation?: PlantationMethod;
+  plantType?: PlantType;
+  plantationDate?: string;
+  mlrdPlants?: number;
+  fullCostPlants?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export enum PaymentStage {
-    Year1 = 'Year 1 Subsidy',
-    Year2 = 'Year 2 Subsidy',
-    Year3 = 'Year 3 Subsidy',
-    Fertilizer = 'Fertilizer Support',
+    PlantingMaterialDomestic = 'Planting Material (Domestic)',
+    PlantingMaterialImported = 'Planting Material (Imported)',
+    MaintenanceYear1 = 'Maintenance (Year 1)',
+    MaintenanceYear2 = 'Maintenance (Year 2)',
+    MaintenanceYear3 = 'Maintenance (Year 3)',
+    MaintenanceYear4 = 'Maintenance (Year 4)',
+    IntercroppingYear1 = 'Intercropping (Year 1)',
+    IntercroppingYear2 = 'Intercropping (Year 2)',
+    IntercroppingYear3 = 'Intercropping (Year 3)',
+    IntercroppingYear4 = 'Intercropping (Year 4)',
+    BoreWell = 'Bore Well Construction',
+    VermiCompost = 'Vermi Compost Unit',
+    Replanting = 'Replanting Assistance',
+    Fertilizer = 'Fertilizer',
     Other = 'Other',
 }
 
@@ -140,6 +177,9 @@ export enum ActivityType {
     PLANTATION_UPDATE = 'PLANTATION_UPDATE',
     PAYMENT_RECORDED = 'PAYMENT_RECORDED',
     DETAILS_EDITED = 'DETAILS_EDITED',
+    RESOURCE_DISTRIBUTED = 'RESOURCE_DISTRIBUTED',
+    VOICE_NOTE = 'VOICE_NOTE',
+    TRAINING_ATTENDED = 'TRAINING_ATTENDED',
 }
 
 export interface ActivityLog {
@@ -230,4 +270,66 @@ export interface CustomFieldDefinition {
   options?: string[];
   isRequired: boolean;
   sortOrder: number;
+}
+
+// --- New Alert System ---
+export interface Alert {
+    id: string; // A unique ID for the alert, e.g., `${farmerId}-year2-eligibility`
+    farmerId: string;
+    farmerName: string;
+    message: string;
+    timestamp: number; // The date the condition was met
+}
+
+// --- Inventory Management ---
+export interface Resource {
+  id: string;
+  name: string;
+  unit: string; // e.g., 'sapling', 'kg', 'kit'
+  description?: string;
+  tenantId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResourceDistribution {
+  id: string;
+  farmerId: string;
+  resourceId: string;
+  quantity: number;
+  distributionDate: string; // ISO string
+  notes?: string;
+  createdBy: string; // User ID
+  createdAt: string; // ISO string
+  syncStatus: 'synced' | 'pending';
+  tenantId: string;
+}
+
+// --- Task Management ---
+export enum TaskStatus {
+    ToDo = 'To Do',
+    InProgress = 'In Progress',
+    Done = 'Done',
+}
+
+export enum TaskPriority {
+    Low = 'Low',
+    Medium = 'Medium',
+    High = 'High',
+}
+
+export interface Task {
+    id: string;
+    title: string;
+    description?: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    dueDate?: string; // ISO string
+    assigneeId?: string; // User ID
+    farmerId?: string; // Farmer ID
+    createdBy: string; // User ID
+    createdAt: string; // ISO string
+    updatedAt: string; // ISO string
+    tenantId: string;
+    syncStatus: 'synced' | 'pending';
 }

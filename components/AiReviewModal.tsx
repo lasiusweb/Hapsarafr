@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Farmer } from '../types';
+import { Farmer, Plot } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { getGeoName } from '../lib/utils';
 
 interface AiReviewModalProps {
     farmerData: Partial<Farmer>;
+    plotsData: Partial<Plot>[];
     onClose: () => void;
 }
 
-const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, onClose }) => {
+const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, plotsData, onClose }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [review, setReview] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
@@ -19,13 +20,16 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, onClose }) =>
             setError(null);
             
             if (!process.env.API_KEY) {
-                setError("Gemini API key is not configured. Please set the API_KEY environment variable.");
+                setError("HapsaraAI API key is not configured. Please set the API_KEY environment variable.");
                 setIsLoading(false);
                 return;
             }
 
             try {
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                
+                const totalAcreage = plotsData.reduce((sum, plot) => sum + (plot.acreage || 0), 0);
+                const totalPlants = plotsData.reduce((sum, plot) => sum + (plot.numberOfPlants || 0), 0);
 
                 const prompt = `
                     You are an expert agricultural data verification assistant for India's Oil Palm Mission.
@@ -40,13 +44,12 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, onClose }) =>
                     - Aadhaar Number (last 4 digits): ${farmerData.aadhaarNumber?.slice(-4) || 'Not Provided'}
                     - Bank Account Number: ${farmerData.bankAccountNumber || 'Not Provided'}
                     - IFSC Code: ${farmerData.ifscCode || 'Not Provided'}
-                    - Applied Extent (Acres): ${farmerData.appliedExtent ?? 'Not Provided'}
-                    - Approved Extent (Acres): ${farmerData.approvedExtent ?? 'Not Provided'}
-                    - Number of Plants: ${farmerData.numberOfPlants ?? 'Not Provided'}
+                    - Number of Plots: ${plotsData.length > 0 ? plotsData.length : 'Not Provided'}
+                    - Total Acreage: ${plotsData.length > 0 ? totalAcreage.toFixed(2) : 'Not Provided'}
+                    - Total Number of Plants: ${plotsData.length > 0 ? totalPlants : 'Not Provided'}
                     - District: ${getGeoName('district', { district: farmerData.district! })}
                     - Mandal: ${getGeoName('mandal', { district: farmerData.district!, mandal: farmerData.mandal! })}
                     - Village: ${getGeoName('village', { district: farmerData.district!, mandal: farmerData.mandal!, village: farmerData.village! })}
-                    - Plantation Date: ${farmerData.plantationDate || 'Not Provided'}
                     - Registration Date: ${farmerData.registrationDate || 'Not Provided'}
 
                     Your feedback:
@@ -68,7 +71,7 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, onClose }) =>
         };
 
         fetchReview();
-    }, [farmerData]);
+    }, [farmerData, plotsData]);
     
     const formatReview = (text: string) => {
         return text

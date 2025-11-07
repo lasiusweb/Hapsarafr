@@ -139,12 +139,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         ppbRofrId: String(row.ppbRofrId || '').trim(),
                         photo: '', bankAccountNumber: String(row.bankAccountNumber || '').trim(),
                         ifscCode: String(row.ifscCode || '').trim(),
-                        accountVerified: false, appliedExtent: Number(row.appliedExtent) || 0,
-                        approvedExtent: 0, numberOfPlants: 0,
-                        methodOfPlantation: PlantationMethod.Square, plantType: PlantType.Imported,
-                        plantationDate: '', mlrdPlants: 0, fullCostPlants: 0,
-                        latitude: row.latitude ? Number(row.latitude) : undefined,
-                        longitude: row.longitude ? Number(row.longitude) : undefined,
+                        accountVerified: false,
                         proposedYear: '2024-25', registrationDate: now.split('T')[0],
                         paymentUtrDd: '', status: FarmerStatus.Registered,
                         district: districtCode, mandal: mandalCode, village: villageCode,
@@ -284,8 +279,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
     };
 
     const handleDownloadTemplate = () => {
-        const headers = ['fullName', 'fatherHusbandName', 'aadhaarNumber', 'mobileNumber', 'gender', 'address', 'ppbRofrId', 'bankAccountNumber', 'ifscCode', 'appliedExtent', 'district', 'mandal', 'village', 'latitude', 'longitude'];
-        const exampleRow = ['Jane Doe', 'John Doe', '123456789012', '9876543210', 'Female', '123 Main St, Anytown', 'PPB123', '987654321098', 'SBIN0001234', 5, 'Hanmakonda', 'Hanamkonda', 'Hanamkonda', '17.9689', '79.5941'];
+        const headers = ['fullName', 'fatherHusbandName', 'aadhaarNumber', 'mobileNumber', 'gender', 'address', 'ppbRofrId', 'bankAccountNumber', 'ifscCode', 'district', 'mandal', 'village'];
+        const exampleRow = ['Jane Doe', 'John Doe', '123456789012', '9876543210', 'Female', '123 Main St, Anytown', 'PPB123', '987654321098', 'SBIN0001234', 'Hanmakonda', 'Hanamkonda', 'Hanamkonda'];
         const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Farmer Template');
@@ -295,6 +290,9 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
     // --- UI Components ---
     const UploadStep = () => (
         <>
+            <div className="p-4 bg-blue-900/50 border border-blue-700/50 rounded-lg text-sm text-blue-300 mb-6">
+                <strong>Coming Soon:</strong> Bulk import for farmers with multiple plots is not yet supported. The current template only imports basic farmer details. Please add plots manually after importing.
+            </div>
             <div onDragEnter={e => {e.preventDefault(); e.stopPropagation(); setIsDragging(true);}} onDragLeave={e => {e.preventDefault(); e.stopPropagation(); setIsDragging(false);}} onDragOver={e => {e.preventDefault(); e.stopPropagation();}} onDrop={e => {e.preventDefault(); e.stopPropagation(); setIsDragging(false); if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0]);}} className={`p-10 border-2 border-dashed rounded-lg text-center transition-colors ${isDragging ? 'border-green-400 bg-gray-700' : 'border-gray-500 hover:border-green-500'}`}>
                 <input type="file" id="bulk-import-file-input" className="hidden" accept=".xlsx" onChange={e => handleFileChange(e.target.files?.[0])} />
                 <div className="flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>

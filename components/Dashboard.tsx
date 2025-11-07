@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Farmer, FarmerStatus, Filters } from '../types';
 import { GEO_DATA } from '../data/geoData';
 
 interface DashboardProps {
     farmers: Farmer[];
-    onNavigateWithFilter: (view: 'farmer-directory', filters: Partial<Omit<Filters, 'searchQuery'>>) => void;
+    onNavigateWithFilter: (view: 'farmer-directory', filters: Partial<Omit<Filters, 'searchQuery' | 'registrationDateFrom' | 'registrationDateTo'>>) => void;
 }
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; }> = ({ title, value, icon }) => (
@@ -18,6 +18,19 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
         </div>
     </div>
 );
+
+const ActionCard: React.FC<{ title: string; count: number; onClick: () => void; icon: React.ReactNode; }> = ({ title, count, onClick, icon }) => (
+    <button onClick={onClick} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg hover:border-green-300 border border-transparent transition-all text-left w-full flex items-start gap-4">
+        <div className="bg-green-100 p-3 rounded-lg flex-shrink-0">
+            {icon}
+        </div>
+        <div>
+            <p className="text-2xl font-bold text-gray-800">{count}</p>
+            <p className="font-semibold text-gray-600">{title}</p>
+        </div>
+    </button>
+);
+
 
 const CHART_COLORS = ['#34d399', '#fbbf24', '#60a5fa', '#f87171', '#a78bfa', '#fb923c'];
 
@@ -100,21 +113,42 @@ const InteractivePieChart: React.FC<{ title: string, data: { label: string, valu
 
 
 const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) => {
-    const stats = useMemo(() => {
+    const [dateRange, setDateRange] = useState<'all' | 'month' | 'week'>('all');
+
+    const filteredFarmersByDate = useMemo(() => {
+        if (dateRange === 'all') return farmers;
         const now = new Date();
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-        const newThisMonth = farmers.filter(f => new Date(f.registrationDate).getTime() >= firstDayOfMonth).length;
+        let startDate: Date;
+        if (dateRange === 'month') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else { // 'week'
+            startDate = new Date(now.setDate(now.getDate() - now.getDay()));
+        }
+        startDate.setHours(0, 0, 0, 0);
+        return farmers.filter(f => new Date(f.registrationDate).getTime() >= startDate.getTime());
+    }, [farmers, dateRange]);
+
+
+    const stats = useMemo(() => {
         const totalExtent = farmers.reduce((sum, f) => sum + (f.approvedExtent || 0), 0);
         return {
             totalFarmers: farmers.length.toLocaleString(),
-            newThisMonth: newThisMonth.toLocaleString(),
+            newInRange: filteredFarmersByDate.length.toLocaleString(),
             totalExtent: totalExtent.toFixed(2),
         };
+    }, [farmers, filteredFarmersByDate]);
+    
+    const quickLinks = useMemo(() => {
+        const pendingSanction = farmers.filter(f => f.status === FarmerStatus.Registered).length;
+        const pendingPlantation = farmers.filter(f => f.status === FarmerStatus.Sanctioned).length;
+        const unverifiedAccounts = farmers.filter(f => f.bankAccountNumber && !f.accountVerified).length;
+        
+        return { pendingSanction, pendingPlantation, unverifiedAccounts };
     }, [farmers]);
 
     const districtData = useMemo(() => {
         const counts: Record<string, number> = {};
-        farmers.forEach(f => {
+        filteredFarmersByDate.forEach(f => {
             counts[f.district] = (counts[f.district] || 0) + 1;
         });
         return Object.entries(counts)
@@ -124,11 +158,11 @@ const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) 
                 value
             }))
             .sort((a,b) => b.value - a.value);
-    }, [farmers]);
+    }, [filteredFarmersByDate]);
     
     const statusData = useMemo(() => {
         const counts = Object.values(FarmerStatus).reduce((acc, status) => ({ ...acc, [status]: 0 }), {} as Record<FarmerStatus, number>);
-        farmers.forEach(f => { counts[f.status]++; });
+        filteredFarmersByDate.forEach(f => { counts[f.status]++; });
         const colors: Record<FarmerStatus, string> = {
             [FarmerStatus.Registered]: '#3b82f6',
             [FarmerStatus.Sanctioned]: '#f97316',
@@ -136,10 +170,31 @@ const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) 
             [FarmerStatus.PaymentDone]: '#a855f7',
         };
         return Object.entries(counts).map(([label, value]) => ({ label, value, color: colors[label as FarmerStatus] }));
-    }, [farmers]);
+    }, [filteredFarmersByDate]);
+    
+    const DateRangeButton: React.FC<{ range: 'all' | 'month' | 'week', text: string }> = ({ range, text }) => {
+        const isActive = dateRange === range;
+        return (
+            <button
+                onClick={() => setDateRange(range)}
+                className={`px-3 py-1 text-sm font-semibold rounded-md ${isActive ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+            >
+                {text}
+            </button>
+        );
+    };
 
     return (
         <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-700">Overall Statistics</h2>
+                <div className="flex items-center gap-2">
+                    <DateRangeButton range="week" text="This Week" />
+                    <DateRangeButton range="month" text="This Month" />
+                    <DateRangeButton range="all" text="All Time" />
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <StatCard 
                     title="Total Farmers"
@@ -147,8 +202,8 @@ const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) 
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
                 />
                 <StatCard 
-                    title="New this Month"
-                    value={stats.newThisMonth}
+                    title={`New Farmers (${dateRange === 'all' ? 'All Time' : 'This ' + dateRange})`}
+                    value={stats.newInRange}
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
                 />
                 <StatCard 
@@ -157,8 +212,32 @@ const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) 
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h1a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.884 5.337l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM15.116 5.337l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM5.337 7.884l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM17.663 7.884l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 />
             </div>
+
+            <div className="border-t pt-6">
+                <h2 className="text-lg font-semibold text-gray-700 mb-4">Quick Links</h2>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <ActionCard 
+                        title="Pending Sanction"
+                        count={quickLinks.pendingSanction}
+                        onClick={() => onNavigateWithFilter('farmer-directory', { status: FarmerStatus.Registered })}
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                    />
+                    <ActionCard 
+                        title="Awaiting Plantation"
+                        count={quickLinks.pendingPlantation}
+                        onClick={() => onNavigateWithFilter('farmer-directory', { status: FarmerStatus.Sanctioned })}
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                    />
+                    <ActionCard 
+                        title="Unverified Bank Accounts"
+                        count={quickLinks.unverifiedAccounts}
+                        onClick={() => onNavigateWithFilter('farmer-directory', {})} // No simple filter for this, but can still navigate
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>}
+                    />
+                </div>
+            </div>
             
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-6 border-t">
                 <InteractivePieChart 
                     title="Farmer Status" 
                     data={statusData}

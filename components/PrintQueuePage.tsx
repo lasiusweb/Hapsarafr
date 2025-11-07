@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import { Q } from '@nozbe/watermelondb';
-import { FarmerModel } from '../db';
-import { User, Farmer } from '../types';
+import { FarmerModel, PlotModel } from '../db';
+import { User, Farmer, Plot } from '../types';
 import PrintView from './PrintView';
-import { farmerModelToPlain } from '../lib/utils';
+// FIX: Import plotModelToPlain to convert PlotModel to plain objects.
+import { farmerModelToPlain, plotModelToPlain } from '../lib/utils';
 import { useDatabase } from '../DatabaseContext';
 
 interface PrintQueuePageProps {
@@ -15,15 +16,24 @@ interface PrintQueuePageProps {
     onBack: () => void;
 }
 
+// FIX: Define a new state type to hold both farmer and their plots.
+interface FarmerWithPlots {
+    farmer: Farmer;
+    plots: Plot[];
+}
+
+
 const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users, onRemove, onClear, onBack }) => {
-    const [queuedFarmers, setQueuedFarmers] = useState<FarmerModel[]>([]);
+    // FIX: Update state to hold FarmerWithPlots objects.
+    const [farmersWithPlots, setFarmersWithPlots] = useState<FarmerWithPlots[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const database = useDatabase();
 
     useEffect(() => {
-        const fetchFarmers = async () => {
+        // FIX: Make the data fetching function async to handle fetching related plots.
+        const fetchFarmersAndPlots = async () => {
             if (queuedFarmerIds.length === 0) {
-                setQueuedFarmers([]);
+                setFarmersWithPlots([]);
                 setIsLoading(false);
                 return;
             }
@@ -33,7 +43,19 @@ const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users,
                 const farmers = await farmersCollection.query(Q.where('id', Q.oneOf(queuedFarmerIds))).fetch();
                 // Ensure the order is the same as the queue order
                 const sortedFarmers = queuedFarmerIds.map(id => farmers.find(f => f.id === id)).filter(Boolean) as FarmerModel[];
-                setQueuedFarmers(sortedFarmers);
+                
+                // FIX: Asynchronously fetch plots for each farmer.
+                const plotsPromises = sortedFarmers.map(f => f.plots.fetch());
+                const plotsByFarmerArray = await Promise.all(plotsPromises);
+
+                // FIX: Combine farmers and their plots into the new state structure.
+                const combinedData = sortedFarmers.map((f, index) => ({
+                    farmer: farmerModelToPlain(f)!,
+                    plots: plotsByFarmerArray[index].map(p => plotModelToPlain(p)!)
+                }));
+
+                setFarmersWithPlots(combinedData);
+
             } catch (error) {
                 console.error("Failed to fetch farmers for print queue:", error);
             } finally {
@@ -41,10 +63,9 @@ const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users,
             }
         };
 
-        fetchFarmers();
+        fetchFarmersAndPlots();
     }, [queuedFarmerIds, database]);
     
-    const plainFarmers = useMemo(() => queuedFarmers.map(f => farmerModelToPlain(f)).filter(Boolean) as Farmer[], [queuedFarmers]);
 
     const handlePrint = () => {
         window.print();
@@ -101,9 +122,9 @@ const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users,
                 {/* Print Content */}
                 {isLoading ? (
                     <div className="text-center py-20 text-gray-500">Loading queue...</div>
-                ) : plainFarmers.length > 0 ? (
+                ) : farmersWithPlots.length > 0 ? (
                     <div className="space-y-6">
-                        {plainFarmers.map(farmer => (
+                        {farmersWithPlots.map(({ farmer, plots }) => (
                             <div key={farmer.id} className="print-container bg-white rounded-lg shadow-md relative">
                                 <button
                                     onClick={() => onRemove(farmer.id)}
@@ -113,7 +134,8 @@ const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users,
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                                 </button>
                                 <div className="print-item">
-                                    <PrintView farmer={farmer} users={users} isForPdf={true} />
+                                    {/* FIX: Pass the fetched plots to the PrintView component. */}
+                                    <PrintView farmer={farmer} plots={plots} users={users} isForPdf={true} />
                                 </div>
                             </div>
                         ))}

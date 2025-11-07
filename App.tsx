@@ -4,8 +4,8 @@ import { Farmer, User, Group, Permission, PaymentStage, ActivityType, Filters, A
 import FilterBar from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
-import { Q, Query, Model } from '@nozbe/watermelondb';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, AppContentCacheModel, DistrictModel, MandalModel, VillageModel, TenantModel } from './db';
+import { Q, Query, Model, Database } from '@nozbe/watermelondb';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, AppContentCacheModel, DistrictModel, MandalModel, VillageModel, TenantModel, ResourceModel } from './db';
 import { initializeSupabase } from './lib/supabase';
 import { DEFAULT_GROUPS } from './data/permissionsData';
 import { MOCK_USERS } from './data/userData';
@@ -52,6 +52,15 @@ const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
 const GeoManagementPage = lazy(() => import('./components/GeoManagementPage'));
 const SchemaManagerPage = lazy(() => import('./components/SchemaManagerPage'));
 const TenantManagementPage = lazy(() => import('./components/TenantManagementPage'));
+const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
+const DistributionReportPage = lazy(() => import('./components/DistributionReportPage'));
+const DiscussModeModal = lazy(() => import('./components/DiscussModeModal'));
+// Phase 3 Placeholders
+const YieldPredictionPage = lazy(() => import('./components/YieldPredictionPage'));
+const SatelliteAnalysisPage = lazy(() => import('./components/SatelliteAnalysisPage'));
+const FinancialLedgerPage = lazy(() => import('./components/FinancialLedgerPage'));
+// Phase 2 Placeholders
+const TaskManagementPage = lazy(() => import('./components/TaskManagementPage'));
 
 
 // Type declarations for CDN libraries
@@ -68,79 +77,7 @@ const initialFilters: Filters = {
   registrationDateTo: '',
 };
 
-// --- New Alert System ---
-interface Alert {
-    id: string; // farmerId + stage
-    farmerId: string;
-    farmerName: string;
-    message: string;
-    timestamp: number;
-    read: boolean;
-}
-
-function timeAgo(timestamp: number): string {
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - timestamp) / 1000);
-    if (seconds < 60) return "Just now";
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-}
-
-const AlertsPanel: React.FC<{
-    alerts: Alert[];
-    isOpen: boolean;
-    onClose: () => void;
-    onMarkAsRead: (id: string) => void;
-    onMarkAllAsRead: () => void;
-    onNavigate: (path: string) => void;
-}> = ({ alerts, isOpen, onClose, onMarkAsRead, onMarkAllAsRead, onNavigate }) => {
-    if (!isOpen) return null;
-    
-    const unreadAlerts = alerts.filter(a => !a.read);
-
-    const handleAlertClick = (alert: Alert) => {
-        onMarkAsRead(alert.id);
-        onNavigate(`farmer-details/${alert.farmerId}`);
-        onClose();
-    };
-    
-    return (
-        <div className="absolute top-16 right-4 z-50 w-full max-w-sm bg-white rounded-lg shadow-2xl border border-gray-200" onClick={e => e.stopPropagation()}>
-            <div className="p-3 border-b flex justify-between items-center">
-                <h3 className="font-semibold text-gray-800">Notifications</h3>
-                {unreadAlerts.length > 0 && <button onClick={onMarkAllAsRead} className="text-sm text-green-600 font-semibold hover:underline">Mark all as read</button>}
-            </div>
-            <div className="max-h-96 overflow-y-auto">
-                {alerts.length === 0 ? (
-                    <div className="text-center p-8 text-gray-500">
-                        <p>No new notifications.</p>
-                    </div>
-                ) : (
-                    <ul className="divide-y divide-gray-100">
-                        {alerts.map(alert => (
-                            <li key={alert.id} onClick={() => handleAlertClick(alert)} className={`p-4 hover:bg-gray-50 cursor-pointer ${!alert.read ? 'bg-green-50' : ''}`}>
-                                <div className="flex items-start gap-3">
-                                    {!alert.read && <div className="mt-1.5 h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></div>}
-                                    <div className={alert.read ? 'pl-5' : ''}>
-                                        <p className="text-sm text-gray-700">{alert.message}</p>
-                                        <p className="text-xs text-gray-400 mt-1">{timeAgo(alert.timestamp)}</p>
-                                    </div>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-        </div>
-    );
-};
-
-
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner' | 'data-health' | 'geo-management' | 'schema-manager' | 'tenant-management';
+type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner' | 'data-health' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'resource-management' | 'distribution-report' | 'yield-prediction' | 'satellite-analysis' | 'financial-ledger' | 'task-management';
 type ParsedHash = 
     | { view: View; params: {} }
     | { view: 'farmer-details'; params: { farmerId: string } }
@@ -156,7 +93,7 @@ const parseHash = (): ParsedHash => {
         return { view: 'farmer-details', params: { farmerId: id } };
     }
 
-    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner', 'data-health', 'geo-management', 'schema-manager', 'tenant-management'];
+    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner', 'data-health', 'geo-management', 'schema-manager', 'tenant-management', 'resource-management', 'distribution-report', 'yield-prediction', 'satellite-analysis', 'financial-ledger', 'task-management'];
     if (simpleViews.includes(path as View)) {
         return { view: path as View, params: {} };
     }
@@ -168,39 +105,48 @@ const parseHash = (): ParsedHash => {
     return { view: 'not-found', params: {} };
 };
 
-const getViewTitle = (view: View | 'farmer-details' | 'not-found'): string => {
-    const titles: Record<View | 'farmer-details' | 'not-found', string> = {
-        'dashboard': 'Dashboard',
-        'farmer-directory': 'Farmer Directory',
-        'farmer-details': 'Farmer Details',
-        'profile': 'My Profile',
-        'admin': 'Admin Panel',
-        'billing': 'Billing & Usage',
-        'usage-analytics': 'Usage Analytics',
-        'content-manager': 'Content Manager',
-        'subscription-management': 'Subscription Management',
-        'print-queue': 'Print Queue',
-        'subsidy-management': 'Subsidy Management',
-        'map-view': 'Map View',
-        'help': 'Help & Support',
-        'id-verification': 'ID Verification Tool',
-        'reports': 'Reports & Analytics',
-        'crop-health-scanner': 'Crop Health Scanner',
-        'data-health': 'Data Health',
-        'geo-management': 'Geographic Management',
-        'schema-manager': 'Schema & Form Manager',
-        'tenant-management': 'Tenant Management',
-        'not-found': 'Page Not Found',
-    };
-    return titles[view] || 'Hapsara';
-};
-
 const ModalLoader: React.FC<{ message?: string }> = ({ message = "Loading Application..." }) => (
     <div className="fixed inset-0 bg-gray-100 flex flex-col items-center justify-center z-[100]">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500 mb-4"></div>
         <p className="text-lg text-gray-600 font-semibold">{message}</p>
     </div>
 );
+
+const seedInitialData = async (database: Database, tenantId: string) => {
+    try {
+        const resourcesCollection = database.get<ResourceModel>('resources');
+        const existingResources = await resourcesCollection.query(Q.where('tenant_id', tenantId)).fetch();
+        
+        if (existingResources.length > 0) {
+            return; // Data already seeded for this tenant
+        }
+
+        const defaultResources = [
+            { name: 'Manually Handled Oil Palm Cutter', unit: 'unit', description: 'Assistance: up to ₹2,500/unit' },
+            { name: 'Protective Wire Mesh', unit: 'unit', description: 'Assistance: up to ₹20,000/unit' },
+            { name: 'Motorized Chisel', unit: 'unit', description: 'Assistance: up to ₹15,000/unit' },
+            { name: 'Aluminium Portable Ladder', unit: 'unit', description: 'Assistance: up to ₹5,000/unit' },
+            { name: 'Chaff Cutter', unit: 'unit', description: 'Assistance: up to ₹50,000/unit' },
+            { name: 'Tractor with Trolley (up to 20 HP)', unit: 'unit', description: 'As per SMAM guidelines' },
+        ];
+
+        await database.write(async () => {
+            for (const resource of defaultResources) {
+                await resourcesCollection.create(r => {
+                    r.name = resource.name;
+                    r.unit = resource.unit;
+                    r.description = resource.description;
+                    r.tenantId = tenantId;
+                });
+            }
+        });
+
+        console.log('Default resources seeded successfully.');
+
+    } catch (error) {
+        console.error("Failed to seed initial data:", error);
+    }
+};
 
 const App: React.FC = () => {
     const database = useDatabase();
@@ -215,7 +161,7 @@ const App: React.FC = () => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [currentHash, setCurrentHash] = useState(window.location.hash);
     const [isShowingRegistrationForm, setIsShowingRegistrationForm] = useState(false);
-    const [editingFarmer, setEditingFarmer] = useState<Farmer | null>(null);
+    const [editingFarmer, setEditingFarmer] = useState<FarmerModel | null>(null);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [farmerToPrint, setFarmerToPrint] = useState<Farmer | null>(null);
@@ -229,6 +175,7 @@ const App: React.FC = () => {
     const [printQueue, setPrintQueue] = useState<string[]>([]);
     const [showSupabaseSettingsModal, setShowSupabaseSettingsModal] = useState(false);
     const [listViewMode, setListViewMode] = useState<'table' | 'grid'>('table');
+    const [isDiscussModeOpen, setIsDiscussModeOpen] = useState(false);
 
     // Data State
     const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -249,8 +196,16 @@ const App: React.FC = () => {
     const allUsersFromDB = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database]));
     const plainUsers = useMemo(() => allUsersFromDB.map(u => ({ id: u.id, name: u.name, email: u.email!, avatar: u.avatar, groupId: u.groupId, tenantId: u.tenantId, is_verified: u.isVerified! })), [allUsersFromDB]);
     const plainGroups = useMemo(() => allGroups.map(g => ({ id: g.id, name: g.name, permissions: g.parsedPermissions, tenantId: g.tenantId })), [allGroups]);
-    const allFarmers = useMemo(() => allFarmerModels.map(f => farmerModelToPlain(f) as Farmer), [allFarmerModels]);
+    // FIX: Convert FarmerModel[] to Farmer[] to satisfy component prop types.
+    const plainFarmers: Farmer[] = useMemo(() => allFarmerModels.map(farmerModelToPlain).filter((f): f is Farmer => f !== null), [allFarmerModels]);
 
+    // Seed initial data effect
+    useEffect(() => {
+        if (database && currentUser) {
+            seedInitialData(database, currentUser.tenantId);
+        }
+    }, [database, currentUser]);
+    
     useEffect(() => {
       const sp = initializeSupabase();
       setSupabase(sp);
@@ -436,67 +391,101 @@ const App: React.FC = () => {
                         onShowSupabaseSettings={() => {}}
                     />
                 </Suspense>
-                 <main className="flex-1 flex flex-col overflow-hidden">
-                     <header className="bg-white shadow-md p-4 z-30">
-                        <h1 className="text-xl font-semibold">{getViewTitle(parseHash().view)}</h1>
-                    </header>
-                    <div className="flex-1 overflow-y-auto p-6">
-                        <Suspense fallback={<ModalLoader />}>
-                           {view === 'farmer-directory' && (
-                                <FarmerList
-                                    farmers={allFarmers}
-                                    users={plainUsers}
-                                    tenants={tenants}
-                                    isSuperAdmin={isSuperAdmin}
-                                    canEdit={true}
-                                    canDelete={true}
-                                    onPrint={() => {}}
-                                    onExportToPdf={() => {}}
-                                    selectedFarmerIds={[]}
-                                    onSelectionChange={() => {}}
-                                    onSelectAll={() => {}}
-                                    sortConfig={sortConfig}
-                                    onRequestSort={(key) => {}}
-                                    newlyAddedFarmerId={null}
-                                    onHighlightComplete={() => {}}
-                                    onBatchUpdate={() => {}}
-                                    onDeleteSelected={() => {}}
-                                    totalRecords={allFarmers.length}
-                                    currentPage={1}
-                                    rowsPerPage={10}
-                                    onPageChange={() => {}}
-                                    onRowsPerPageChange={() => {}}
-                                    isLoading={false}
-                                    onAddToPrintQueue={() => {}}
-                                    onNavigate={(path) => window.location.hash = path}
-                                    listViewMode={listViewMode}
-                                    onSetListViewMode={setListViewMode}
-                                />
-                            )}
-                            {view === 'profile' && (
-                                <ProfilePage
-                                    currentUser={currentUser}
-                                    groups={plainGroups}
-                                    onSave={handleSaveProfile}
-                                    onBack={() => window.location.hash = 'dashboard'}
-                                    setNotification={setNotification}
-                                />
-                            )}
-                            {view === 'admin' && (
-                                <AdminPage
-                                    users={plainUsers}
-                                    groups={plainGroups}
-                                    currentUser={currentUser}
-                                    onSaveUsers={handleSaveUsers}
-                                    onSaveGroups={handleSaveGroups}
-                                    onBack={() => window.location.hash = 'dashboard'}
-                                    onNavigate={(v) => window.location.hash = v}
-                                    setNotification={setNotification}
-                                />
-                            )}
-                        </Suspense>
-                    </div>
-                </main>
+                <div className="flex-1 flex flex-col overflow-auto p-6">
+                    <Suspense fallback={<ModalLoader />}>
+                       {view === 'dashboard' && (
+                            <Dashboard 
+                                farmers={plainFarmers}
+                                onNavigateWithFilter={() => {
+                                    // This will be implemented in a future phase
+                                }}
+                            />
+                        )}
+                       {view === 'farmer-directory' && (
+                            <FarmerList
+                                farmers={plainFarmers}
+                                users={plainUsers}
+                                tenants={tenants}
+                                isSuperAdmin={isSuperAdmin}
+                                canEdit={true}
+                                canDelete={true}
+                                onPrint={() => {}}
+                                onExportToPdf={() => {}}
+                                selectedFarmerIds={[]}
+                                onSelectionChange={() => {}}
+                                onSelectAll={() => {}}
+                                sortConfig={sortConfig}
+                                onRequestSort={(key) => {}}
+                                newlyAddedFarmerId={null}
+                                onHighlightComplete={() => {}}
+                                onBatchUpdate={() => {}}
+                                onDeleteSelected={() => {}}
+                                totalRecords={allFarmerModels.length}
+                                currentPage={1}
+                                rowsPerPage={10}
+                                onPageChange={() => {}}
+                                onRowsPerPageChange={() => {}}
+                                isLoading={false}
+                                onAddToPrintQueue={() => {}}
+                                onNavigate={(path) => window.location.hash = path}
+                                listViewMode={listViewMode}
+                                onSetListViewMode={setListViewMode}
+                            />
+                        )}
+                        {view === 'profile' && (
+                            <ProfilePage
+                                currentUser={currentUser}
+                                groups={plainGroups}
+                                onSave={handleSaveProfile}
+                                onBack={() => window.location.hash = 'dashboard'}
+                                setNotification={setNotification}
+                            />
+                        )}
+                        {view === 'admin' && (
+                            <AdminPage
+                                users={plainUsers}
+                                groups={plainGroups}
+                                currentUser={currentUser}
+                                onSaveUsers={handleSaveUsers}
+                                onSaveGroups={handleSaveGroups}
+                                onBack={() => window.location.hash = 'dashboard'}
+                                onNavigate={(v) => window.location.hash = v}
+                                setNotification={setNotification}
+                            />
+                        )}
+                        {view === 'help' && (
+                           <HelpPage onBack={() => window.location.hash = 'dashboard'} />
+                        )}
+                        {view === 'reports' && (
+                            <ReportsPage allFarmers={plainFarmers} onBack={() => window.location.hash = 'dashboard'} />
+                        )}
+                        {view === 'crop-health-scanner' && (
+                            <CropHealthScannerPage onBack={() => window.location.hash = 'dashboard'} />
+                        )}
+                        {view === 'resource-management' && (
+                            <ResourceManagementPage onBack={() => window.location.hash = 'admin'} />
+                        )}
+                        {view === 'distribution-report' && (
+                            <DistributionReportPage onBack={() => window.location.hash = 'dashboard'} />
+                        )}
+                        {view === 'farmer-details' && 'farmerId' in params && (
+                            <FarmerDetailsPage
+                                farmerId={params.farmerId}
+                                users={plainUsers}
+                                currentUser={currentUser}
+                                onBack={() => window.location.hash = 'farmer-directory'}
+                                permissions={new Set(plainGroups.find(g => g.id === currentUser.groupId)?.permissions)}
+                                setNotification={setNotification}
+                            />
+                        )}
+                        {/* Phase 3 Placeholders */}
+                        {view === 'yield-prediction' && <YieldPredictionPage onBack={() => window.location.hash = 'dashboard'} />}
+                        {view === 'satellite-analysis' && <SatelliteAnalysisPage onBack={() => window.location.hash = 'dashboard'} />}
+                        {view === 'financial-ledger' && <FinancialLedgerPage onBack={() => window.location.hash = 'dashboard'} />}
+                        {/* Phase 2 Placeholders */}
+                        {view === 'task-management' && <TaskManagementPage onBack={() => window.location.hash = 'dashboard'} currentUser={currentUser} />}
+                    </Suspense>
+                </div>
                 {notification && (
                     <Notification
                         message={notification.message}
@@ -512,13 +501,27 @@ const App: React.FC = () => {
                                 setIsShowingRegistrationForm(false);
                                 setEditingFarmer(null);
                             }}
-                            existingFarmers={allFarmers}
+                            existingFarmers={plainFarmers}
                             mode={editingFarmer ? 'edit' : 'create'}
-                            existingFarmer={editingFarmer}
+                            existingFarmer={farmerModelToPlain(editingFarmer)}
                             setNotification={setNotification}
                         />
                     </Suspense>
                 )}
+                 {/* --- Floating Action Buttons --- */}
+                <button
+                    onClick={() => setIsDiscussModeOpen(true)}
+                    className="fixed bottom-6 right-6 bg-green-600 text-white rounded-full p-4 shadow-lg hover:bg-green-700 transition-transform transform hover:scale-110 z-30"
+                    title="Open Discuss Mode"
+                    aria-label="Open Discuss Mode"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" />
+                    </svg>
+                </button>
+                <Suspense fallback={<div/>}>
+                    {isDiscussModeOpen && <DiscussModeModal onClose={() => setIsDiscussModeOpen(false)} />}
+                </Suspense>
             </div>
         );
     }

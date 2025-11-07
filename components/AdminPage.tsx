@@ -1,8 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-// FIX: Remove unused Invitation type, which is obsolete.
 import { User, Group, Permission } from '../types';
 import { PERMISSIONS_LIST } from '../data/permissionsData';
-// FIX: Remove unused InvitationModal import, which is obsolete.
 import CustomSelect from './CustomSelect';
 
 interface AdminPageProps {
@@ -12,14 +10,12 @@ interface AdminPageProps {
     onSaveUsers: (updatedUsers: User[]) => Promise<void>;
     onSaveGroups: (updatedGroups: Group[]) => Promise<void>;
     onBack: () => void;
-    // FIX: Remove obsolete invitation props.
     onNavigate: (view: 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management') => void;
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
 const SUPER_ADMIN_GROUP_ID = 'group-super-admin';
 
-// FIX: Remove obsolete invitation props.
 const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, onNavigate, setNotification }) => {
     const permissions = useMemo(() => {
         const userGroup = groups.find(g => g.id === currentUser.groupId);
@@ -28,7 +24,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
 
     const canManageUsers = permissions.has(Permission.CAN_MANAGE_USERS);
     const canManageGroups = permissions.has(Permission.CAN_MANAGE_GROUPS);
-    // FIX: Remove unused canInvite constant.
     const isSuperAdmin = currentUser.groupId === SUPER_ADMIN_GROUP_ID;
 
     const [activeTab, setActiveTab] = useState<'users' | 'groups' | 'system'>(isSuperAdmin ? 'system' : canManageUsers ? 'users' : 'groups');
@@ -47,8 +42,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
         }
     }, [groups, selectedGroupId]);
     
-    // FIX: Remove obsolete invitation-related state.
-
     // Filter out super admins from view if the current user is not a super admin
     const visibleUsers = useMemo(() => isSuperAdmin ? editedUsers : editedUsers.filter(u => u.groupId !== SUPER_ADMIN_GROUP_ID), [editedUsers, isSuperAdmin]);
     const visibleGroups = useMemo(() => isSuperAdmin ? editedGroups : editedGroups.filter(g => g.id !== SUPER_ADMIN_GROUP_ID), [editedGroups, isSuperAdmin]);
@@ -113,8 +106,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
         }
     };
     
-    // FIX: Remove obsolete handleInviteSubmit function.
-
     const permissionCategories = useMemo(() => {
         const initialValue: Record<string, { id: Permission; description: string; category: string; }[]> = {};
         return PERMISSIONS_LIST.reduce((acc, p) => {
@@ -214,7 +205,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                         </tbody>
                                     </table>
                                 </div>
-                                {/* FIX: Remove obsolete invitation UI. */}
                             </div>
                         )}
                         {activeTab === 'groups' && canManageGroups && (
@@ -285,7 +275,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                     </div>
                 </div>
             </div>
-            {/* FIX: Remove obsolete InvitationModal. */}
         </div>
     );
 };

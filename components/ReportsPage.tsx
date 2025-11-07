@@ -105,6 +105,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [aiReport, setAiReport] = useState<string | null>(null);
     const [aiError, setAiError] = useState<string | null>(null);
+    const [aiQuery, setAiQuery] = useState('');
 
     const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -246,7 +247,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                 - Average Area per Farmer: ${stats.avgExtent} Acres
 
                 Distribution by Status:
-                ${statusDistribution.map(s => `- ${s.label}: ${s.value} farmers (${((s.value / (parseInt(stats.totalFarmers.toString(), 10) || 1)) * 100).toFixed(1)}%)`).join('\n')}
+                ${statusDistribution.map(s => `- ${s.label}: ${s.value} farmers (${((s.value / (stats.totalFarmers || 1)) * 100).toFixed(1)}%)`).join('\n')}
 
                 Distribution by Plantation Method:
                 ${methodDistribution.map(m => `- ${m.label}: ${m.value} farmers`).join('\n')}
@@ -254,8 +255,11 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                 Gender Distribution:
                 ${genderDistribution.map(g => `- ${g.label}: ${g.value} farmers`).join('\n')}
 
+                User's Question: "${aiQuery || 'Provide a general summary.'}"
+
                 Your Task:
-                Write a brief, insightful report in markdown format. Highlight key trends, significant numbers, and potential areas of success or concern based *only* on the data provided.
+                Based *only* on the data provided, answer the user's question or provide a general summary if no question is asked.
+                Write a brief, insightful report in markdown format. Highlight key trends, significant numbers, and potential areas of success or concern.
                 Structure your report with a main title (e.g., using '#'), a brief overview paragraph, and a few bullet points for key takeaways. Do not invent any data.
             `;
             
@@ -325,28 +329,36 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><CustomPieChart title="Farmer Status" data={statusDistribution} /><CustomPieChart title="Plantation Method" data={methodDistribution} /><CustomPieChart title="Gender Distribution" data={genderDistribution} /></div>
                     {filters.district && <CustomBarChart title={`Total Extent by Mandal in ${getGeoName('district', { district: filters.district })}`} data={extentByMandal} />}
 
-                    {(isGeneratingReport || aiReport || aiError) && (
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
-                                AI-Generated Summary
-                            </h3>
-                            {isGeneratingReport && <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div></div>}
-                            {aiError && <div className="p-4 bg-red-50 text-red-700 rounded-md">{aiError}</div>}
-                            {aiReport && <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(aiReport) }} />}
+                     <div className="bg-white p-6 rounded-lg shadow-md border-2 border-dashed border-gray-300 text-center text-gray-500">
+                        <h3 className="font-bold text-gray-700">Coming Soon: Regional Outbreak Detection</h3>
+                        <p className="text-sm mt-2">AI will analyze incoming crop health images to identify potential disease outbreaks in specific regions, enabling proactive administrative action.</p>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                        <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
+                            AI Report Assistant
+                        </h3>
+                         <p className="text-sm text-gray-500 mb-4">Ask a question about the current filtered data to get an AI-generated summary.</p>
+                        <div className="flex flex-col md:flex-row gap-4">
+                            <textarea value={aiQuery} onChange={e => setAiQuery(e.target.value)} placeholder="e.g., 'Which status group is the largest?' or 'Highlight any potential issues in this data.'" className="flex-1 p-2 border border-gray-300 rounded-md" rows={2}></textarea>
+                            <button onClick={handleGenerateReport} disabled={isGeneratingReport || filteredFarmers.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm disabled:bg-gray-400 flex items-center justify-center gap-2">
+                                {isGeneratingReport ? 'Generating...' : 'Generate AI Report'}
+                            </button>
                         </div>
-                    )}
+                        {(isGeneratingReport || aiReport || aiError) && (
+                            <div className="mt-4 border-t pt-4">
+                                {isGeneratingReport && <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div></div>}
+                                {aiError && <div className="p-4 bg-red-50 text-red-700 rounded-md">{aiError}</div>}
+                                {aiReport && <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(aiReport) }} />}
+                            </div>
+                        )}
+                    </div>
 
                     <div className="bg-white rounded-lg shadow-md">
                         <div className="p-4 border-b flex justify-between items-center">
                             <h3 className="text-xl font-bold text-gray-800">Filtered Farmer Data</h3>
-                            <div className="flex gap-2">
-                                <button onClick={handleGenerateReport} disabled={isGeneratingReport || filteredFarmers.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm disabled:bg-gray-400 flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
-                                    {isGeneratingReport ? 'Generating...' : 'Generate AI Summary'}
-                                </button>
-                                <button onClick={() => exportToExcel(filteredFarmers, 'Filtered_Farmer_Report')} disabled={filteredFarmers.length === 0} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm disabled:bg-gray-400">Export to Excel</button>
-                            </div>
+                            <button onClick={() => exportToExcel(filteredFarmers, 'Filtered_Farmer_Report')} disabled={filteredFarmers.length === 0} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm disabled:bg-gray-400">Export to Excel</button>
                         </div>
                         <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hap ID</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reg. Date</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Approved Extent</th></tr></thead>

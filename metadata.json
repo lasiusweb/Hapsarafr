@@ -3,6 +3,7 @@
   "description": "A comprehensive offline-capable web application for the Oil Palm Mission that manages farmer registrations, tracks plantation progress, and monitors subsidy payments across Hanmakonda and Mulugu districts.",
   "requestFramePermissions": [
     "geolocation",
-    "camera"
+    "camera",
+    "microphone"
   ]
 }

@@ -243,6 +243,11 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack })
                                         <span>{isLoading ? 'Analyzing...' : (analysis ? 'Analysis Complete' : 'Analyze with AI')}</span>
                                     </button>
                                      {error && <p className="mt-4 text-center text-red-600 bg-red-50 p-3 rounded-md">{error}</p>}
+                                    {analysis && (
+                                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                                            <strong>Coming Soon:</strong> Track crop health over time! In a future update, you'll be able to upload a series of images to monitor disease progression or recovery.
+                                        </div>
+                                    )}
                                     {analysis && !isLoading && (
                                         <div className="mt-4 p-4 bg-gray-50 rounded-lg border flex-1 overflow-y-auto max-h-[500px]">
                                             <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: formatMarkdown(analysis) }} />

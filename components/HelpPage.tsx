@@ -1,58 +1,93 @@
-import React, { useState } from 'react';
-import { AppContent } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI, Chat } from '@google/genai';
 
 interface HelpPageProps {
-    appContent: Partial<AppContent> | null;
     onBack: () => void;
 }
 
-const FAQAccordionItem: React.FC<{ faq: { question: string; answer: string }; isOpen: boolean; onClick: () => void; }> = ({ faq, isOpen, onClick }) => {
-    return (
-        <div className="border-b">
-            <button
-                onClick={onClick}
-                className="w-full flex justify-between items-center text-left py-4 px-2 hover:bg-gray-50"
-                aria-expanded={isOpen}
-            >
-                <span className="font-semibold text-gray-800">{faq.question}</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-gray-500 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-            {isOpen && (
-                <div className="p-4 bg-gray-50 text-gray-600">
-                    <p>{faq.answer}</p>
-                </div>
-            )}
-        </div>
-    );
-};
+const HelpPage: React.FC<HelpPageProps> = ({ onBack }) => {
+    const [chat, setChat] = useState<Chat | null>(null);
+    const [conversation, setConversation] = useState<{ role: 'user' | 'model', text: string }[]>([]);
+    const [chatInput, setChatInput] = useState('');
+    const [isChatLoading, setIsChatLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+    
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [conversation]);
 
-
-const HelpPage: React.FC<HelpPageProps> = ({ appContent, onBack }) => {
-    const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
-    const [feedback, setFeedback] = useState('');
-
-    const defaultFaqs = [
-        { id: '1', question: 'How do I sync my data?', answer: 'The "Sync Now" button in the header will push your local changes to the server. The app also syncs automatically in the background when you are online.' },
-        { id: '2', question: 'Can I work offline?', answer: 'Yes! All registrations and edits are saved locally to your device. When you reconnect to the internet, your changes will be synced.' }
-    ];
-
-    const faqs = appContent?.faqs && appContent.faqs.length > 0 ? appContent.faqs : defaultFaqs;
-
-    const handleFaqClick = (index: number) => {
-        setOpenFaqIndex(openFaqIndex === index ? null : index);
-    };
-
-    const handleFeedbackSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (feedback.trim()) {
-            // In a real app, this would send to an API
-            alert('Thank you for your feedback!');
-            setFeedback('');
-        } else {
-            alert('Please enter your feedback before submitting.');
+    useEffect(() => {
+        if (!process.env.API_KEY) {
+            setError("Cannot initialize AI Assistant: Gemini API key is not configured.");
+            return;
         }
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const systemInstruction = "You are a friendly and helpful AI assistant for the Hapsara Oil Palm Mission application. Your role is to answer user questions about how to use the app, explain oil palm subsidy guidelines, and provide best practices for oil palm cultivation. Keep your answers concise and clear. Format your responses with markdown.";
+            const chatSession = ai.chats.create({
+                model: 'gemini-2.5-flash',
+                config: { systemInstruction }
+            });
+            setChat(chatSession);
+            setConversation([{ role: 'model', text: 'Hello! I am the Hapsara AI Assistant. How can I help you today with the app or with oil palm cultivation?' }]);
+        } catch (e: any) {
+            console.error("Failed to initialize chat:", e);
+            setError("Failed to initialize the AI Assistant. Please check your API key and network connection.");
+        }
+    }, []);
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!chatInput.trim() || !chat || isChatLoading) return;
+
+        const question = chatInput.trim();
+        setIsChatLoading(true);
+        setChatInput('');
+        setConversation(prev => [...prev, { role: 'user', text: question }]);
+
+        try {
+            const result = await chat.sendMessageStream({ message: question });
+            
+            // Add a placeholder for the model's response
+            setConversation(prev => [...prev, { role: 'model', text: '' }]);
+            
+            for await (const chunk of result) {
+                const chunkText = chunk.text;
+                setConversation(prev => {
+                    const newConversation = [...prev];
+                    const lastMessage = newConversation[newConversation.length - 1];
+                    if (lastMessage.role === 'model') {
+                        lastMessage.text += chunkText;
+                    }
+                    return newConversation;
+                });
+            }
+        } catch (err: any) {
+             console.error("Gemini chat error:", err);
+             setConversation(prev => [...prev, { role: 'model', text: "Sorry, I encountered an error while trying to respond. Please try again." }]);
+        } finally {
+            setIsChatLoading(false);
+        }
+    };
+    
+    const formatMarkdown = (text: string) => {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .split('\n')
+            .map(line => line.trim())
+            .map(line => {
+                if (line.startsWith('- ') || line.startsWith('* ')) {
+                    return `<li class="list-disc list-inside ml-4">${line.substring(2)}</li>`;
+                }
+                 if (line.startsWith('#')) {
+                    const level = line.match(/^#+/)?.[0].length || 1;
+                    return `<h${level + 3} class="font-bold my-2">${line.replace(/^#+\s*/, '')}</h${level + 3}>`;
+                }
+                return line ? `<p class="my-2">${line}</p>` : '';
+            })
+            .join('');
     };
 
     return (
@@ -71,45 +106,45 @@ const HelpPage: React.FC<HelpPageProps> = ({ appContent, onBack }) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="md:col-span-2">
-                        {/* FAQs Section */}
-                        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">Frequently Asked Questions</h2>
-                            <div className="border-t">
-                                {faqs.map((faq, index) => (
-                                    <FAQAccordionItem
-                                        key={faq.id}
-                                        faq={faq}
-                                        isOpen={openFaqIndex === index}
-                                        onClick={() => handleFaqClick(index)}
-                                    />
+                        <div className="bg-white rounded-lg shadow-md h-[70vh] flex flex-col">
+                            <h2 className="text-xl font-bold text-gray-800 p-6 border-b">AI Help Assistant</h2>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                {conversation.map((msg, index) => (
+                                    <div key={index} className={`flex items-start gap-2.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                                        <div className={`flex flex-col max-w-lg p-3 rounded-lg ${msg.role === 'user' ? 'bg-green-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
+                                            <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.text) }}></div>
+                                        </div>
+                                    </div>
                                 ))}
+                                {isChatLoading && conversation[conversation.length - 1].role === 'user' && (
+                                     <div className="flex items-start gap-2.5">
+                                        <div className="flex flex-col max-w-xs p-3 rounded-lg bg-gray-100 rounded-bl-none">
+                                            <div className="flex items-center space-x-2">
+                                                <div className="w-2 h-2 rounded-full bg-gray-400 animate-pulse"></div>
+                                                <div className="w-2 h-2 rounded-full bg-gray-400 animate-pulse [animation-delay:0.2s]"></div>
+                                                <div className="w-2 h-2 rounded-full bg-gray-400 animate-pulse [animation-delay:0.4s]"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={chatEndRef} />
                             </div>
-                        </div>
-
-                        {/* Feedback Section */}
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                             <h2 className="text-xl font-bold text-gray-800 mb-4">Submit Feedback</h2>
-                            <form onSubmit={handleFeedbackSubmit}>
-                               <textarea
-                                    value={feedback}
-                                    onChange={(e) => setFeedback(e.target.value)}
-                                    placeholder="Tell us what you think..."
-                                    className="w-full h-32 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
-                                    required
-                               />
-                               <button type="submit" className="mt-4 px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">
-                                   Submit
-                                </button>
-                            </form>
+                            {error ? (
+                                <div className="p-4 text-red-700 bg-red-50 text-center">{error}</div>
+                            ) : (
+                                <form onSubmit={handleSendMessage} className="p-4 border-t flex gap-2">
+                                    <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Ask a question..." className="flex-1 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" disabled={isChatLoading} />
+                                    <button type="submit" disabled={isChatLoading || !chatInput.trim()} className="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition disabled:bg-green-300">Send</button>
+                                </form>
+                            )}
                         </div>
                     </div>
 
-                    {/* Contact Section */}
                     <div className="md:col-span-1">
                         <div className="bg-white rounded-lg shadow-md p-6 sticky top-6">
                             <h2 className="text-xl font-bold text-gray-800 mb-4">Contact Support</h2>
                             <p className="text-sm text-gray-600 mb-4">
-                                If you can't find an answer in the FAQs, please don't hesitate to reach out to us.
+                                If the AI assistant can't help, please don't hesitate to reach out to our team.
                             </p>
                             <div className="space-y-4">
                                  <a href="mailto:support@hapsara.com" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">

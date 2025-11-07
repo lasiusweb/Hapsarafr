@@ -1,11 +1,11 @@
-import { appSchema, tableSchema, Model, Database, Q, CollectionMap } from '@nozbe/watermelondb';
+import { appSchema, tableSchema, Model, Database, Q, CollectionMap, Relation } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { field, date, lazy, writer, readonly, text } from '@nozbe/watermelondb/decorators';
-import { FarmerStatus, PlantationMethod, PlantType, PaymentStage, Permission, Group } from '../types';
+import { FarmerStatus, PlantationMethod, PlantType, PaymentStage, Permission, Group, SoilType, TaskStatus, TaskPriority } from '../types';
 
 // 1. Define the Schema
 export const mySchema = appSchema({
-  version: 7,
+  version: 10,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -21,16 +21,6 @@ export const mySchema = appSchema({
         { name: 'bankAccountNumber', type: 'string' },
         { name: 'ifscCode', type: 'string' },
         { name: 'accountVerified', type: 'boolean' },
-        { name: 'appliedExtent', type: 'number' },
-        { name: 'approvedExtent', type: 'number' },
-        { name: 'numberOfPlants', type: 'number' },
-        { name: 'methodOfPlantation', type: 'string' },
-        { name: 'plantType', type: 'string' },
-        { name: 'plantationDate', type: 'string' },
-        { name: 'mlrdPlants', type: 'number' },
-        { name: 'fullCostPlants', type: 'number' },
-        { name: 'latitude', type: 'number', isOptional: true },
-        { name: 'longitude', type: 'number', isOptional: true },
         { name: 'applicationId', type: 'string' },
         { name: 'farmerId', type: 'string', isIndexed: true },
         { name: 'proposedYear', type: 'string' },
@@ -49,6 +39,25 @@ export const mySchema = appSchema({
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
+    }),
+    tableSchema({
+        name: 'plots',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'acreage', type: 'number' },
+            { name: 'soil_type', type: 'string', isOptional: true },
+            { name: 'plantation_date', type: 'string', isOptional: true },
+            { name: 'geojson', type: 'string', isOptional: true },
+            { name: 'number_of_plants', type: 'number' },
+            { name: 'method_of_plantation', type: 'string' },
+            { name: 'plant_type', type: 'string' },
+            { name: 'mlrd_plants', type: 'number' },
+            { name: 'full_cost_plants', type: 'number' },
+            { name: 'sync_status', type: 'string', isIndexed: true },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+        ]
     }),
     tableSchema({
         name: 'subsidy_payments',
@@ -75,6 +84,31 @@ export const mySchema = appSchema({
             { name: 'created_at', type: 'number' },
             { name: 'tenant_id', type: 'string', isIndexed: true },
         ],
+    }),
+    tableSchema({
+      name: 'resources',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'unit', type: 'string' },
+        { name: 'description', type: 'string', isOptional: true },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'resource_distributions',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'resource_id', type: 'string', isIndexed: true },
+        { name: 'quantity', type: 'number' },
+        { name: 'distribution_date', type: 'string' },
+        { name: 'notes', type: 'string', isOptional: true },
+        { name: 'created_by', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'sync_status', type: 'string', isIndexed: true },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+      ],
     }),
     tableSchema({
         name: 'users',
@@ -147,6 +181,23 @@ export const mySchema = appSchema({
         { name: 'updated_at', type: 'number' },
       ]
     }),
+    tableSchema({
+      name: 'tasks',
+      columns: [
+        { name: 'title', type: 'string' },
+        { name: 'description', type: 'string', isOptional: true },
+        { name: 'status', type: 'string', isIndexed: true },
+        { name: 'priority', type: 'string' },
+        { name: 'due_date', type: 'string', isOptional: true },
+        { name: 'assignee_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'farmer_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'created_by', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'sync_status', type: 'string', isIndexed: true },
+      ]
+    }),
   ],
 });
 
@@ -168,7 +219,8 @@ export class GroupModel extends Model {
     @field('tenant_id') tenantId!: string;
 
     // FIX: Add declaration for inherited properties from `Model` to satisfy TypeScript.
-    update!: (recordUpdater: (record: this) => void) => Promise<void>;
+    // Corrected `update` method signature to return `Promise<this>` to match base Model.
+    update!: (recordUpdater: (record: this) => void) => Promise<this>;
 
     get parsedPermissions(): Permission[] {
         try {
@@ -198,7 +250,8 @@ export class TenantModel extends Model {
     @readonly @date('created_at') createdAt!: Date;
     
     // FIX: Add declaration for inherited properties from `Model` to satisfy TypeScript.
-    update!: (recordUpdater: (record: this) => void) => Promise<void>;
+    // Corrected `update` method signature to return `Promise<this>` to match base Model.
+    update!: (recordUpdater: (record: this) => void) => Promise<this>;
 
     @writer
     async updateSubscriptionStatus(newStatus: 'active' | 'trial' | 'inactive') {
@@ -222,6 +275,29 @@ export class UserModel extends Model {
     @field('group_id') groupId!: string;
     @field('tenant_id') tenantId!: string;
 }
+
+export class PlotModel extends Model {
+    static table = 'plots';
+    static associations = {
+        farmer: { type: 'belongs_to', key: 'farmer_id' },
+    } as const;
+
+    @field('farmer_id') farmerId!: string;
+    @field('acreage') acreage!: number;
+    @field('soil_type') soilType?: SoilType;
+    @field('plantation_date') plantationDate?: string;
+    @field('geojson') geojson?: string;
+    @field('number_of_plants') numberOfPlants!: number;
+    @field('method_of_plantation') methodOfPlantation!: PlantationMethod;
+    @field('plant_type') plantType!: PlantType;
+    @field('mlrd_plants') mlrdPlants!: number;
+    @field('full_cost_plants') fullCostPlants!: number;
+    @field('sync_status') syncStatusLocal!: 'synced' | 'pending';
+    @field('tenant_id') tenantId!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+}
+
 
 export class SubsidyPaymentModel extends Model {
     static table = 'subsidy_payments';
@@ -255,6 +331,46 @@ export class ActivityLogModel extends Model {
     @field('tenant_id') tenantId!: string;
 }
 
+export class ResourceModel extends Model {
+    static table = 'resources';
+    static associations = {
+        resource_distributions: { type: 'has_many', foreignKey: 'resource_id' },
+    } as const;
+
+    @field('name') name!: string;
+    @field('unit') unit!: string;
+    @field('description') description?: string;
+    @field('tenant_id') tenantId!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+}
+
+export class ResourceDistributionModel extends Model {
+    static table = 'resource_distributions';
+    static associations = {
+        farmer: { type: 'belongs_to', key: 'farmer_id' },
+        resource: { type: 'belongs_to', key: 'resource_id' },
+    } as const;
+
+    @field('farmer_id') farmerId!: string;
+    @field('resource_id') resourceId!: string;
+    @field('quantity') quantity!: number;
+    @field('distribution_date') distributionDate!: string;
+    @field('notes') notes?: string;
+    @field('created_by') createdBy!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @field('sync_status') syncStatusLocal!: 'synced' | 'pending';
+    @field('tenant_id') tenantId!: string;
+
+    // FIX: Add declaration for inherited properties from `Model` to satisfy TypeScript.
+    belongsTo!: <T extends Model>(associationName: string) => Relation<T>;
+
+    // The lazy getter for a belongsTo relationship should use the association name 'resource'.
+    @lazy get resource(): Relation<ResourceModel> {
+        return this.belongsTo('resource');
+    }
+}
+
 export class FarmerModel extends Model {
   static table = 'farmers';
 
@@ -269,16 +385,6 @@ export class FarmerModel extends Model {
   @field('bankAccountNumber') bankAccountNumber!: string;
   @field('ifscCode') ifscCode!: string;
   @field('accountVerified') accountVerified!: boolean;
-  @field('appliedExtent') appliedExtent!: number;
-  @field('approvedExtent') approvedExtent!: number;
-  @field('numberOfPlants') numberOfPlants!: number;
-  @field('methodOfPlantation') methodOfPlantation!: PlantationMethod;
-  @field('plantType') plantType!: PlantType;
-  @field('plantationDate') plantationDate!: string;
-  @field('mlrdPlants') mlrdPlants!: number;
-  @field('fullCostPlants') fullCostPlants!: number;
-  @field('latitude') latitude?: number;
-  @field('longitude') longitude?: number;
   @field('applicationId') applicationId!: string;
   @field('farmerId') farmerId!: string;
   @field('proposedYear') proposedYear!: string;
@@ -298,10 +404,11 @@ export class FarmerModel extends Model {
   @date('updated_at') updatedAt!: Date;
   
   // FIX: Add declarations for inherited properties from `Model` to satisfy TypeScript.
-  readonly id!: string;
-  readonly database!: Database;
-  update!: (recordUpdater?: (record: this) => void) => Promise<void>;
+  // Corrected `update` method signature to return `Promise<this>` to match base Model.
+  update!: (recordUpdater?: (record: this) => void) => Promise<this>;
   
+  @lazy get plots() { return this.collections.get<PlotModel>('plots').query(Q.where('farmer_id', this.id)); }
+
   @lazy get subsidyPayments() { return this.database.get<SubsidyPaymentModel>('subsidy_payments').query(
       Q.where('farmer_id', this.id),
       Q.sortBy('paymentDate', Q.desc)
@@ -311,6 +418,13 @@ export class FarmerModel extends Model {
       Q.where('farmer_id', this.id),
       Q.sortBy('created_at', Q.desc)
   ); }
+
+  @lazy get resourceDistributions() {
+    return this.collections.get<ResourceDistributionModel>('resource_distributions').query(
+        Q.where('farmer_id', this.id),
+        Q.sortBy('distribution_date', Q.desc)
+    );
+  }
 
   get customFields(): Record<string, any> {
       try {
@@ -336,10 +450,6 @@ export class DistrictModel extends Model {
     mandals: { type: 'has_many', foreignKey: 'district_id' },
   } as const;
 
-  // FIX: Add declarations for inherited properties from `Model` to satisfy TypeScript.
-  readonly id!: string;
-  readonly database!: Database;
-
   @field('code') code!: string;
   @field('name') name!: string;
 
@@ -354,10 +464,6 @@ export class MandalModel extends Model {
     district: { type: 'belongs_to', key: 'district_id' },
     villages: { type: 'has_many', foreignKey: 'mandal_id' },
   } as const;
-
-  // FIX: Add declarations for inherited properties from `Model` to satisfy TypeScript.
-  readonly id!: string;
-  readonly database!: Database;
 
   @field('code') code!: string;
   @field('name') name!: string;
@@ -401,6 +507,23 @@ export class CustomFieldDefinitionModel extends Model {
     }
 }
 
+export class TaskModel extends Model {
+    static table = 'tasks';
+
+    @text('title') title!: string;
+    @text('description') description?: string;
+    @field('status') status!: TaskStatus;
+    @field('priority') priority!: TaskPriority;
+    @field('due_date') dueDate?: string;
+    @field('assignee_id') assigneeId?: string;
+    @field('farmer_id') farmerId?: string;
+    @field('created_by') createdBy!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @field('tenant_id') tenantId!: string;
+    @field('sync_status') syncStatusLocal!: 'synced' | 'pending';
+}
+
 // 3. Create the Database Adapter
 const adapter = new LokiJSAdapter({
   schema: mySchema,
@@ -408,9 +531,11 @@ const adapter = new LokiJSAdapter({
   useIncrementalIDB: true,
   dbName: 'hapsara-watermelon',
   migrations: {
-      from: 6,
-      to: 7,
-      steps: []
+      from: 9,
+      to: 10,
+      steps: [
+        // Version 10 introduces tasks table
+      ]
   },
   onIndexedDBVersionChange: () => {
     window.location.reload();
@@ -430,7 +555,8 @@ const adapter = new LokiJSAdapter({
 const database = new Database({
   adapter,
   modelClasses: [
-    FarmerModel, 
+    FarmerModel,
+    PlotModel,
     SubsidyPaymentModel, 
     ActivityLogModel, 
     UserModel, 
@@ -441,6 +567,9 @@ const database = new Database({
     MandalModel,
     VillageModel,
     CustomFieldDefinitionModel,
+    ResourceModel,
+    ResourceDistributionModel,
+    TaskModel,
   ],
 });
 

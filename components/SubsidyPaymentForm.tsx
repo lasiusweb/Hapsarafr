@@ -5,16 +5,38 @@ import CustomSelect from './CustomSelect';
 
 interface SubsidyPaymentFormProps {
     onClose: () => void;
-    onSubmit: (paymentData: Omit<SubsidyPayment, 'syncStatus' | 'createdAt' | 'createdBy' | 'farmerId'>) => Promise<void>;
+    onSubmit: (paymentData: Omit<SubsidyPayment, 'syncStatus' | 'createdAt' | 'createdBy' | 'farmerId' | 'tenantId'>) => Promise<void>;
     existingPayment?: SubsidyPaymentModel | null;
+    initialStage?: PaymentStage;
 }
 
-const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubmit, existingPayment = null }) => {
+const STAGE_AMOUNT_MAP: Partial<Record<PaymentStage, number>> = {
+  [PaymentStage.MaintenanceYear1]: 5250,
+  [PaymentStage.MaintenanceYear2]: 5250,
+  [PaymentStage.MaintenanceYear3]: 5250,
+  [PaymentStage.MaintenanceYear4]: 5250,
+  [PaymentStage.IntercroppingYear1]: 5250,
+  [PaymentStage.IntercroppingYear2]: 5250,
+  [PaymentStage.IntercroppingYear3]: 5250,
+  [PaymentStage.IntercroppingYear4]: 5250,
+  [PaymentStage.PlantingMaterialDomestic]: 20000,
+  [PaymentStage.PlantingMaterialImported]: 29000,
+  [PaymentStage.BoreWell]: 50000,
+  [PaymentStage.VermiCompost]: 15000,
+};
+
+
+const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubmit, existingPayment = null, initialStage }) => {
+    const getInitialAmount = (stage?: PaymentStage) => {
+        if (!stage) return '';
+        return String(STAGE_AMOUNT_MAP[stage] || '');
+    };
+    
     const [formData, setFormData] = useState({
         paymentDate: new Date().toISOString().split('T')[0],
-        amount: '',
+        amount: getInitialAmount(initialStage),
         utrNumber: '',
-        paymentStage: PaymentStage.Year1,
+        paymentStage: initialStage || PaymentStage.MaintenanceYear1,
         notes: '',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,6 +58,14 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+    
+    const handleStageChange = (stage: PaymentStage) => {
+        setFormData(prev => ({
+            ...prev,
+            paymentStage: stage,
+            amount: getInitialAmount(stage)
+        }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -64,7 +94,7 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-2xl w-full max-w-lg">
                 <div className="p-6 border-b">
-                    <h2 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Subsidy Payment' : 'Record New Payment'}</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Subsidy / Assistance' : 'Record Subsidy / Assistance'}</h2>
                 </div>
                 <div className="p-8 space-y-4">
                     <div>
@@ -72,16 +102,16 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                         <input type="date" id="paymentDate" name="paymentDate" value={formData.paymentDate} onChange={handleChange} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
                     </div>
                     <div>
-                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Amount (₹)</label>
-                        <input type="number" id="amount" name="amount" value={formData.amount} onChange={handleChange} required placeholder="e.g., 5000" className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
-                    </div>
-                    <div>
                         <label htmlFor="paymentStage" className="block text-sm font-medium text-gray-700">Payment Stage</label>
                         <CustomSelect
                             value={formData.paymentStage}
-                            onChange={(value) => setFormData(prev => ({ ...prev, paymentStage: value as PaymentStage }))}
+                            onChange={(value) => handleStageChange(value as PaymentStage)}
                             options={paymentStageOptions}
                         />
+                    </div>
+                     <div>
+                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Amount (₹)</label>
+                        <input type="number" id="amount" name="amount" value={formData.amount} onChange={handleChange} required placeholder="e.g., 5250" className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
                     </div>
                     <div>
                         <label htmlFor="utrNumber" className="block text-sm font-medium text-gray-700">UTR/DD Number</label>

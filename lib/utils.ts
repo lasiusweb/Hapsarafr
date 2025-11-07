@@ -1,5 +1,5 @@
-import { Farmer } from './types';
-import { FarmerModel, DistrictModel, MandalModel, VillageModel } from '../db';
+import { Farmer, Plot } from './types';
+import { FarmerModel, DistrictModel, MandalModel, VillageModel, PlotModel } from '../db';
 import { Database } from '@nozbe/watermelondb';
 
 // --- Farmer Data Conversion ---
@@ -18,16 +18,6 @@ export const farmerModelToPlain = (f: FarmerModel | null): Farmer | null => {
         bankAccountNumber: f.bankAccountNumber,
         ifscCode: f.ifscCode,
         accountVerified: f.accountVerified,
-        appliedExtent: f.appliedExtent,
-        approvedExtent: f.approvedExtent,
-        numberOfPlants: f.numberOfPlants,
-        methodOfPlantation: f.methodOfPlantation,
-        plantType: f.plantType,
-        plantationDate: f.plantationDate,
-        mlrdPlants: f.mlrdPlants,
-        fullCostPlants: f.fullCostPlants,
-        latitude: f.latitude,
-        longitude: f.longitude,
         applicationId: f.applicationId,
         farmerId: f.farmerId,
         proposedYear: f.proposedYear,
@@ -38,6 +28,7 @@ export const farmerModelToPlain = (f: FarmerModel | null): Farmer | null => {
         district: f.district,
         mandal: f.mandal,
         village: f.village,
+        // FIX: Correctly map the model's `syncStatusLocal` to the plain object's `syncStatus`.
         syncStatus: f.syncStatusLocal,
         createdBy: f.createdBy,
         updatedBy: f.updatedBy,
@@ -46,6 +37,29 @@ export const farmerModelToPlain = (f: FarmerModel | null): Farmer | null => {
         customFields: f.customFields,
     };
 };
+
+// FIX: Add a utility function to convert a PlotModel to a plain Plot object.
+export const plotModelToPlain = (p: PlotModel | null): Plot | null => {
+    if (!p) return null;
+    return {
+        id: p.id,
+        farmerId: p.farmerId,
+        acreage: p.acreage,
+        soilType: p.soilType,
+        plantationDate: p.plantationDate,
+        geojson: p.geojson,
+        numberOfPlants: p.numberOfPlants,
+        methodOfPlantation: p.methodOfPlantation,
+        plantType: p.plantType,
+        mlrdPlants: p.mlrdPlants,
+        fullCostPlants: p.fullCostPlants,
+        syncStatus: p.syncStatusLocal,
+        tenantId: p.tenantId,
+        createdAt: new Date(p.createdAt).toISOString(),
+        updatedAt: new Date(p.updatedAt).toISOString(),
+    };
+};
+
 
 // --- Geo Data Optimization & Utilities ---
 

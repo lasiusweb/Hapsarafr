@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
+import { Farmer, FarmerStatus, PlantationMethod, PlantType, Plot } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import AiReviewModal from './AiReviewModal';
 import { getGeoName } from '../lib/utils';
@@ -627,7 +627,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 </div>
             )}
             
-            {showAiReview && <AiReviewModal farmerData={formData} onClose={() => setShowAiReview(false)} />}
+            {/* FIX: Pass plotsData prop to AiReviewModal by creating a plot object from formData. */}
+            {showAiReview && <AiReviewModal farmerData={formData} plotsData={[{
+                acreage: formData.approvedExtent,
+                numberOfPlants: formData.numberOfPlants,
+                methodOfPlantation: formData.methodOfPlantation,
+                plantType: formData.plantType,
+                plantationDate: formData.plantationDate,
+                mlrdPlants: formData.mlrdPlants,
+                fullCostPlants: formData.fullCostPlants
+            }]} onClose={() => setShowAiReview(false)} />}
 
             {preparedFarmerData && currentStep === 5 && (
                 <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center">
