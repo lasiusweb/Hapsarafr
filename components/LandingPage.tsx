@@ -1,6 +1,7 @@
 import React from 'react';
 import { PRICING_MODEL } from '../data/subscriptionPlans';
 import { AppContent } from '../types';
+import { sanitizeHTML } from '../lib/utils';
 
 interface LandingPageProps {
   onLaunch: () => void;
@@ -80,7 +81,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch, appContent }) => {
                 </div>
                 <div>
                     <h3 className="text-3xl font-bold text-gray-800 mb-4">About Hapsara</h3>
-                    <div dangerouslySetInnerHTML={{ __html: appContent?.landing_about_us || defaultContent.aboutUs }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(appContent?.landing_about_us || defaultContent.aboutUs) }} />
                 </div>
             </div>
         </section>

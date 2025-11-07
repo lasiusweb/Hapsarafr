@@ -1,11 +1,11 @@
 import { appSchema, tableSchema, Model, Database, Q, CollectionMap } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { field, date, lazy, writer, readonly } from '@nozbe/watermelondb/decorators';
-import { FarmerStatus, PlantationMethod, PlantType, PaymentStage, Permission } from '../types';
+import { FarmerStatus, PlantationMethod, PlantType, PaymentStage, Permission, Group } from '../types';
 
 // 1. Define the Schema
 export const mySchema = appSchema({
-  version: 2,
+  version: 3,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -87,34 +87,45 @@ export const mySchema = appSchema({
             { name: 'permissions', type: 'string' }, // Stored as a JSON string
         ]
     }),
+    tableSchema({
+      name: 'app_content_cache',
+      columns: [
+        { name: 'key', type: 'string' },
+        { name: 'value', type: 'string' },
+      ],
+    }),
   ],
 });
 
+export class AppContentCacheModel extends Model {
+    static table = 'app_content_cache';
+    @field('key') key!: string;
+    @field('value') value!: string;
+}
+
 export class GroupModel extends Model {
     static table = 'groups';
-    // FIX: Added associations to complete the relationship definition with UserModel,
-    // which resolves a TypeScript inference issue that was hiding the `update` method.
     static associations = {
         users: { type: 'has_many', foreignKey: 'group_id' },
     } as const;
 
-    // FIX: Added readonly properties to ensure correct type inference for instance methods like `update`.
-    readonly _raw!: any;
-    readonly database!: Database;
-    readonly collections!: CollectionMap;
-
-    // FIX: The `id` property should be `readonly` and not a `@field`.
     readonly id!: string;
+    readonly _raw!: any;
+    readonly collections!: CollectionMap;
+    readonly database!: Database;
+
     @field('name') name!: string;
     @field('permissions') permissionsStr!: string;
 
-    get permissions(): Permission[] {
+    // FIX: Renamed getter to avoid name collision with the 'permissions' db column.
+    get parsedPermissions(): Permission[] {
         return JSON.parse(this.permissionsStr);
     }
 
-    @writer async updatePermissions(permissions: Permission[]) {
-        await this.update(group => {
-            group.permissionsStr = JSON.stringify(permissions);
+    @writer
+    async updatePermissions(newPermissions: Permission[]) {
+        await this.update(g => {
+            g.permissionsStr = JSON.stringify(newPermissions);
         });
     }
 }
@@ -125,13 +136,11 @@ export class UserModel extends Model {
         groups: { type: 'belongs_to', key: 'group_id' },
     } as const;
 
-    // FIX: Added readonly properties to ensure correct type inference for lazy relations.
+    readonly id!: string;
     readonly _raw!: any;
     readonly collections!: CollectionMap;
     readonly database!: Database;
 
-    // FIX: The `id` property should be `readonly` and not a `@field`.
-    readonly id!: string;
     @field('name') name!: string;
     @field('avatar') avatar!: string;
     @field('group_id') groupId!: string;
@@ -265,7 +274,7 @@ const adapter = new LokiJSAdapter({
 // 4. Create the Database Instance
 const database = new Database({
   adapter,
-  modelClasses: [FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel],
+  modelClasses: [FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, AppContentCacheModel],
 });
 
 export default database;

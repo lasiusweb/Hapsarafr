@@ -52,13 +52,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
     const [importSummary, setImportSummary] = useState<{ imported: number; skipped: number; failed: number; errors: string[] } | null>(null);
     
     const farmersByVillage = useMemo(() => {
-        // FIX: Replaced explicit generic on reduce with a typed initial value to resolve TS error.
+        const initialValue: Record<string, Farmer[]> = {};
         return existingFarmers.reduce((acc, farmer) => {
             const villageKey = `${farmer.district}-${farmer.mandal}-${farmer.village}`;
             if (!acc[villageKey]) acc[villageKey] = [];
             acc[villageKey].push(farmer);
             return acc;
-        }, {} as Record<string, Farmer[]>);
+        }, initialValue);
     }, [existingFarmers]);
 
 

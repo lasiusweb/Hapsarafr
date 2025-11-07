@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, Group, Permission, Invitation } from '../types';
 import { PERMISSIONS_LIST } from '../data/permissionsData';
 import InvitationModal from './InvitationModal';
@@ -28,6 +28,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     const [editedUsers, setEditedUsers] = useState<User[]>(users);
     const [editedGroups, setEditedGroups] = useState<Group[]>(groups);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(groups[0]?.id || null);
+
+    useEffect(() => {
+        setEditedUsers(users);
+    }, [users]);
+
+    useEffect(() => {
+        setEditedGroups(groups);
+        // Also reset selected group if it disappears from the list
+        if (selectedGroupId && !groups.some(g => g.id === selectedGroupId)) {
+            setSelectedGroupId(groups[0]?.id || null);
+        }
+    }, [groups, selectedGroupId]);
     
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteGroup, setInviteGroup] = useState(groups[0]?.id || '');
@@ -99,7 +111,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     };
 
     const permissionCategories = useMemo(() => {
-        const initialValue: Record<string, (typeof PERMISSIONS_LIST)[0][]> = {};
+        const initialValue: Record<string, { id: Permission; description: string; category: string; }[]> = {};
         return PERMISSIONS_LIST.reduce((acc, p) => {
             const category = p.category;
             if (!acc[category]) {

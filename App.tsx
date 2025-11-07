@@ -5,7 +5,7 @@ import FilterBar from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
 import { Q, Query, Model } from '@nozbe/watermelondb';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel } from './db';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, AppContentCacheModel } from './db';
 import { initializeSupabase } from './lib/supabase';
 import { DEFAULT_GROUPS } from './data/permissionsData';
 import { MOCK_USERS } from './data/userData';
@@ -163,6 +163,29 @@ const parseHash = (): ParsedHash => {
     return { view: 'not-found', params: {} };
 };
 
+const getViewTitle = (view: View | 'farmer-details' | 'not-found'): string => {
+    const titles: Record<View | 'farmer-details' | 'not-found', string> = {
+        'dashboard': 'Dashboard',
+        'farmer-directory': 'Farmer Directory',
+        'farmer-details': 'Farmer Details',
+        'profile': 'My Profile',
+        'admin': 'Admin Panel',
+        'billing': 'Billing & Usage',
+        'usage-analytics': 'Usage Analytics',
+        'content-manager': 'Content Manager',
+        'subscription-management': 'Subscription Management',
+        'print-queue': 'Print Queue',
+        'subsidy-management': 'Subsidy Management',
+        'map-view': 'Map View',
+        'help': 'Help & Support',
+        'id-verification': 'ID Verification Tool',
+        'reports': 'Reports & Analytics',
+        'crop-health-scanner': 'Crop Health Scanner',
+        'not-found': 'Page Not Found',
+    };
+    return titles[view] || 'Hapsara';
+};
+
 const ModalLoader: React.FC = () => (
     <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-[100]">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div>
@@ -223,7 +246,8 @@ const App: React.FC = () => {
     const dbGroups = useQuery(groupsQuery);
 
     const users = useMemo(() => dbUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar, groupId: u.groupId })), [dbUsers]);
-    const groups = useMemo(() => dbGroups.map(g => ({ id: g.id, name: g.name, permissions: g.permissions })), [dbGroups]);
+    // FIX: Use the renamed `parsedPermissions` getter on GroupModel.
+    const groups = useMemo(() => dbGroups.map(g => ({ id: g.id, name: g.name, permissions: g.parsedPermissions })), [dbGroups]);
 
     const allPlainFarmers = useMemo(() => allFarmers.map(f => farmerModelToPlain(f)).filter(Boolean) as Farmer[], [allFarmers]);
     
@@ -302,10 +326,48 @@ const App: React.FC = () => {
                 return acc;
             }, {} as Partial<AppContent>);
             setAppContent(content);
+
+            // Cache the newly fetched content
+            const contentCacheCollection = database.get<AppContentCacheModel>('app_content_cache');
+            await database.write(async () => {
+                try {
+                    const existingCache = await contentCacheCollection.find('main_content');
+                    await existingCache.update(record => {
+                        record.value = JSON.stringify(content);
+                    });
+                } catch (error) {
+                    // Cache doesn't exist, create it
+                    await contentCacheCollection.create(record => {
+                        record._raw.id = 'main_content'; // WatermelonDB requires an ID for creation
+                        (record as any).key = 'main_content';
+                        record.value = JSON.stringify(content);
+                    });
+                }
+            });
+
         } catch (e: any) {
             console.error("Error processing app content:", e);
         }
-    }, [supabase]);
+    }, [supabase, database]);
+    
+    // Load cached content on startup
+    useEffect(() => {
+        const loadCachedContent = async () => {
+            const contentCacheCollection = database.get<AppContentCacheModel>('app_content_cache');
+            try {
+                const cachedContent = await contentCacheCollection.find('main_content');
+                if (cachedContent && cachedContent.value) {
+                    setAppContent(JSON.parse(cachedContent.value));
+                }
+            } catch (error) {
+                console.log('No cached content found. Will fetch from network.');
+            }
+        };
+        if (database) {
+            loadCachedContent();
+        }
+    }, [database]);
+
 
     useEffect(() => {
         handleSupabaseConnect();
@@ -397,6 +459,7 @@ const App: React.FC = () => {
 
     const handleNavigate = (path: string) => {
         window.location.hash = path;
+        setIsSidebarOpen(false); // Close mobile sidebar on navigation
     };
 
     const handleNavigateWithFilter = (view: 'farmer-directory', newFilters: Partial<Filters>) => {
@@ -689,4 +752,250 @@ const App: React.FC = () => {
     const processedFarmers = useMemo(() => {
         let filtered = [...allPlainFarmers];
 
-        const
+        if (effectiveFilters.searchQuery) {
+            const lowercasedQuery = effectiveFilters.searchQuery.toLowerCase();
+            filtered = filtered.filter(f =>
+                f.fullName.toLowerCase().includes(lowercasedQuery) ||
+                f.farmerId.toLowerCase().includes(lowercasedQuery) ||
+                f.mobileNumber.includes(lowercasedQuery)
+            );
+        }
+
+        if (effectiveFilters.district) {
+            filtered = filtered.filter(f => f.district === effectiveFilters.district);
+        }
+        if (effectiveFilters.mandal) {
+            filtered = filtered.filter(f => f.mandal === effectiveFilters.mandal);
+        }
+        if (effectiveFilters.village) {
+            filtered = filtered.filter(f => f.village === effectiveFilters.village);
+        }
+        if (effectiveFilters.status) {
+            filtered = filtered.filter(f => f.status === effectiveFilters.status);
+        }
+        if (effectiveFilters.registrationDateFrom) {
+            const fromDate = new Date(effectiveFilters.registrationDateFrom);
+            if (!isNaN(fromDate.getTime())) {
+                filtered = filtered.filter(f => new Date(f.registrationDate) >= fromDate);
+            }
+        }
+        if (effectiveFilters.registrationDateTo) {
+            const toDate = new Date(effectiveFilters.registrationDateTo);
+            if (!isNaN(toDate.getTime())) {
+                toDate.setHours(23, 59, 59, 999); // Include the whole day
+                filtered = filtered.filter(f => new Date(f.registrationDate) <= toDate);
+            }
+        }
+
+        if (sortConfig !== null) {
+            filtered.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+
+                if (aValue == null || bValue == null) return 0;
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        
+        return filtered;
+    }, [allPlainFarmers, effectiveFilters, sortConfig]);
+
+    const totalRecords = processedFarmers.length;
+    const paginatedFarmers = useMemo(() => {
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        return processedFarmers.slice(startIndex, startIndex + rowsPerPage);
+    }, [processedFarmers, currentPage, rowsPerPage]);
+
+    // Handlers for list interactions
+    const handleSelectionChange = (farmerId: string, isSelected: boolean) => {
+        setSelectedFarmerIds(prev =>
+            isSelected ? [...prev, farmerId] : prev.filter(id => id !== farmerId)
+        );
+    };
+    const handleSelectAll = (isAllSelected: boolean) => {
+        setSelectedFarmerIds(isAllSelected ? paginatedFarmers.map(f => f.id) : []);
+    };
+    const handleSortRequest = (key: keyof Farmer | 'id') => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+    const handleAddToPrintQueue = (ids: string[]) => {
+        setPrintQueue(prev => [...new Set([...prev, ...ids])]);
+        setNotification({ message: `${ids.length} farmer(s) added to print queue.`, type: 'info' });
+        setSelectedFarmerIds([]);
+    };
+    
+    const handleMarkAlertAsRead = (id: string) => {
+        const updatedAlerts = alerts.map(a => a.id === id ? { ...a, read: true } : a);
+        setAlerts(updatedAlerts);
+        localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
+    };
+
+    const handleMarkAllAlertsAsRead = () => {
+        const updatedAlerts = alerts.map(a => ({ ...a, read: true }));
+        setAlerts(updatedAlerts);
+        localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
+    };
+
+    const renderCurrentView = () => {
+      if (!currentUser) return null;
+      switch (parsedHash.view) {
+        case 'dashboard':
+            return <Dashboard farmers={allPlainFarmers} onNavigateWithFilter={handleNavigateWithFilter} />;
+        case 'farmer-directory':
+            return <>
+                <FilterBar filters={filters} onFilterChange={setFilters} />
+                <FarmerList
+                    farmers={paginatedFarmers}
+                    users={users}
+                    canEdit={permissions.has(Permission.CAN_EDIT_FARMER)}
+                    canDelete={permissions.has(Permission.CAN_DELETE_FARMER)}
+                    onPrint={handlePrintFarmer}
+                    onExportToPdf={handleExportPdf}
+                    selectedFarmerIds={selectedFarmerIds}
+                    onSelectionChange={handleSelectionChange}
+                    onSelectAll={handleSelectAll}
+                    sortConfig={sortConfig}
+                    onRequestSort={handleSortRequest}
+                    newlyAddedFarmerId={newlyAddedFarmerId}
+                    onHighlightComplete={() => setNewlyAddedFarmerId(null)}
+                    onBatchUpdate={() => setShowBatchUpdateModal(true)}
+                    onDeleteSelected={handleDeleteSelectedFarmers}
+                    totalRecords={totalRecords}
+                    currentPage={currentPage}
+                    rowsPerPage={rowsPerPage}
+                    onPageChange={setCurrentPage}
+                    onRowsPerPageChange={(rows) => { setRowsPerPage(rows); setCurrentPage(1); }}
+                    isLoading={allFarmers.length === 0 && pendingSyncCount > 0}
+                    onAddToPrintQueue={handleAddToPrintQueue}
+                    onNavigate={handleNavigate}
+                />
+            </>;
+        case 'farmer-details':
+            return <FarmerDetailsPage farmerId={parsedHash.params.farmerId} users={users} currentUser={currentUser} onBack={() => handleNavigate('farmer-directory')} permissions={permissions} setNotification={setNotification} />;
+        case 'profile':
+            return <ProfilePage currentUser={currentUser} groups={groups} onBack={() => handleNavigate('dashboard')} onSave={async () => {}} />;
+        case 'admin':
+            return <AdminPage users={users} groups={groups} currentUser={currentUser} onSaveUsers={handleSaveUsers} onSaveGroups={handleSaveGroups} onBack={() => handleNavigate('dashboard')} invitations={[]} onInviteUser={async () => ''} />;
+        case 'billing':
+            return <BillingPage currentUser={currentUser} onBack={() => handleNavigate('dashboard')} userCount={users.length} recordCount={allFarmers.length} onNavigate={handleNavigate} />;
+        case 'usage-analytics':
+            return <UsageAnalyticsPage currentUser={currentUser} onBack={() => handleNavigate('dashboard')} supabase={supabase} />;
+        case 'content-manager':
+            return <ContentManagerPage supabase={supabase} currentContent={appContent} onContentSave={fetchAppContent} onBack={() => handleNavigate('dashboard')} />;
+        case 'subscription-management':
+            return <SubscriptionManagementPage currentUser={currentUser} onBack={() => handleNavigate('billing')} />;
+        case 'print-queue':
+            return <PrintQueuePage queuedFarmerIds={printQueue} users={users} onRemove={(id) => setPrintQueue(q => q.filter(i => i !== id))} onClear={() => setPrintQueue([])} onBack={() => handleNavigate('farmer-directory')} />;
+        case 'subsidy-management':
+            return <SubsidyManagementPage farmers={allPlainFarmers} payments={allPayments} currentUser={currentUser} onBack={() => handleNavigate('dashboard')} database={database} setNotification={setNotification} />;
+        case 'map-view':
+            return <MapView farmers={allPlainFarmers} onNavigate={handleNavigate} />;
+        case 'help':
+            return <HelpPage appContent={appContent} onBack={() => handleNavigate('dashboard')} />;
+        case 'id-verification':
+            return <IdVerificationPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
+        case 'reports':
+            return <ReportsPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
+        case 'crop-health-scanner':
+            return <CropHealthScannerPage onBack={() => handleNavigate('dashboard')} />;
+        default:
+            return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
+      }
+    };
+
+    return (
+        <>
+            <div id="pdf-export-container" className="hidden" aria-hidden="true"></div>
+            {farmerForPrinting && <PrintView farmer={farmerForPrinting} users={users} />}
+            {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
+
+            <Suspense fallback={<ModalLoader />}>
+                {appState === 'LANDING' && <LandingPage onLaunch={() => setAppState('LOGIN')} appContent={appContent} />}
+                {appState === 'LOGIN' && <LoginScreen onLogin={handleLogin} users={users} />}
+                
+                {appState === 'APP' && currentUser && (
+                    <div className="flex h-screen bg-gray-100 font-sans" onClick={() => isAlertsPanelOpen && setIsAlertsPanelOpen(false)}>
+                        <Sidebar
+                            isOpen={isSidebarOpen}
+                            isCollapsed={isSidebarCollapsed}
+                            onToggleCollapse={() => setIsSidebarCollapsed(c => !c)}
+                            currentUser={currentUser}
+                            onLogout={handleLogout}
+                            onNavigate={handleNavigate}
+                            currentView={parsedHash.view as View}
+                            permissions={permissions}
+                            onImport={() => setShowBulkImportModal(true)}
+                            onExportExcel={() => exportToExcel(processedFarmers, `Hapsara_Export_${new Date().toISOString().split('T')[0]}`)}
+                            onExportCsv={() => exportToCsv(processedFarmers, `Hapsara_Export_${new Date().toISOString().split('T')[0]}`)}
+                            onViewRawData={() => setShowRawDataView(true)}
+                            onShowPrivacy={() => setShowPrivacy(true)}
+                            onShowChangelog={() => setShowChangelog(true)}
+                            printQueueCount={printQueue.length}
+                            onShowSupabaseSettings={() => setShowSupabaseSettings(true)}
+                        />
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            <header className="bg-white shadow-sm z-30 p-4 flex justify-between items-center flex-shrink-0">
+                                <div className="flex items-center gap-4">
+                                    <button onClick={() => setIsSidebarOpen(o => !o)} className="lg:hidden p-2 text-gray-500 hover:text-gray-800">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                    </button>
+                                    <h1 className="text-2xl font-bold text-gray-800">{getViewTitle(parsedHash.view)}</h1>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    {permissions.has(Permission.CAN_SYNC_DATA) && (
+                                        <button onClick={handleSync} disabled={isSyncing || !isOnline} className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            {isSyncing ? <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${isOnline ? 'text-green-500' : 'text-red-500'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zM6.24 7.24a.75.75 0 011.06 0L10 9.94l2.7-2.7a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L6.24 8.3a.75.75 0 010-1.06z" clipRule="evenodd" /></svg>}
+                                            <span>{isSyncing ? 'Syncing...' : isOnline ? 'Synced' : 'Offline'}</span>
+                                            {pendingSyncCount > 0 && !isSyncing && <span className="text-xs bg-yellow-400 text-yellow-900 font-bold px-1.5 py-0.5 rounded-full">{pendingSyncCount}</span>}
+                                        </button>
+                                    )}
+                                    <button onClick={(e) => { e.stopPropagation(); setIsAlertsPanelOpen(o => !o); }} className="relative p-2 text-gray-500 hover:text-gray-800">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                                        {alerts.filter(a => !a.read).length > 0 && <span className="absolute top-1 right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-white"></span>}
+                                    </button>
+                                    <AlertsPanel alerts={alerts} isOpen={isAlertsPanelOpen} onClose={() => setIsAlertsPanelOpen(false)} onMarkAsRead={handleMarkAlertAsRead} onMarkAllAsRead={handleMarkAllAlertsAsRead} onNavigate={handleNavigate} />
+                                    {permissions.has(Permission.CAN_REGISTER_FARMER) && parsedHash.view === 'farmer-directory' && (
+                                        <button onClick={() => { setIsShowingRegistrationForm(true); setEditingFarmer(null); }} className="hidden sm:inline-block px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm">Register Farmer</button>
+                                    )}
+                                </div>
+                            </header>
+                            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-6">
+                                {renderCurrentView()}
+                            </main>
+                        </div>
+                    </div>
+                )}
+                
+                {isShowingRegistrationForm && (
+                    <RegistrationForm
+                        onSubmit={handleSaveFarmer}
+                        onCancel={() => setIsShowingRegistrationForm(false)}
+                        existingFarmers={allPlainFarmers}
+                        mode={editingFarmer ? 'edit' : 'create'}
+                        existingFarmer={editingFarmer}
+                    />
+                )}
+                {showBatchUpdateModal && <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleBatchUpdateStatus} onCancel={() => setShowBatchUpdateModal(false)} />}
+                {showBulkImportModal && <BulkImportModal onClose={() => setShowBulkImportModal(false)} onSubmit={handleBulkImport} existingFarmers={allPlainFarmers} />}
+                {showDeleteConfirmation && <ConfirmationModal isOpen={showDeleteConfirmation} title="Delete Farmers?" message={`Are you sure you want to mark ${selectedFarmerIds.length} farmer(s) for deletion? They will be removed permanently on the next sync.`} onConfirm={confirmDelete} onCancel={() => setShowDeleteConfirmation(false)} confirmText="Yes, Delete" confirmButtonClass="bg-red-600 hover:bg-red-700" />}
+                {showRawDataView && <RawDataView farmers={allFarmers} onClose={() => setShowRawDataView(false)} />}
+                {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} appContent={appContent} />}
+                {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+                {showSupabaseSettings && <SupabaseSettingsModal isOpen={showSupabaseSettings} onClose={() => setShowSupabaseSettings(false)} onConnect={handleSupabaseConnect} />}
+            </Suspense>
+        </>
+    );
+};
+
+export default App;

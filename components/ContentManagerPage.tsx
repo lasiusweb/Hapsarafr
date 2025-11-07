@@ -90,7 +90,7 @@ const ContentManagerPage: React.FC<ContentManagerPageProps> = ({ supabase, curre
                 <textarea id="heroSubtitle" value={heroSubtitle} onChange={e => setHeroSubtitle(e.target.value)} rows={3} className="mt-1 w-full p-2 border rounded-md"></textarea>
             </div>
              <div>
-                <label htmlFor="aboutUs" className="block text-sm font-medium text-gray-700">About Us Content (HTML allowed)</label>
+                <label htmlFor="aboutUs" className="block text-sm font-medium text-gray-700">About Us Content (HTML allowed: p, strong, em, ul, ol, li, h3, b, i, br)</label>
                 <textarea id="aboutUs" value={aboutUs} onChange={e => setAboutUs(e.target.value)} rows={8} className="mt-1 w-full p-2 border rounded-md font-mono"></textarea>
             </div>
         </div>
@@ -121,7 +121,7 @@ const ContentManagerPage: React.FC<ContentManagerPageProps> = ({ supabase, curre
 
     const renderPrivacyPolicyForm = () => (
         <div>
-            <label htmlFor="privacyPolicy" className="block text-sm font-medium text-gray-700">Privacy Policy (HTML allowed)</label>
+            <label htmlFor="privacyPolicy" className="block text-sm font-medium text-gray-700">Privacy Policy (HTML allowed: p, strong, em, ul, ol, li, h3, b, i, br)</label>
             <textarea id="privacyPolicy" value={privacyPolicy} onChange={e => setPrivacyPolicy(e.target.value)} rows={20} className="mt-1 w-full p-2 border rounded-md font-mono"></textarea>
         </div>
     );

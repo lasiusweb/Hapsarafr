@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppContent } from '../types';
+import { sanitizeHTML } from '../lib/utils';
 
 const PrivacyModal: React.FC<{ onClose: () => void; appContent: Partial<AppContent> | null; }> = ({ onClose, appContent }) => {
     const defaultContent = {
@@ -13,7 +14,7 @@ const PrivacyModal: React.FC<{ onClose: () => void; appContent: Partial<AppConte
                     <h2 className="text-2xl font-bold text-gray-800">Privacy Policy</h2>
                 </div>
                 <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4 text-gray-600">
-                   <div dangerouslySetInnerHTML={{ __html: appContent?.privacy_policy || defaultContent.privacyPolicy }} />
+                   <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(appContent?.privacy_policy || defaultContent.privacyPolicy) }} />
                 </div>
                 <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
                     <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition">Close</button>

@@ -93,3 +93,39 @@ export const getGeoName = (type: 'district' | 'mandal' | 'village', codes: { dis
     }
     return codes[type] || 'N/A';
 };
+
+// --- HTML Sanitization ---
+export const sanitizeHTML = (htmlString: string | undefined | null): string => {
+    if (!htmlString) return '';
+    const allowedTags = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'br', 'b', 'i', 'h3'];
+    try {
+        const doc = new DOMParser().parseFromString(htmlString, 'text/html');
+        const allElements = doc.body.getElementsByTagName('*');
+        
+        for (let i = allElements.length - 1; i >= 0; i--) {
+            const element = allElements[i];
+            const tagName = element.tagName.toLowerCase();
+
+            if (!allowedTags.includes(tagName)) {
+                // Replace disallowed tag with its content
+                const parent = element.parentNode;
+                if (parent) {
+                    while (element.firstChild) {
+                        parent.insertBefore(element.firstChild, element);
+                    }
+                    parent.removeChild(element);
+                }
+            } else {
+                // Remove any attributes
+                for (let j = element.attributes.length - 1; j >= 0; j--) {
+                    element.removeAttribute(element.attributes[j].name);
+                }
+            }
+        }
+        return doc.body.innerHTML;
+    } catch (e) {
+        console.error("HTML sanitization failed", e);
+        // Fallback to simple script tag removal on error
+        return htmlString.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    }
+};
