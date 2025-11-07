@@ -99,14 +99,15 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     };
 
     const permissionCategories = useMemo(() => {
-        return PERMISSIONS_LIST.reduce<Record<string, (typeof PERMISSIONS_LIST)[0][]>>((acc, p) => {
+        const initialValue: Record<string, (typeof PERMISSIONS_LIST)[0][]> = {};
+        return PERMISSIONS_LIST.reduce((acc, p) => {
             const category = p.category;
             if (!acc[category]) {
                 acc[category] = [];
             }
             acc[category].push(p);
             return acc;
-        }, {});
+        }, initialValue);
     }, []);
 
     return (

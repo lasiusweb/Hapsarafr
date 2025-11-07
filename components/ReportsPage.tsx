@@ -3,6 +3,7 @@ import { Farmer, FarmerStatus, PlantationMethod } from '../types';
 import { GEO_DATA } from '../data/geoData';
 import { getGeoName } from '../lib/utils';
 import { exportToExcel } from '../lib/export';
+import { GoogleGenAI } from '@google/genai';
 
 interface ReportsPageProps {
     allFarmers: Farmer[];
@@ -101,6 +102,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
     });
     const [currentPage, setCurrentPage] = useState(1);
     const rowsPerPage = 10;
+    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+    const [aiReport, setAiReport] = useState<string | null>(null);
+    const [aiError, setAiError] = useState<string | null>(null);
 
     const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -209,6 +213,86 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
     }, [filteredFarmers, currentPage, rowsPerPage]);
     const totalPages = Math.ceil(filteredFarmers.length / rowsPerPage);
 
+    const handleGenerateReport = async () => {
+        setIsGeneratingReport(true);
+        setAiReport(null);
+        setAiError(null);
+
+        if (!process.env.API_KEY) {
+            setAiError("Gemini API key is not configured. An administrator must set the API_KEY environment variable.");
+            setIsGeneratingReport(false);
+            return;
+        }
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+            const filtersSummary = [
+                filters.district && `District: ${getGeoName('district', { district: filters.district })}`,
+                filters.mandal && `Mandal: ${getGeoName('mandal', { district: filters.district, mandal: filters.mandal })}`,
+                filters.status && `Status: ${filters.status}`,
+                filters.plantationMethod && `Plantation Method: ${filters.plantationMethod}`,
+                (filters.dateFrom || filters.dateTo) && `Registration Date: ${filters.dateFrom || 'any'} to ${filters.dateTo || 'any'}`
+            ].filter(Boolean).join(', ');
+
+            const prompt = `
+                As an agricultural program analyst for the Oil Palm Mission in India, generate a concise summary report based on the following data.
+                The data has been filtered by: ${filtersSummary || 'None'}.
+
+                Key Statistics:
+                - Total Farmers: ${stats.totalFarmers}
+                - Total Approved Area: ${stats.totalApprovedExtent} Acres
+                - Total Plants: ${stats.totalPlants}
+                - Average Area per Farmer: ${stats.avgExtent} Acres
+
+                Distribution by Status:
+                ${statusDistribution.map(s => `- ${s.label}: ${s.value} farmers (${((s.value / (parseInt(stats.totalFarmers.toString(), 10) || 1)) * 100).toFixed(1)}%)`).join('\n')}
+
+                Distribution by Plantation Method:
+                ${methodDistribution.map(m => `- ${m.label}: ${m.value} farmers`).join('\n')}
+
+                Gender Distribution:
+                ${genderDistribution.map(g => `- ${g.label}: ${g.value} farmers`).join('\n')}
+
+                Your Task:
+                Write a brief, insightful report in markdown format. Highlight key trends, significant numbers, and potential areas of success or concern based *only* on the data provided.
+                Structure your report with a main title (e.g., using '#'), a brief overview paragraph, and a few bullet points for key takeaways. Do not invent any data.
+            `;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+
+            setAiReport(response.text);
+
+        } catch (err: any) {
+            console.error("Gemini API error:", err);
+            setAiError("Could not generate the report. The AI model may be temporarily unavailable.");
+        } finally {
+            setIsGeneratingReport(false);
+        }
+    };
+    
+    // Simple markdown renderer
+    const renderMarkdown = (text: string) => {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .split('\n')
+            .map(line => line.trim())
+            .map(line => {
+                if (line.startsWith('* ') || line.startsWith('- ')) {
+                    return `<li class="list-disc list-inside">${line.substring(2)}</li>`;
+                }
+                if (line.startsWith('# ')) {
+                    return `<h3 class="text-lg font-bold mt-4 mb-2">${line.substring(2)}</h3>`;
+                }
+                return line ? `<p>${line}</p>` : '';
+            })
+            .join('');
+    };
+
     return (
         <div className="p-6 bg-gray-50 min-h-full">
             <div className="max-w-7xl mx-auto">
@@ -241,10 +325,28 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><CustomPieChart title="Farmer Status" data={statusDistribution} /><CustomPieChart title="Plantation Method" data={methodDistribution} /><CustomPieChart title="Gender Distribution" data={genderDistribution} /></div>
                     {filters.district && <CustomBarChart title={`Total Extent by Mandal in ${getGeoName('district', { district: filters.district })}`} data={extentByMandal} />}
 
+                    {(isGeneratingReport || aiReport || aiError) && (
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
+                                AI-Generated Summary
+                            </h3>
+                            {isGeneratingReport && <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div></div>}
+                            {aiError && <div className="p-4 bg-red-50 text-red-700 rounded-md">{aiError}</div>}
+                            {aiReport && <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(aiReport) }} />}
+                        </div>
+                    )}
+
                     <div className="bg-white rounded-lg shadow-md">
                         <div className="p-4 border-b flex justify-between items-center">
                             <h3 className="text-xl font-bold text-gray-800">Filtered Farmer Data</h3>
-                            <button onClick={() => exportToExcel(filteredFarmers, 'Filtered_Farmer_Report')} disabled={filteredFarmers.length === 0} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm disabled:bg-gray-400">Export to Excel</button>
+                            <div className="flex gap-2">
+                                <button onClick={handleGenerateReport} disabled={isGeneratingReport || filteredFarmers.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm disabled:bg-gray-400 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
+                                    {isGeneratingReport ? 'Generating...' : 'Generate AI Summary'}
+                                </button>
+                                <button onClick={() => exportToExcel(filteredFarmers, 'Filtered_Farmer_Report')} disabled={filteredFarmers.length === 0} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm disabled:bg-gray-400">Export to Excel</button>
+                            </div>
                         </div>
                         <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hap ID</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reg. Date</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Approved Extent</th></tr></thead>

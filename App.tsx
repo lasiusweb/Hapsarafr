@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import * as ReactDOM from 'react-dom/client';
-import { Farmer, User, Group, Permission, PaymentStage, ActivityType, Filters } from './types';
+import { Farmer, User, Group, Permission, PaymentStage, ActivityType, Filters, AppContent, FarmerStatus } from './types';
 import FilterBar from './components/FilterBar';
 import FarmerList from './components/FarmerList';
 import { useDatabase } from './DatabaseContext';
 import { Q, Query, Model } from '@nozbe/watermelondb';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel } from './db';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel } from './db';
 import { initializeSupabase } from './lib/supabase';
 import { DEFAULT_GROUPS } from './data/permissionsData';
 import { MOCK_USERS } from './data/userData';
@@ -46,6 +46,7 @@ const MapView = lazy(() => import('./components/MapView'));
 const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
 const ReportsPage = lazy(() => import('./components/ReportsPage'));
 const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerPage'));
+const SupabaseSettingsModal = lazy(() => import('./components/SupabaseSettingsModal'));
 
 
 // Type declarations for CDN libraries
@@ -171,11 +172,9 @@ const ModalLoader: React.FC = () => (
 const App: React.FC = () => {
     const database = useDatabase();
     const isOnline = useOnlineStatus();
-    const [appState, setAppState] = useState<string>('APP'); 
+    const [appState, setAppState] = useState<string>('LANDING'); // 'LANDING', 'LOGIN', 'APP'
     const [supabase, setSupabase] = useState<any | null>(null);
-    const [users, setUsers] = useState<User[]>(MOCK_USERS);
-    const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[1]); // Default to Steve Rogers (Data Entry)
-    const [groups, setGroups] = useState<Group[]>(DEFAULT_GROUPS);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
   
     // UI State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -191,6 +190,7 @@ const App: React.FC = () => {
     const [showRawDataView, setShowRawDataView] = useState(false);
     const [showChangelog, setShowChangelog] = useState(false);
     const [showPrivacy, setShowPrivacy] = useState(false);
+    const [showSupabaseSettings, setShowSupabaseSettings] = useState(false);
   
     // Data and list state
     const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -206,23 +206,116 @@ const App: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [pendingSyncCount, setPendingSyncCount] = useState(0);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+    const [appContent, setAppContent] = useState<Partial<AppContent> | null>(null);
 
     // Alert System State
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
     
-    // WatermelonDB Queries - filter out soft-deleted records from the main view
+    // --- WatermelonDB Queries ---
     const farmersQuery = useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('syncStatus', Q.notEq('pending_delete'))), [database]);
     const allFarmers = useQuery(farmersQuery);
     const paymentsQuery = useMemo(() => database.get<SubsidyPaymentModel>('subsidy_payments').query(), [database]);
     const allPayments = useQuery(paymentsQuery);
+    const usersQuery = useMemo(() => database.get<UserModel>('users').query(), [database]);
+    const dbUsers = useQuery(usersQuery);
+    const groupsQuery = useMemo(() => database.get<GroupModel>('groups').query(), [database]);
+    const dbGroups = useQuery(groupsQuery);
+
+    const users = useMemo(() => dbUsers.map(u => ({ id: u.id, name: u.name, avatar: u.avatar, groupId: u.groupId })), [dbUsers]);
+    const groups = useMemo(() => dbGroups.map(g => ({ id: g.id, name: g.name, permissions: g.permissions })), [dbGroups]);
 
     const allPlainFarmers = useMemo(() => allFarmers.map(f => farmerModelToPlain(f)).filter(Boolean) as Farmer[], [allFarmers]);
-
+    
+    // --- Database Seeding Effect ---
     useEffect(() => {
+        const seedDatabase = async () => {
+            const groupsCount = await database.collections.get('groups').query().fetchCount();
+            if (groupsCount === 0) {
+                console.log('Seeding database with default groups and users...');
+                await database.write(async () => {
+                    const groupCollection = database.collections.get('groups');
+                    for (const group of DEFAULT_GROUPS) {
+                        await groupCollection.create(g => {
+                            (g as any)._raw.id = group.id;
+                            (g as GroupModel).name = group.name;
+                            (g as GroupModel).permissionsStr = JSON.stringify(group.permissions);
+                        });
+                    }
+                    const userCollection = database.collections.get('users');
+                    for (const user of MOCK_USERS) {
+                         await userCollection.create(u => {
+                            (u as any)._raw.id = user.id;
+                            (u as UserModel).name = user.name;
+                            (u as UserModel).avatar = user.avatar;
+                            (u as UserModel).groupId = user.groupId;
+                        });
+                    }
+                });
+                console.log('Database seeding complete.');
+            }
+        };
+        seedDatabase();
+    }, [database]);
+
+
+    const handleLogin = (userId: string) => {
+        const user = users.find(u => u.id === userId);
+        if (user) {
+            setCurrentUser(user);
+            setAppState('APP');
+            window.location.hash = 'dashboard';
+        }
+    };
+
+    const handleLogout = () => {
+        setCurrentUser(null);
+        setAppState('LOGIN');
+    };
+    
+    const handleSupabaseConnect = useCallback(() => {
         const sup = initializeSupabase();
         setSupabase(sup);
     }, []);
+
+    const fetchAppContent = useCallback(async () => {
+        if (!supabase) return;
+        try {
+            const { data, error } = await supabase.from('app_content').select('key, value');
+            if (error) {
+                console.error("Error fetching app content:", error);
+                setNotification({ message: 'Could not load site content.', type: 'error' });
+                return;
+            }
+            if (!data) return;
+
+            const content = data.reduce((acc: Partial<AppContent>, row: any) => {
+                if (row.key === 'landing_page') {
+                    acc.landing_hero_title = row.value.hero_title;
+                    acc.landing_hero_subtitle = row.value.hero_subtitle;
+                    acc.landing_about_us = row.value.about_us;
+                } else if (row.key === 'privacy_policy') {
+                    acc.privacy_policy = row.value.content;
+                } else if (row.key === 'faqs') {
+                    acc.faqs = row.value.items;
+                }
+                return acc;
+            }, {} as Partial<AppContent>);
+            setAppContent(content);
+        } catch (e: any) {
+            console.error("Error processing app content:", e);
+        }
+    }, [supabase]);
+
+    useEffect(() => {
+        handleSupabaseConnect();
+    }, [handleSupabaseConnect]);
+
+    useEffect(() => {
+        if (supabase) {
+            fetchAppContent();
+        }
+    }, [supabase, fetchAppContent]);
 
     // Effect for Alert Generation
     useEffect(() => {
@@ -307,10 +400,8 @@ const App: React.FC = () => {
     };
 
     const handleNavigateWithFilter = (view: 'farmer-directory', newFilters: Partial<Filters>) => {
-        // Reset filters to initial state then apply the new ones to prevent conflicts
         setFilters({ ...initialFilters, ...newFilters });
         handleNavigate(view);
-        // Reset pagination for the new filtered view
         setCurrentPage(1);
     };
 
@@ -323,7 +414,8 @@ const App: React.FC = () => {
     }, []);
 
     const permissions = useMemo(() => {
-        const userGroup = groups.find(g => g.id === currentUser?.groupId);
+        if (!currentUser) return new Set();
+        const userGroup = groups.find(g => g.id === currentUser.groupId);
         return new Set(userGroup?.permissions || []);
     }, [currentUser, groups]);
 
@@ -380,10 +472,110 @@ const App: React.FC = () => {
         setEditingFarmer(null);
     }, [database, editingFarmer, currentUser]);
 
-    const handleEditFarmer = (farmer: Farmer) => {
-        setEditingFarmer(farmer);
-        setIsShowingRegistrationForm(true);
-    };
+    const handleBatchUpdateStatus = useCallback(async (newStatus: FarmerStatus) => {
+        if (selectedFarmerIds.length === 0 || !currentUser) return;
+
+        await database.write(async writer => {
+            const farmersToUpdate = await database.get<FarmerModel>('farmers').query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
+            const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
+
+            for (const farmer of farmersToUpdate) {
+                const oldStatus = farmer.status;
+                if (oldStatus !== newStatus) {
+                    await farmer.update(record => {
+                        record.status = newStatus;
+                        record.syncStatusLocal = 'pending';
+                        record.updatedBy = currentUser.id;
+                    }, writer);
+                    
+                    await activityLogsCollection.create(log => {
+                        log.farmerId = farmer.id;
+                        log.activityType = ActivityType.STATUS_CHANGE;
+                        log.description = `Status changed from ${oldStatus} to ${newStatus} in a batch update.`;
+                        log.createdBy = currentUser.id;
+                    }, writer);
+                }
+            }
+        });
+
+        setShowBatchUpdateModal(false);
+        setNotification({ message: `${selectedFarmerIds.length} farmer(s) updated to "${newStatus}".`, type: 'success' });
+        setSelectedFarmerIds([]);
+    }, [database, selectedFarmerIds, currentUser]);
+
+    const handleBulkImport = useCallback(async (newFarmers: Farmer[]) => {
+        if (newFarmers.length === 0 || !currentUser) return;
+        
+        await database.write(async writer => {
+            const farmersCollection = database.get<FarmerModel>('farmers');
+            const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
+
+            for (const farmerData of newFarmers) {
+                await farmersCollection.create(record => {
+                    Object.assign(record, { ...farmerData, syncStatusLocal: 'pending', createdBy: currentUser.id, updatedBy: currentUser.id });
+                    record._raw.id = farmerData.id;
+                }, writer);
+
+                await activityLogsCollection.create(log => {
+                    log.farmerId = farmerData.id;
+                    log.activityType = ActivityType.REGISTRATION;
+                    const villageName = getGeoName('village', { district: farmerData.district, mandal: farmerData.mandal, village: farmerData.village });
+                    log.description = `Farmer bulk imported into ${villageName}.`;
+                    log.createdBy = currentUser.id;
+                }, writer);
+            }
+        });
+        
+        setNotification({ message: `${newFarmers.length} farmer(s) imported successfully.`, type: 'success' });
+    }, [database, currentUser]);
+
+
+    const handleSaveUsers = useCallback(async (updatedUsers: User[]) => {
+        await database.write(async () => {
+            for (const updatedUser of updatedUsers) {
+                const userRecord = await database.get<UserModel>('users').find(updatedUser.id);
+                await userRecord.update(record => {
+                    record.groupId = updatedUser.groupId;
+                });
+            }
+        });
+        setNotification({ message: 'User roles saved successfully!', type: 'success' });
+    }, [database]);
+
+    const handleSaveGroups = useCallback(async (updatedGroups: Group[]) => {
+        await database.write(async () => {
+            const groupCollection = database.get<GroupModel>('groups');
+            const existingGroupIds = dbGroups.map(g => g.id);
+            const updatedGroupIds = updatedGroups.map(g => g.id);
+            
+            // Handle creations and updates
+            for (const updatedGroup of updatedGroups) {
+                if (existingGroupIds.includes(updatedGroup.id)) {
+                    // Update
+                    const groupRecord = await groupCollection.find(updatedGroup.id);
+                    await groupRecord.update(record => {
+                        record.name = updatedGroup.name;
+                        record.permissionsStr = JSON.stringify(updatedGroup.permissions);
+                    });
+                } else {
+                    // Create
+                    await groupCollection.create(record => {
+                        record._raw.id = updatedGroup.id;
+                        record.name = updatedGroup.name;
+                        record.permissionsStr = JSON.stringify(updatedGroup.permissions);
+                    });
+                }
+            }
+
+            // Handle deletions
+            const groupsToDeleteIds = existingGroupIds.filter(id => !updatedGroupIds.includes(id));
+            for (const groupId of groupsToDeleteIds) {
+                const groupRecord = await groupCollection.find(groupId);
+                await groupRecord.destroyPermanently();
+            }
+        });
+        setNotification({ message: 'Group settings saved successfully!', type: 'success' });
+    }, [database, dbGroups]);
 
     const handleSync = useCallback(async () => {
         if (!isOnline) {
@@ -391,7 +583,7 @@ const App: React.FC = () => {
             return;
         }
         if (!supabase) {
-            setNotification({ message: 'Supabase connection not available.', type: 'error' });
+            setNotification({ message: 'Supabase connection not available. Please configure it in the settings.', type: 'error' });
             return;
         }
         setIsSyncing(true);
@@ -497,345 +689,4 @@ const App: React.FC = () => {
     const processedFarmers = useMemo(() => {
         let filtered = [...allPlainFarmers];
 
-        const query = effectiveFilters.searchQuery.toLowerCase().trim();
-        if (query) {
-            filtered = filtered.filter(f => 
-                f.fullName.toLowerCase().includes(query) ||
-                f.farmerId.toLowerCase().includes(query) ||
-                f.mobileNumber.includes(query)
-            );
-        }
-        
-        if (effectiveFilters.district) filtered = filtered.filter(f => f.district === effectiveFilters.district);
-        if (effectiveFilters.mandal) filtered = filtered.filter(f => f.mandal === effectiveFilters.mandal);
-        if (effectiveFilters.village) filtered = filtered.filter(f => f.village === effectiveFilters.village);
-        if (effectiveFilters.status) filtered = filtered.filter(f => f.status === effectiveFilters.status);
-
-        if (effectiveFilters.registrationDateFrom) {
-            const fromDate = new Date(effectiveFilters.registrationDateFrom).getTime();
-            filtered = filtered.filter(f => new Date(f.registrationDate).getTime() >= fromDate);
-        }
-        if (effectiveFilters.registrationDateTo) {
-            const toDate = new Date(effectiveFilters.registrationDateTo).getTime();
-            filtered = filtered.filter(f => new Date(f.registrationDate).getTime() <= toDate);
-        }
-        
-        if (sortConfig) {
-            filtered.sort((a, b) => {
-                const aValue = a[sortConfig.key as keyof Farmer] as any;
-                const bValue = b[sortConfig.key as keyof Farmer] as any;
-                if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-                if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
-                return 0;
-            });
-        }
-
-        return filtered;
-    }, [allPlainFarmers, effectiveFilters, sortConfig]);
-    
-    const handleExportExcel = () => {
-        if (processedFarmers.length === 0) {
-            setNotification({ message: 'No farmers to export. Clear filters to export all data.', type: 'info' });
-            return;
-        }
-        exportToExcel(processedFarmers);
-        setNotification({ message: `Exporting ${processedFarmers.length} farmers to Excel.`, type: 'success' });
-    };
-
-    const handleExportCsv = () => {
-        if (processedFarmers.length === 0) {
-            setNotification({ message: 'No farmers to export. Clear filters to export all data.', type: 'info' });
-            return;
-        }
-        exportToCsv(processedFarmers);
-        setNotification({ message: `Exporting ${processedFarmers.length} farmers to CSV.`, type: 'success' });
-    };
-
-    const paginatedFarmers = useMemo(() => {
-        const startIndex = (currentPage - 1) * rowsPerPage;
-        return processedFarmers.slice(startIndex, startIndex + rowsPerPage);
-    }, [processedFarmers, currentPage, rowsPerPage]);
-
-    const handleSelectFarmer = (farmerId: string, isSelected: boolean) => {
-        setSelectedFarmerIds(prev => isSelected ? [...prev, farmerId] : prev.filter(id => id !== farmerId));
-    };
-
-    const handleSelectAll = (allSelected: boolean) => {
-        setSelectedFarmerIds(allSelected ? paginatedFarmers.map(f => f.id) : []);
-    };
-
-    // Alert Handlers
-    const handleMarkAsRead = (alertId: string) => {
-        const updatedAlerts = alerts.map(a => a.id === alertId ? { ...a, read: true } : a);
-        setAlerts(updatedAlerts);
-        localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
-    };
-
-    const handleMarkAllAsRead = () => {
-        const updatedAlerts = alerts.map(a => ({ ...a, read: true }));
-        setAlerts(updatedAlerts);
-        localStorage.setItem('hapsara-alerts', JSON.stringify(updatedAlerts));
-    };
-    
-    // --- Main Content Renderer ---
-    const renderContent = () => {
-        switch (parsedHash.view) {
-            case 'dashboard':
-                return <Dashboard farmers={allPlainFarmers} onNavigateWithFilter={handleNavigateWithFilter} />;
-            case 'farmer-directory':
-                return (
-                    <>
-                        <FilterBar filters={filters} onFilterChange={setFilters} />
-                        <FarmerList
-                            farmers={paginatedFarmers}
-                            users={users}
-                            canEdit={permissions.has(Permission.CAN_EDIT_FARMER)}
-                            canDelete={permissions.has(Permission.CAN_DELETE_FARMER)}
-                            onPrint={handlePrintFarmer}
-                            onExportToPdf={handleExportPdf}
-                            selectedFarmerIds={selectedFarmerIds}
-                            onSelectionChange={handleSelectFarmer}
-                            onSelectAll={handleSelectAll}
-                            sortConfig={sortConfig}
-                            onRequestSort={(key) => {
-                                const direction = sortConfig?.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
-                                setSortConfig({ key, direction });
-                            }}
-                            newlyAddedFarmerId={newlyAddedFarmerId}
-                            onHighlightComplete={() => setNewlyAddedFarmerId(null)}
-                            onBatchUpdate={() => setShowBatchUpdateModal(true)}
-                            onDeleteSelected={handleDeleteSelectedFarmers}
-                            totalRecords={processedFarmers.length}
-                            currentPage={currentPage}
-                            rowsPerPage={rowsPerPage}
-                            onPageChange={setCurrentPage}
-                            onRowsPerPageChange={setRowsPerPage}
-                            isLoading={false}
-                            onAddToPrintQueue={(ids) => setPrintQueue(q => [...new Set([...q, ...ids])])}
-                            onNavigate={handleNavigate}
-                        />
-                    </>
-                );
-             case 'farmer-details':
-                return <FarmerDetailsPage 
-                            farmerId={parsedHash.params.farmerId} 
-                            database={database}
-                            users={users}
-                            currentUser={currentUser}
-                            onBack={() => handleNavigate('farmer-directory')}
-                            permissions={permissions}
-                            setNotification={setNotification}
-                        />;
-            case 'map-view':
-                return <MapView farmers={allPlainFarmers} onNavigate={handleNavigate} />;
-            case 'subsidy-management':
-                 return <SubsidyManagementPage 
-                            farmers={allPlainFarmers}
-                            payments={allPayments}
-                            currentUser={currentUser}
-                            onBack={() => handleNavigate('dashboard')}
-                            database={database}
-                            setNotification={setNotification}
-                        />;
-            case 'reports':
-                return <ReportsPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
-            case 'admin':
-                return <AdminPage 
-                            users={users} 
-                            groups={groups} 
-                            currentUser={currentUser} 
-                            onSaveUsers={async (u) => setUsers(u)}
-                            onSaveGroups={async (g) => setGroups(g)}
-                            onBack={() => handleNavigate('dashboard')}
-                            invitations={[]}
-                            onInviteUser={async () => 'mock-code'}
-                        />;
-            case 'profile':
-                return <ProfilePage 
-                            currentUser={currentUser} 
-                            groups={groups} 
-                            onSave={async (u) => setCurrentUser(u)}
-                            onBack={() => handleNavigate('dashboard')} 
-                        />;
-            case 'print-queue':
-                return <PrintQueuePage
-                            queuedFarmerIds={printQueue}
-                            users={users}
-                            onRemove={(id) => setPrintQueue(q => q.filter(farmerId => farmerId !== id))}
-                            onClear={() => setPrintQueue([])}
-                            onBack={() => handleNavigate('farmer-directory')}
-                       />;
-            case 'help':
-                return <HelpPage 
-                            appContent={null}
-                            onBack={() => handleNavigate('dashboard')}
-                        />;
-            case 'id-verification':
-                return <IdVerificationPage allFarmers={allPlainFarmers} onBack={() => handleNavigate('dashboard')} />;
-            case 'crop-health-scanner':
-                return <CropHealthScannerPage onBack={() => handleNavigate('dashboard')} />;
-            default:
-                return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
-        }
-    };
-
-    if (appState === 'LOADING') return <ModalLoader />;
-    
-    return (
-        <Suspense fallback={<ModalLoader />}>
-            {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
-            <div className="flex h-screen bg-gray-100">
-                <Sidebar
-                    isOpen={isSidebarOpen}
-                    isCollapsed={isSidebarCollapsed}
-                    onToggleCollapse={() => setIsSidebarCollapsed(c => !c)}
-                    currentUser={currentUser}
-                    onLogout={() => {}}
-                    onNavigate={handleNavigate}
-                    currentView={parsedHash.view as View}
-                    permissions={permissions}
-                    onImport={() => setShowBulkImportModal(true)}
-                    onExportExcel={handleExportExcel}
-                    onExportCsv={handleExportCsv}
-                    onViewRawData={() => setShowRawDataView(false)}
-                    onShowPrivacy={() => setShowPrivacy(true)}
-                    onShowChangelog={() => setShowChangelog(true)}
-                    printQueueCount={printQueue.length}
-                />
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    <Header
-                        onToggleSidebar={() => setIsSidebarOpen(o => !o)}
-                        currentView={parsedHash.view}
-                        onRegister={() => { setEditingFarmer(null); setIsShowingRegistrationForm(true); }}
-                        onSync={handleSync}
-                        syncLoading={isSyncing}
-                        pendingSyncCount={pendingSyncCount}
-                        isOnline={isOnline}
-                        permissions={permissions}
-                        unreadAlertsCount={alerts.filter(a => !a.read).length}
-                        onToggleAlertsPanel={() => setIsAlertsPanelOpen(p => !p)}
-                    />
-                    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
-                       {renderContent()}
-                    </main>
-                    <AlertsPanel
-                        alerts={alerts}
-                        isOpen={isAlertsPanelOpen}
-                        onClose={() => setIsAlertsPanelOpen(false)}
-                        onMarkAsRead={handleMarkAsRead}
-                        onMarkAllAsRead={handleMarkAllAsRead}
-                        onNavigate={handleNavigate}
-                    />
-                </div>
-
-                {isShowingRegistrationForm && (
-                     <RegistrationForm 
-                        onSubmit={handleSaveFarmer}
-                        onCancel={() => setIsShowingRegistrationForm(false)}
-                        existingFarmers={allPlainFarmers}
-                        mode={editingFarmer ? 'edit' : 'create'}
-                        existingFarmer={editingFarmer}
-                    />
-                )}
-                {showDeleteConfirmation && (
-                    <ConfirmationModal
-                        isOpen={showDeleteConfirmation}
-                        title={`Delete ${selectedFarmerIds.length} Farmer(s)?`}
-                        message={<>
-                            <p>Are you sure you want to delete the selected farmer(s)?</p>
-                            <p className="mt-2 text-sm text-yellow-700 bg-yellow-50 p-2 rounded-md font-semibold">
-                                This action will mark them for deletion. The records will be permanently removed after the next sync. This cannot be undone.
-                            </p>
-                        </>}
-                        onConfirm={confirmDelete}
-                        onCancel={() => setShowDeleteConfirmation(false)}
-                        confirmText="Yes, Delete"
-                        confirmButtonClass="bg-red-600 hover:bg-red-700"
-                    />
-                )}
-                {showRawDataView && (
-                    <RawDataView
-                        farmers={allFarmers}
-                        onClose={() => setShowRawDataView(false)}
-                    />
-                )}
-
-                {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
-                {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} appContent={null} />}
-
-                {farmerForPrinting && <PrintView farmer={farmerForPrinting} users={users} />}
-                <div id="pdf-export-container" style={{ position: 'absolute', left: '-9999px', top: 0 }}></div>
-            </div>
-        </Suspense>
-    );
-};
-
-const Header: React.FC<{
-    onToggleSidebar: () => void;
-    currentView: ParsedHash['view'];
-    onRegister: () => void;
-    onSync: () => void;
-    syncLoading: boolean;
-    pendingSyncCount: number;
-    isOnline: boolean;
-    permissions: Set<Permission>;
-    unreadAlertsCount: number;
-    onToggleAlertsPanel: () => void;
-}> = ({ onToggleSidebar, currentView, onRegister, onSync, syncLoading, pendingSyncCount, isOnline, permissions, unreadAlertsCount, onToggleAlertsPanel }) => {
-    const canRegister = permissions.has(Permission.CAN_REGISTER_FARMER);
-    const viewTitles: Record<ParsedHash['view'], string> = {
-        dashboard: 'Dashboard',
-        'farmer-directory': 'Farmer Directory',
-        'farmer-details': 'Farmer Details',
-        profile: 'My Profile',
-        admin: 'Admin Panel',
-        billing: 'Billing & Usage',
-        'usage-analytics': 'Usage Analytics',
-        'content-manager': 'Content Manager',
-        'subscription-management': 'Subscription Management',
-        'print-queue': 'Print Queue',
-        'subsidy-management': 'Subsidy Management',
-        'map-view': 'Farmer Map View',
-        'help': 'Help & Support',
-        'id-verification': 'ID Verification Tool',
-        reports: 'Reports & Analytics',
-        'crop-health-scanner': 'Crop Health Scanner',
-        'not-found': 'Page Not Found',
-    };
-
-    return (
-        <header className="bg-white shadow-sm p-4 flex justify-between items-center flex-shrink-0 z-20">
-            <div className="flex items-center gap-4">
-                <button onClick={onToggleSidebar} className="p-2 rounded-md hover:bg-gray-100 lg:hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
-                </button>
-                <h1 className="text-xl font-bold text-gray-800 hidden sm:block">{viewTitles[currentView]}</h1>
-            </div>
-            <div className="flex items-center gap-4">
-                {isOnline && (
-                    <button onClick={onSync} disabled={syncLoading} className="relative flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-md transition text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait">
-                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${syncLoading ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.885-.666A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566z" clipRule="evenodd" /></svg>
-                        <span className="hidden md:inline">{syncLoading ? 'Syncing...' : 'Sync Now'}</span>
-                        {pendingSyncCount > 0 && !syncLoading && (
-                            <span className="absolute -top-1 -right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-yellow-500 text-yellow-900 text-xs items-center justify-center font-bold">{pendingSyncCount > 9 ? '9+' : pendingSyncCount}</span></span>
-                        )}
-                    </button>
-                )}
-                 <button onClick={onToggleAlertsPanel} className="relative p-2 rounded-full hover:bg-gray-100 transition text-gray-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                    {unreadAlertsCount > 0 && (
-                        <span className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center text-xs rounded-full bg-red-500 text-white font-bold">{unreadAlertsCount > 9 ? '9+' : unreadAlertsCount}</span>
-                    )}
-                </button>
-                {canRegister && currentView === 'farmer-directory' && (
-                    <button onClick={onRegister} className="flex items-center gap-2 px-4 py-2 rounded-md transition font-semibold bg-green-600 text-white hover:bg-green-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110 2h3V6a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                        <span className="hidden md:inline">Register Farmer</span>
-                    </button>
-                )}
-            </div>
-        </header>
-    );
-};
-
-export default App;
+        const

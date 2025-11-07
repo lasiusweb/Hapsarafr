@@ -1,11 +1,11 @@
 import { appSchema, tableSchema, Model, Database, Q, CollectionMap } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
-import { field, date, lazy } from '@nozbe/watermelondb/decorators';
-import { FarmerStatus, PlantationMethod, PlantType, PaymentStage } from '../types';
+import { field, date, lazy, writer, readonly } from '@nozbe/watermelondb/decorators';
+import { FarmerStatus, PlantationMethod, PlantType, PaymentStage, Permission } from '../types';
 
 // 1. Define the Schema
 export const mySchema = appSchema({
-  version: 1,
+  version: 2,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -72,8 +72,72 @@ export const mySchema = appSchema({
             { name: 'created_at', type: 'number' },
         ],
     }),
+    tableSchema({
+        name: 'users',
+        columns: [
+            { name: 'name', type: 'string' },
+            { name: 'avatar', type: 'string' },
+            { name: 'group_id', type: 'string', isIndexed: true },
+        ]
+    }),
+    tableSchema({
+        name: 'groups',
+        columns: [
+            { name: 'name', type: 'string' },
+            { name: 'permissions', type: 'string' }, // Stored as a JSON string
+        ]
+    }),
   ],
 });
+
+export class GroupModel extends Model {
+    static table = 'groups';
+    // FIX: Added associations to complete the relationship definition with UserModel,
+    // which resolves a TypeScript inference issue that was hiding the `update` method.
+    static associations = {
+        users: { type: 'has_many', foreignKey: 'group_id' },
+    } as const;
+
+    // FIX: Added readonly properties to ensure correct type inference for instance methods like `update`.
+    readonly _raw!: any;
+    readonly database!: Database;
+    readonly collections!: CollectionMap;
+
+    // FIX: The `id` property should be `readonly` and not a `@field`.
+    readonly id!: string;
+    @field('name') name!: string;
+    @field('permissions') permissionsStr!: string;
+
+    get permissions(): Permission[] {
+        return JSON.parse(this.permissionsStr);
+    }
+
+    @writer async updatePermissions(permissions: Permission[]) {
+        await this.update(group => {
+            group.permissionsStr = JSON.stringify(permissions);
+        });
+    }
+}
+
+export class UserModel extends Model {
+    static table = 'users';
+    static associations = {
+        groups: { type: 'belongs_to', key: 'group_id' },
+    } as const;
+
+    // FIX: Added readonly properties to ensure correct type inference for lazy relations.
+    readonly _raw!: any;
+    readonly collections!: CollectionMap;
+    readonly database!: Database;
+
+    // FIX: The `id` property should be `readonly` and not a `@field`.
+    readonly id!: string;
+    @field('name') name!: string;
+    @field('avatar') avatar!: string;
+    @field('group_id') groupId!: string;
+
+    @lazy group = this.collections.get<GroupModel>('groups').find(this.groupId);
+}
 
 export class SubsidyPaymentModel extends Model {
     static table = 'subsidy_payments';
@@ -84,6 +148,7 @@ export class SubsidyPaymentModel extends Model {
     readonly id!: string;
     readonly _raw!: any;
     readonly database!: Database;
+    readonly collections!: CollectionMap;
 
     @field('farmer_id') farmerId!: string;
     @field('paymentDate') paymentDate!: string;
@@ -105,6 +170,7 @@ export class ActivityLogModel extends Model {
     readonly id!: string;
     readonly _raw!: any;
     readonly database!: Database;
+    readonly collections!: CollectionMap;
 
     @field('farmer_id') farmerId!: string;
     @field('activity_type') activityType!: string;
@@ -176,22 +242,21 @@ const adapter = new LokiJSAdapter({
   useWebWorker: false,
   useIncrementalIDB: true,
   dbName: 'hapsara-watermelon',
+  migrations: {
+      from: 1,
+      to: 2,
+      steps: []
+  },
   // These options are recommended for production environments to improve stability and handle multi-tab scenarios.
   onIndexedDBVersionChange: () => {
-    // This is a safety measure for schema migrations. If the schema version changes,
-    // reloading the app ensures the database structure is up-to-date.
     window.location.reload();
   },
   extraIncrementalIDBOptions: {
     onDidOverwrite: () => {
-      // This function is called when the database is overwritten, which can happen if the database is corrupted.
-      // It's a good place to log an error or alert the user that their local data might have been lost.
       console.warn('Local database was overwritten. If you did not intend to do this, please report an issue.');
       alert('Local database was reset. Your unsynced data may have been lost.');
     },
     onversionchange: () => {
-      // This event is fired when another browser tab is trying to upgrade the database version.
-      // To avoid conflicts, we should close our connection, which is most safely done by reloading the page.
       window.location.reload();
     },
   },
@@ -200,7 +265,7 @@ const adapter = new LokiJSAdapter({
 // 4. Create the Database Instance
 const database = new Database({
   adapter,
-  modelClasses: [FarmerModel, SubsidyPaymentModel, ActivityLogModel],
+  modelClasses: [FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel],
 });
 
 export default database;
