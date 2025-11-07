@@ -158,6 +158,7 @@ export class GroupModel extends Model {
     static table = 'groups';
     static associations = {
         users: { type: 'has_many', foreignKey: 'group_id' },
+        tenant: { type: 'belongs_to', key: 'tenant_id' },
     } as const;
 
     @field('name') name!: string;
@@ -185,6 +186,10 @@ export class GroupModel extends Model {
 
 export class TenantModel extends Model {
     static table = 'tenants';
+    static associations = {
+        users: { type: 'has_many', foreignKey: 'tenant_id' },
+        groups: { type: 'has_many', foreignKey: 'tenant_id' },
+    } as const;
 
     @field('name') name!: string;
     @field('subscription_status') subscriptionStatus!: 'active' | 'trial' | 'inactive';
@@ -205,6 +210,7 @@ export class UserModel extends Model {
     static table = 'users';
     static associations = {
         group: { type: 'belongs_to', key: 'group_id' },
+        tenant: { type: 'belongs_to', key: 'tenant_id' },
     } as const;
 
     @field('name') name!: string;

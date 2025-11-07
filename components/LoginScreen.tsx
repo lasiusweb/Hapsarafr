@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { User } from '../types';
+import React, { useState, useMemo } from 'react';
+import { User, Tenant } from '../types';
 
 interface LoginScreenProps {
   onLogin: (userId: string) => void;
   users: User[];
+  tenants: Tenant[];
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
-    // Find a non-super-admin user to select by default, otherwise select the first user.
+const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, tenants }) => {
     const defaultUser = users.find(u => u.groupId !== 'group-super-admin') || users[0];
     const [selectedUserId, setSelectedUserId] = useState<string>(defaultUser?.id || '');
 
@@ -20,9 +20,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
         }
     };
 
+    const usersByTenant = useMemo(() => {
+        const tenantMap = new Map(tenants.map(t => [t.id, t.name]));
+        const grouped: { [key: string]: User[] } = {};
+
+        // Ensure Super Admin's "Hapsara Platform" tenant appears first
+        const superAdminTenantName = 'Hapsara Platform';
+        grouped[superAdminTenantName] = [];
+
+        users.forEach(user => {
+            const tenantName = tenantMap.get(user.tenantId) || superAdminTenantName;
+            if (!grouped[tenantName]) {
+                grouped[tenantName] = [];
+            }
+            grouped[tenantName].push(user);
+        });
+
+        // If the super admin group is empty, remove it
+        if(grouped[superAdminTenantName].length === 0) {
+            delete grouped[superAdminTenantName];
+        }
+
+        return grouped;
+    }, [users, tenants]);
+
+
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-8">
+            <div className="w-full max-w-lg bg-white rounded-lg shadow-xl p-8">
                 <div className="text-center mb-8">
                     <div className="flex justify-center items-center gap-3 mb-2">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" viewBox="0 0 20 20" fill="currentColor">
@@ -30,25 +55,32 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
                         </svg>
                         <h1 className="text-3xl font-bold text-gray-800">Hapsara</h1>
                     </div>
-                    <h2 className="text-2xl font-semibold text-gray-700">Select User Profile</h2>
+                    <h2 className="text-2xl font-semibold text-gray-700">Select Digital Office</h2>
                 </div>
                 <form onSubmit={handleLoginSubmit} className="space-y-6">
-                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                        {users.map(user => (
-                            <button
-                                type="button"
-                                key={user.id}
-                                onClick={() => setSelectedUserId(user.id)}
-                                className={`w-full p-3 border rounded-lg flex items-center gap-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
-                                    ${selectedUserId === user.id 
-                                        ? 'bg-green-50 border-green-400 ring-2 ring-green-500' 
-                                        : 'bg-white border-gray-300 hover:border-green-400 hover:bg-green-50'
-                                    }`
-                                }
-                            >
-                                <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full object-cover" />
-                                <span className="font-semibold text-gray-800">{user.name}</span>
-                            </button>
+                    <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
+                        {Object.entries(usersByTenant).map(([tenantName, tenantUsers]) => (
+                             <div key={tenantName}>
+                                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">{tenantName}</h3>
+                                <div className="space-y-2">
+                                    {tenantUsers.map(user => (
+                                        <button
+                                            type="button"
+                                            key={user.id}
+                                            onClick={() => setSelectedUserId(user.id)}
+                                            className={`w-full p-3 border rounded-lg flex items-center gap-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
+                                                ${selectedUserId === user.id 
+                                                    ? 'bg-green-50 border-green-400 ring-2 ring-green-500' 
+                                                    : 'bg-white border-gray-300 hover:border-green-400 hover:bg-green-50'
+                                                }`
+                                            }
+                                        >
+                                            <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full object-cover" />
+                                            <span className="font-semibold text-gray-800">{user.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
 

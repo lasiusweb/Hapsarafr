@@ -8,6 +8,7 @@ interface SidebarProps {
     isCollapsed: boolean;
     onToggleCollapse: () => void;
     currentUser: User | null;
+    currentTenantName: string | null;
     onLogout: () => void;
     onNavigate: (path: string) => void;
     currentView: View;
@@ -23,7 +24,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
-    isOpen, isCollapsed, onToggleCollapse, currentUser, onLogout, onNavigate, currentView, permissions, 
+    isOpen, isCollapsed, onToggleCollapse, currentUser, currentTenantName, onLogout, onNavigate, currentView, permissions, 
     onImport, onExportExcel, onExportCsv, onViewRawData,
     onShowPrivacy, onShowChangelog, printQueueCount, onShowSupabaseSettings
 }) => {
@@ -102,7 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} text="Subsidy Management" view="subsidy-management" />
                         {canManageAdmin && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text={isSuperAdmin ? "Super Admin Panel" : "Admin Panel"} view="admin" />}
                         {canManageContent && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>} text="Content Manager" view="content-manager" />}
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.79 4 4s-1.79 4-4 4c-1.742 0-3.223-.835-3.772-2M12 12h.01M12 12a9 9 0 110-18 9 9 0 010 18z" /></svg>} text="Help & Support" view="help" />
+                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.79 4 4s-1.79 4-4 4c-1.742 0-3.223-.835-3.772-2M12 12h.01M12 12a9 9 0 110-18 9 9 0 010 18z" /></svg>} text="Help & Support" view="help" />
 
                         {(canImport || canExport || canManageAdmin || canManageContent) && <NavCategory text="Tools" />}
                         <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.293 2.293a1 1 0 010 1.414L11 12l-2 2-2.293-2.293a1 1 0 010-1.414L10 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 19l-2.293-2.293a1 1 0 00-1.414 0L12 21l2-2 2.293 2.293a1 1 0 001.414 0L19 19z" /></svg>} text="Crop Health Scanner" view="crop-health-scanner" />
@@ -147,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-600 flex-shrink-0" />
                                     <div className={`ml-3 overflow-hidden sidebar-item-text`}>
                                         <p className="font-semibold text-sm text-white whitespace-nowrap">{currentUser.name}</p>
-                                        <p className="text-xs text-gray-400 whitespace-nowrap capitalize">Usage-Based Plan</p>
+                                        <p className="text-xs text-gray-400 whitespace-nowrap truncate">{currentTenantName || 'Hapsara Platform'}</p>
                                     </div>
                                 </button>
                              )}

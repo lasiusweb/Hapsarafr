@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Farmer, FarmerStatus, User } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Farmer, FarmerStatus, User, Tenant } from '../types';
 import { getGeoName } from '../lib/utils';
 import StatusBadge from './StatusBadge';
 import FarmerCard from './FarmerCard';
@@ -14,8 +14,8 @@ interface FarmerListProps {
     selectedFarmerIds: string[];
     onSelectionChange: (farmerId: string, isSelected: boolean) => void;
     onSelectAll: (allSelected: boolean) => void;
-    sortConfig: { key: keyof Farmer | 'id'; direction: 'ascending' | 'descending' } | null;
-    onRequestSort: (key: keyof Farmer | 'id') => void;
+    sortConfig: { key: keyof Farmer | 'id' | 'tenantId'; direction: 'ascending' | 'descending' } | null;
+    onRequestSort: (key: keyof Farmer | 'id' | 'tenantId') => void;
     newlyAddedFarmerId: string | null;
     onHighlightComplete: () => void;
     onBatchUpdate: () => void;
@@ -30,6 +30,8 @@ interface FarmerListProps {
     onNavigate: (path: string) => void;
     listViewMode: 'table' | 'grid';
     onSetListViewMode: (mode: 'table' | 'grid') => void;
+    isSuperAdmin: boolean;
+    tenants: Tenant[];
 }
 
 const FarmerList: React.FC<FarmerListProps> = ({ 
@@ -37,7 +39,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
     onPrint, onExportToPdf, selectedFarmerIds, onSelectionChange, onSelectAll, 
     sortConfig, onRequestSort, newlyAddedFarmerId, onHighlightComplete, onBatchUpdate, onDeleteSelected,
     totalRecords, currentPage, rowsPerPage, onPageChange, onRowsPerPageChange, isLoading, onAddToPrintQueue,
-    onNavigate, listViewMode, onSetListViewMode
+    onNavigate, listViewMode, onSetListViewMode, isSuperAdmin, tenants
 }) => {
     
     useEffect(() => {
@@ -55,6 +57,8 @@ const FarmerList: React.FC<FarmerListProps> = ({
         const user = users.find(u => u.id === userId);
         return user ? user.name : 'Unknown User';
     };
+
+    const tenantNameMap = useMemo(() => new Map(tenants.map(t => [t.id, t.name])), [tenants]);
     
     if (isLoading) {
         return (
@@ -88,7 +92,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
             : <svg className="w-4 h-4 text-gray-900" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>;
     };
 
-    const SortableHeader: React.FC<{ sortKey: keyof Farmer | 'id'; children: React.ReactNode; className?: string }> = ({ sortKey, children, className }) => {
+    const SortableHeader: React.FC<{ sortKey: keyof Farmer | 'id' | 'tenantId'; children: React.ReactNode; className?: string }> = ({ sortKey, children, className }) => {
         const isActive = sortConfig?.key === sortKey;
         const headerClasses = `
             px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group
@@ -257,6 +261,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                 <th className="px-6 py-3"><!-- Empty for spacing --></th>
                                 <SortableHeader sortKey="farmerId">Hap ID</SortableHeader>
                                 <SortableHeader sortKey="fullName">Name</SortableHeader>
+                                {isSuperAdmin && <SortableHeader sortKey="tenantId">Tenant</SortableHeader>}
                                 <SortableHeader sortKey="village">Location</SortableHeader>
                                 <SortableHeader sortKey="status">Status</SortableHeader>
                                 <SortableHeader sortKey="registrationDate">Reg. Date</SortableHeader>
@@ -305,6 +310,11 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                             </div>
                                         </div>
                                     </td>
+                                    {isSuperAdmin && (
+                                        <td data-label="Tenant" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
+                                            {tenantNameMap.get(farmer.tenantId) || 'Unknown'}
+                                        </td>
+                                    )}
                                     <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         <div>{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</div>
                                         <div className="md:hidden font-semibold text-gray-600">{farmer.approvedExtent} Acres</div>
@@ -329,7 +339,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
                             );
                         }) : (
                              <tr>
-                                <td colSpan={9} className="text-center py-10 text-gray-500">
+                                <td colSpan={isSuperAdmin ? 10 : 9} className="text-center py-10 text-gray-500">
                                     No records match your current filters on this page.
                                 </td>
                             </tr>
