@@ -26,7 +26,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     const canManageGroups = permissions.has(Permission.CAN_MANAGE_GROUPS);
     const isSuperAdmin = currentUser.groupId === SUPER_ADMIN_GROUP_ID;
 
-    const [activeTab, setActiveTab] = useState<'users' | 'groups' | 'system'>(isSuperAdmin ? 'system' : canManageUsers ? 'users' : 'groups');
+    const [activeTab, setActiveTab] = useState<'users' | 'groups'>(canManageUsers ? 'users' : 'groups');
     const [editedUsers, setEditedUsers] = useState<User[]>(users);
     const [editedGroups, setEditedGroups] = useState<Group[]>(groups);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(groups[0]?.id || null);
@@ -118,37 +118,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
         }, initialValue);
     }, []);
     
-    const SystemManagementTab = () => (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <button onClick={() => onNavigate('content-manager')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
-                <h4 className="font-bold text-gray-800">Manage Site Content</h4>
-                <p className="text-sm text-gray-600 mt-1">Edit the landing page, FAQs, and privacy policy.</p>
-            </button>
-            <button onClick={() => onNavigate('geo-management')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
-                <h4 className="font-bold text-gray-800">Manage Geography</h4>
-                <p className="text-sm text-gray-600 mt-1">Add, edit, or remove districts, mandals, and villages.</p>
-            </button>
-            <button onClick={() => onNavigate('schema-manager')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
-                <h4 className="font-bold text-gray-800">Schema & Form Manager</h4>
-                <p className="text-sm text-gray-600 mt-1">Add new fields and create dynamic forms for data entry.</p>
-            </button>
-            <button onClick={() => onNavigate('tenant-management')} className="block p-6 bg-gray-50 hover:bg-gray-100 rounded-lg border text-left transition-colors">
-                <h4 className="font-bold text-gray-800">Tenant Management</h4>
-                <p className="text-sm text-gray-600 mt-1">Onboard new organizations and manage subscriptions.</p>
-            </button>
-            <div className="p-6 bg-gray-100 rounded-lg border border-dashed text-left opacity-60">
-                <h4 className="font-bold text-gray-500">System Analytics</h4>
-                <p className="text-sm text-gray-500 mt-1">View cross-tenant usage and performance metrics (coming soon).</p>
-            </div>
-        </div>
-    );
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                         <h1 className="text-3xl font-bold text-gray-800">{isSuperAdmin ? 'Super Admin Panel' : 'Admin Panel'}</h1>
+                         <h1 className="text-3xl font-bold text-gray-800">User &amp; Role Management</h1>
                          <p className="text-gray-500">Manage user access and group permissions.</p>
                     </div>
                      <div className="flex items-center gap-4 flex-shrink-0">
@@ -163,13 +139,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                 
                 <div className="bg-white rounded-lg shadow-xl p-2">
                     <div className="flex border-b">
-                        {isSuperAdmin && <button onClick={() => setActiveTab('system')} className={`px-4 py-3 font-semibold ${activeTab === 'system' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>System Management</button>}
                         {canManageUsers && <button onClick={() => setActiveTab('users')} className={`px-4 py-3 font-semibold ${activeTab === 'users' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>User Management</button>}
                         {canManageGroups && <button onClick={() => setActiveTab('groups')} className={`px-4 py-3 font-semibold ${activeTab === 'groups' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>Group Management</button>}
                     </div>
 
                     <div className="p-6">
-                        {activeTab === 'system' && isSuperAdmin && <SystemManagementTab />}
                         {activeTab === 'users' && canManageUsers && (
                             <div>
                                 <div className="overflow-x-auto">

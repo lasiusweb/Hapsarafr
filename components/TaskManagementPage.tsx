@@ -57,11 +57,12 @@ const TaskModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     onSave: (taskData: Omit<Task, 'createdAt' | 'updatedAt' | 'syncStatus'>, mode: 'create' | 'edit') => Promise<void>;
+    onDelete: (taskId: string) => Promise<void>;
     task?: TaskModel | null;
     users: UserModel[];
     farmers: FarmerModel[];
     currentUser: User;
-}> = ({ isOpen, onClose, onSave, task, users, farmers, currentUser }) => {
+}> = ({ isOpen, onClose, onSave, onDelete, task, users, farmers, currentUser }) => {
     const isEditMode = !!task;
     const [formState, setFormState] = useState({
         title: '',
@@ -80,7 +81,7 @@ const TaskModal: React.FC<{
                 description: task.description || '',
                 status: task.status,
                 priority: task.priority,
-                dueDate: task.dueDate || '',
+                dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
                 assigneeId: task.assigneeId || '',
                 farmerId: task.farmerId || '',
             });
@@ -104,6 +105,12 @@ const TaskModal: React.FC<{
         };
         await onSave(dataToSave, isEditMode ? 'edit' : 'create');
     };
+    
+    const handleDelete = async () => {
+        if (task && window.confirm('Are you sure you want to delete this task?')) {
+            await onDelete(task.id);
+        }
+    }
 
     if (!isOpen) return null;
     
@@ -113,7 +120,12 @@ const TaskModal: React.FC<{
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-2xl w-full max-w-lg">
-                <div className="p-6 border-b"><h2 className="text-xl font-bold text-gray-800">{isEditMode ? 'Edit Task' : 'Create New Task'}</h2></div>
+                <div className="p-6 border-b flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-gray-800">{isEditMode ? 'Edit Task' : 'Create New Task'}</h2>
+                    {isEditMode && (
+                        <button type="button" onClick={handleDelete} className="text-sm font-semibold text-red-600 hover:underline">Delete Task</button>
+                    )}
+                </div>
                 <div className="p-8 space-y-4 max-h-[70vh] overflow-y-auto">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Title</label>
@@ -181,19 +193,29 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
         });
         setModalState({ isOpen: false });
     }, [database]);
+    
+    const handleDeleteTask = useCallback(async (taskId: string) => {
+        await database.write(async () => {
+            const taskToDelete = await database.get<TaskModel>('tasks').find(taskId);
+            await taskToDelete.destroyPermanently();
+        });
+        setModalState({ isOpen: false });
+    }, [database]);
 
     const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>, newStatus: TaskStatus) => {
+        e.preventDefault();
         const taskId = e.dataTransfer.getData('taskId');
-        const task = await database.get<TaskModel>('tasks').find(taskId);
+        const task = tasks.find(t => t.id === taskId);
         if (task && task.status !== newStatus) {
             await database.write(async () => {
                 await task.update(t => {
                     t.status = newStatus;
+                    t.syncStatusLocal = 'pending';
                 });
             });
         }
         e.currentTarget.classList.remove('bg-green-100', 'border-green-400');
-    }, [database]);
+    }, [database, tasks]);
 
     const tasksByStatus = useMemo(() => {
         const grouped: Record<TaskStatus, TaskModel[]> = {
@@ -266,6 +288,7 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
                 isOpen={modalState.isOpen}
                 onClose={() => setModalState({ isOpen: false })}
                 onSave={handleSaveTask}
+                onDelete={handleDeleteTask}
                 task={modalState.task}
                 users={users}
                 farmers={farmers}

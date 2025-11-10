@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, LiveSession, LiveServerMessage, Modality, Blob } from '@google/genai';
+import { GoogleGenAI, LiveSession, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
 import { Farmer } from '../types';
 
 // --- Audio Helper Functions ---
@@ -53,20 +53,42 @@ function createBlob(data: Float32Array): Blob {
   };
 }
 
+// --- CoPilot Function Declarations ---
+const suggestActionFunction: FunctionDeclaration = {
+  name: 'suggestAction',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'Displays a clickable suggestion to the Field Officer in the UI.',
+    properties: {
+      action_name: {
+        type: Type.STRING,
+        description: 'A unique identifier for the action (e.g., "SHOW_PROFIT_SIMULATOR", "CHECK_PEST_ALERT").'
+      },
+      reason: {
+        type: Type.STRING,
+        description: 'A short, compelling reason for the suggestion that will be shown to the officer.'
+      }
+    },
+    required: ['action_name', 'reason']
+  }
+};
+
 interface LiveAssistantModalProps {
     farmer: Farmer;
     onClose: () => void;
+    onExecuteAction: (actionName: string) => void;
 }
 
 type TranscriptItem = { id: number; role: 'user' | 'model'; text: string; isFinal: boolean };
+type Suggestion = { id: string; name: string; args: { action_name: string; reason: string } };
 
-const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose }) => {
+const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose, onExecuteAction }) => {
     const [status, setStatus] = useState<'CONNECTING' | 'LISTENING' | 'SPEAKING' | 'ERROR' | 'CLOSED'>('CONNECTING');
     const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
+    const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
-    // FIX: Add ref for scrolling chat into view.
     const chatEndRef = useRef<HTMLDivElement>(null);
     const audioResourcesRef = useRef<{
         stream: MediaStream | null;
@@ -77,7 +99,6 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
         nextStartTime: number;
     }>({ stream: null, inputAudioContext: null, outputAudioContext: null, scriptProcessor: null, sources: new Set(), nextStartTime: 0 });
 
-    // FIX: Add useEffect to scroll to the bottom of the transcript on new messages.
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcript]);
@@ -98,9 +119,7 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
                 
                 const audioRes = audioResourcesRef.current;
                 audioRes.stream = stream;
-                // FIX: Cast window to `any` to access non-standard `webkitAudioContext` for older browser compatibility.
                 audioRes.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-                // FIX: Cast window to `any` to access non-standard `webkitAudioContext` for older browser compatibility.
                 audioRes.outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
                 
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -115,7 +134,7 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
                     location: `${farmer.village}, ${farmer.mandal}, ${farmer.district}`
                 });
 
-                const systemInstruction = `You are a helpful AI assistant for the Hapsara Oil Palm Mission app. You are in a live voice conversation with a field officer who is viewing a specific farmer's profile. Your goal is to answer questions based *only* on the JSON data provided below. Do not invent information. Be concise and clear. The farmer data is: ${farmerDataContext}`;
+                const systemInstruction = `You are Hapsara CoPilot, an expert AI assistant for a Field Officer visiting a farmer. Your goal is to help the officer be more effective. You will receive a JSON object with the farmer's data and a real-time transcript of the conversation. Based on the data and conversation keywords (like "fertilizer", "cost", "yellow leaves", "pests"), proactively use the 'suggestAction' tool to provide helpful, timely suggestions to the officer in the UI. Also, respond conversationally to the officer's direct questions. The farmer data is: ${farmerDataContext}`;
 
                 sessionPromiseRef.current = ai.live.connect({
                     model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -125,6 +144,7 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
                         systemInstruction: systemInstruction,
                         inputAudioTranscription: {},
                         outputAudioTranscription: {},
+                        tools: [{ functionDeclarations: [suggestActionFunction] }],
                     },
                     callbacks: {
                         onopen: () => {
@@ -161,6 +181,10 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
                                 source.start(audioRes.nextStartTime);
                                 audioRes.nextStartTime += audioBuffer.duration;
                                 audioRes.sources.add(source);
+                            }
+
+                            if (message.toolCall?.functionCalls) {
+                                setSuggestions(prev => [...prev, ...message.toolCall.functionCalls]);
                             }
 
                             if (message.serverContent?.inputTranscription) {
@@ -216,6 +240,25 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
         };
     }, []);
     
+    const handleSuggestionClick = (suggestion: Suggestion) => {
+        // Execute the action in the parent component
+        onExecuteAction(suggestion.args.action_name);
+        
+        // Inform the model the function was "called"
+        sessionPromiseRef.current?.then(session => {
+            session.sendToolResponse({
+                functionResponses: {
+                    id: suggestion.id,
+                    name: suggestion.name,
+                    response: { result: "ok, action has been triggered in the UI." },
+                }
+            });
+        });
+
+        // Remove the suggestion from the UI
+        setSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+    };
+
     const StatusIndicator = () => {
         const iconStyles = "h-10 w-10 text-white";
         switch (status) {
@@ -229,30 +272,55 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="p-4 border-b flex justify-between items-center bg-gray-800 text-white rounded-t-lg">
                     <div className="flex items-center gap-3">
                         <StatusIndicator />
                         <div>
-                            <h2 className="text-xl font-bold">Live AI Assistant</h2>
+                            <h2 className="text-xl font-bold">Hapsara CoPilot</h2>
                             <p className="text-sm text-gray-300">
-                                {status === 'LISTENING' ? "Ask me anything about this farmer..." : status}
+                                {status === 'LISTENING' ? `Listening... | Farmer: ${farmer.fullName}` : status}
                             </p>
                         </div>
                     </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                    {error && <div className="p-4 bg-red-100 text-red-800 rounded-md text-center">{error}</div>}
-                    {transcript.map((item) => (
-                        <div key={item.id} className={`flex items-start gap-2.5 ${item.role === 'user' ? 'justify-end' : ''}`}>
-                            <div className={`flex flex-col max-w-lg p-3 rounded-lg ${item.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'} ${!item.isFinal ? 'opacity-70' : ''}`}>
-                                <p>{item.text}</p>
-                            </div>
+                <div className="flex-1 flex overflow-hidden">
+                    <div className="w-2/3 border-r flex flex-col bg-gray-50">
+                        <div className="p-4 border-b bg-white">
+                             <h3 className="font-bold text-gray-700">Live Transcript</h3>
                         </div>
-                    ))}
-                    <div ref={chatEndRef} />
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {error && <div className="p-4 bg-red-100 text-red-800 rounded-md text-center">{error}</div>}
+                            {transcript.map((item) => (
+                                <div key={item.id} className={`flex items-start gap-2.5 ${item.role === 'user' ? 'justify-end' : ''}`}>
+                                    <div className={`flex flex-col max-w-lg p-3 rounded-lg ${item.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'} ${!item.isFinal ? 'opacity-70' : ''}`}>
+                                        <p>{item.text}</p>
+                                    </div>
+                                </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                        </div>
+                    </div>
+                    <div className="w-1/3 flex flex-col">
+                         <div className="p-4 border-b bg-white">
+                             <h3 className="font-bold text-gray-700">CoPilot Suggestions</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-100">
+                            {suggestions.map(suggestion => (
+                                <button key={suggestion.id} onClick={() => handleSuggestionClick(suggestion)} className="w-full text-left p-4 bg-white rounded-lg shadow-md hover:shadow-lg hover:border-green-300 border border-transparent transition-all">
+                                    <p className="font-semibold text-blue-600">Suggestion:</p>
+                                    <p className="text-sm text-gray-800">{suggestion.args.reason}</p>
+                                </button>
+                            ))}
+                            {suggestions.length === 0 && (
+                                <div className="text-center text-gray-500 pt-10">
+                                    <p>Suggestions from the AI will appear here during your conversation.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
-                <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
+                <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg border-t">
                     <button type="button" onClick={onClose} className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">End Session</button>
                 </div>
             </div>

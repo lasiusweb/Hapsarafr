@@ -1,532 +1,487 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
-import * as ReactDOM from 'react-dom/client';
-import { Farmer, User, Group, Permission, PaymentStage, ActivityType, Filters, AppContent, FarmerStatus, District, Tenant } from './types';
-import FilterBar from './components/FilterBar';
-import FarmerList from './components/FarmerList';
+import { Database, Q } from '@nozbe/watermelondb';
+import { FarmerModel, UserModel, GroupModel, TenantModel } from './db';
 import { useDatabase } from './DatabaseContext';
-import { Q, Query, Model, Database } from '@nozbe/watermelondb';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, AppContentCacheModel, DistrictModel, MandalModel, VillageModel, TenantModel, ResourceModel } from './db';
-import { initializeSupabase } from './lib/supabase';
-import { DEFAULT_GROUPS } from './data/permissionsData';
-import { MOCK_USERS } from './data/userData';
-import { GEO_DATA } from './data/geoData';
-import Sidebar from './components/Sidebar';
-import Notification from './components/Notification';
-import { synchronize } from './lib/sync';
-import { exportToExcel, exportToCsv } from './lib/export';
-import PrintView from './components/PrintView';
-import { farmerModelToPlain, getGeoName, buildGeoNameMap } from './lib/utils';
 import { useQuery } from './hooks/useQuery';
-import { useDebounce } from './hooks/useDebounce';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+// FIX: Import FarmerStatus to resolve type errors.
+import { Farmer, User, Group, Filters, Permission, Tenant, FarmerStatus } from './types';
+import Sidebar from './components/Sidebar';
+import FarmerList from './components/FarmerList';
+import FilterBar from './components/FilterBar';
+import RegistrationForm from './components/RegistrationForm';
+import { synchronize } from './lib/sync';
+import PrintView from './components/PrintView';
+import { exportToExcel, exportToCsv } from './lib/export';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import Notification from './components/Notification';
+import BatchUpdateStatusModal from './components/BatchUpdateStatusModal';
+import ConfirmationModal from './components/ConfirmationModal';
+import { initializeSupabase, getSupabase } from './lib/supabase';
+import LoginScreen from './components/LoginScreen';
+import LandingPage from './components/LandingPage';
+import { MOCK_USERS } from './data/userData';
+import { DEFAULT_GROUPS } from './data/permissionsData';
+import { farmerModelToPlain, plotModelToPlain } from './lib/utils';
 
-// Lazily import components to enable code-splitting
-const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
-const LandingPage = lazy(() => import('./components/LandingPage'));
-const LoginScreen = lazy(() => import('./components/LoginScreen'));
-const BatchUpdateStatusModal = lazy(() => import('./components/BatchUpdateStatusModal'));
-const BulkImportModal = lazy(() => import('./components/BulkImportModal'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
 const ProfilePage = lazy(() => import('./components/ProfilePage'));
 const AdminPage = lazy(() => import('./components/AdminPage'));
-const ConfirmationModal = lazy(() => import('./components/ConfirmationModal'));
-const AcceptInvitation = lazy(() => import('./components/AcceptInvitation'));
-const RawDataView = lazy(() => import('./components/RawDataView'));
-const BillingPage = lazy(() => import('./components/BillingPage'));
-const UsageAnalyticsPage = lazy(() => import('./components/UsageAnalyticsPage'));
-const PrivacyModal = lazy(() => import('./components/PrivacyModal'));
+const BulkImportModal = lazy(() => import('./components/BulkImportModal'));
+const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
+const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
+const ReportsPage = lazy(() => import('./components/ReportsPage'));
+const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
+const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
 const HelpPage = lazy(() => import('./components/HelpPage'));
-const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const SubscriptionManagementPage = lazy(() => import('./components/SubscriptionManagementPage'));
-const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
-const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
-const SubsidyManagementPage = lazy(() => import('./components/SubsidyManagementPage'));
-const MapView = lazy(() => import('./components/MapView'));
-const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
-const ReportsPage = lazy(() => import('./components/ReportsPage'));
-const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerPage'));
-const SupabaseSettingsModal = lazy(() => import('./components/SupabaseSettingsModal'));
-const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
 const GeoManagementPage = lazy(() => import('./components/GeoManagementPage'));
 const SchemaManagerPage = lazy(() => import('./components/SchemaManagerPage'));
 const TenantManagementPage = lazy(() => import('./components/TenantManagementPage'));
-const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
-const DistributionReportPage = lazy(() => import('./components/DistributionReportPage'));
-const DiscussModeModal = lazy(() => import('./components/DiscussModeModal'));
-// Phase 3 Placeholders
-const YieldPredictionPage = lazy(() => import('./components/YieldPredictionPage'));
+const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerPage'));
 const SatelliteAnalysisPage = lazy(() => import('./components/SatelliteAnalysisPage'));
-const FinancialLedgerPage = lazy(() => import('./components/FinancialLedgerPage'));
-// Phase 2 Placeholders
+const YieldPredictionPage = lazy(() => import('./components/YieldPredictionPage'));
+const PerformanceAnalyticsPage = lazy(() => import('./components/PerformanceAnalyticsPage'));
 const TaskManagementPage = lazy(() => import('./components/TaskManagementPage'));
+const FinancialLedgerPage = lazy(() => import('./components/FinancialLedgerPage'));
+const MapView = lazy(() => import('./components/MapView'));
+const SubsidyManagementPage = lazy(() => import('./components/SubsidyManagementPage'));
+const AssistanceSchemesPage = lazy(() => import('./components/AssistanceSchemesPage'));
+const QualityAssessmentPage = lazy(() => import('./components/QualityAssessmentPage'));
+const ProcessingPage = lazy(() => import('./components/ProcessingPage'));
+const EquipmentManagementPage = lazy(() => import('./components/EquipmentManagementPage'));
+const FinancialDashboardPage = lazy(() => import('./components/FinancialDashboardPage'));
+const AgriStorePage = lazy(() => import('./components/AgriStorePage'));
+const EquipmentAccessProgramPage = lazy(() => import('./components/EquipmentAccessProgramPage'));
 
 
-// Type declarations for CDN libraries
-declare const html2canvas: any;
-declare const jspdf: any;
-
-const initialFilters: Filters = {
-  searchQuery: '',
-  district: '',
-  mandal: '',
-  village: '',
-  status: '',
-  registrationDateFrom: '',
-  registrationDateTo: '',
-};
-
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner' | 'data-health' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'resource-management' | 'distribution-report' | 'yield-prediction' | 'satellite-analysis' | 'financial-ledger' | 'task-management';
-type ParsedHash = 
-    | { view: View; params: {} }
-    | { view: 'farmer-details'; params: { farmerId: string } }
-    | { view: 'not-found', params: {} };
-
-
-// Helper function to get view from hash
-const parseHash = (): ParsedHash => {
-    const hash = window.location.hash.replace(/^#\/?/, '');
-    const [path, id] = hash.split('/');
-    
-    if (path === 'farmer-details' && id) {
-        return { view: 'farmer-details', params: { farmerId: id } };
-    }
-
-    const simpleViews: View[] = ['farmer-directory', 'profile', 'admin', 'billing', 'usage-analytics', 'content-manager', 'subscription-management', 'print-queue', 'subsidy-management', 'map-view', 'help', 'id-verification', 'reports', 'crop-health-scanner', 'data-health', 'geo-management', 'schema-manager', 'tenant-management', 'resource-management', 'distribution-report', 'yield-prediction', 'satellite-analysis', 'financial-ledger', 'task-management'];
-    if (simpleViews.includes(path as View)) {
-        return { view: path as View, params: {} };
-    }
-
-    if (path === '' || path === 'dashboard') {
-        return { view: 'dashboard', params: {} };
-    }
-
-    return { view: 'not-found', params: {} };
-};
-
-const ModalLoader: React.FC<{ message?: string }> = ({ message = "Loading Application..." }) => (
-    <div className="fixed inset-0 bg-gray-100 flex flex-col items-center justify-center z-[100]">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500 mb-4"></div>
-        <p className="text-lg text-gray-600 font-semibold">{message}</p>
-    </div>
-);
-
-const seedInitialData = async (database: Database, tenantId: string) => {
-    try {
-        const resourcesCollection = database.get<ResourceModel>('resources');
-        const existingResources = await resourcesCollection.query(Q.where('tenant_id', tenantId)).fetch();
-        
-        if (existingResources.length > 0) {
-            return; // Data already seeded for this tenant
-        }
-
-        const defaultResources = [
-            { name: 'Manually Handled Oil Palm Cutter', unit: 'unit', description: 'Assistance: up to ₹2,500/unit' },
-            { name: 'Protective Wire Mesh', unit: 'unit', description: 'Assistance: up to ₹20,000/unit' },
-            { name: 'Motorized Chisel', unit: 'unit', description: 'Assistance: up to ₹15,000/unit' },
-            { name: 'Aluminium Portable Ladder', unit: 'unit', description: 'Assistance: up to ₹5,000/unit' },
-            { name: 'Chaff Cutter', unit: 'unit', description: 'Assistance: up to ₹50,000/unit' },
-            { name: 'Tractor with Trolley (up to 20 HP)', unit: 'unit', description: 'As per SMAM guidelines' },
-        ];
-
-        await database.write(async () => {
-            for (const resource of defaultResources) {
-                await resourcesCollection.create(r => {
-                    r.name = resource.name;
-                    r.unit = resource.unit;
-                    r.description = resource.description;
-                    r.tenantId = tenantId;
-                });
-            }
-        });
-
-        console.log('Default resources seeded successfully.');
-
-    } catch (error) {
-        console.error("Failed to seed initial data:", error);
-    }
-};
+type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management'| 'financial-dashboard' | 'agri-store' | 'equipment-access';
 
 const App: React.FC = () => {
     const database = useDatabase();
+    const [currentView, setCurrentView] = useState<ViewType>('dashboard');
+    const [viewParam, setViewParam] = useState<string | null>(null);
     const isOnline = useOnlineStatus();
-    const [appState, setAppState] = useState<string>('LOADING'); // LOADING, LANDING, AUTH, APP
-    const [supabase, setSupabase] = useState<any | null>(null);
+    
+    // Auth & User State
+    const [session, setSession] = useState<any | null>(null);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [currentTenantName, setCurrentTenantName] = useState<string | null>(null);
-  
-    // UI State
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [currentHash, setCurrentHash] = useState(window.location.hash);
-    const [isShowingRegistrationForm, setIsShowingRegistrationForm] = useState(false);
-    const [editingFarmer, setEditingFarmer] = useState<FarmerModel | null>(null);
-    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [farmerToPrint, setFarmerToPrint] = useState<Farmer | null>(null);
-    const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
-    const [isBatchUpdateModalOpen, setIsBatchUpdateModalOpen] = useState(false);
-    const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-    const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
-    const [isRawDataViewOpen, setIsRawDataViewOpen] = useState(false);
-    const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-    const [showChangelogModal, setShowChangelogModal] = useState(false);
-    const [printQueue, setPrintQueue] = useState<string[]>([]);
-    const [showSupabaseSettingsModal, setShowSupabaseSettingsModal] = useState(false);
-    const [listViewMode, setListViewMode] = useState<'table' | 'grid'>('table');
-    const [isDiscussModeOpen, setIsDiscussModeOpen] = useState(false);
-
+    const [initialAuthCheck, setInitialAuthCheck] = useState(false);
+    const [showLandingPage, setShowLandingPage] = useState(true);
+    
     // Data State
-    const [filters, setFilters] = useState<Filters>(initialFilters);
-    const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id' | 'tenantId'; direction: 'ascending' | 'descending' } | null>({ key: 'registrationDate', direction: 'descending' });
-    const [currentPage, setCurrentPage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const allFarmersQuery = useMemo(() => database.get<FarmerModel>('farmers').query(), [database]);
+    const allFarmers = useQuery(allFarmersQuery);
+    const allUsersQuery = useMemo(() => database.get<UserModel>('users').query(), [database]);
+    const allUsers = useQuery(allUsersQuery);
+    const allGroupsQuery = useMemo(() => database.get<GroupModel>('groups').query(), [database]);
+    const allGroups = useQuery(allGroupsQuery);
+    const allTenantsQuery = useMemo(() => database.get<TenantModel>('tenants').query(), [database]);
+    const allTenants = useQuery(allTenantsQuery);
+    
+    const [isLoading, setIsLoading] = useState(true);
+    const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    
+    // Modals & Notifications
+    const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+    const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+    // Sync state
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [lastSync, setLastSync] = useState<Date | null>(null);
+
+    // PDF/Print state
+    const [farmerToPrint, setFarmerToPrint] = useState<FarmerModel | null>(null);
+    const [pdfExportData, setPdfExportData] = useState<{ farmer: FarmerModel, plots: any[] } | null>(null);
+    const [printQueue, setPrintQueue] = useState<string[]>([]);
+    
+    // Edit state
+    const [farmerToEdit, setFarmerToEdit] = useState<FarmerModel | null>(null);
+    
+    // Selection for batch actions
+    const [selectedFarmerIds, setSelectedFarmerIds] = useState<string[]>([]);
+    const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
+    const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+
+    // Highlight new farmer
     const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
-
-    // Data Queries
-    const allGroups = useQuery(useMemo(() => database.get<GroupModel>('groups').query(), [database]));
-    const allTenants = useQuery(useMemo(() => database.get<TenantModel>('tenants').query(), [database]));
-    const allFarmerModels = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
-    const allPaymentModels = useQuery(useMemo(() => database.get<SubsidyPaymentModel>('subsidy_payments').query(), [database]));
-    const allActivityLogModels = useQuery(useMemo(() => database.get<ActivityLogModel>('activity_logs').query(), [database]));
-    const appContentRecord = useQuery(useMemo(() => database.get<AppContentCacheModel>('app_content_cache').query(), [database]));
     
-    // Derived plain data
-    const allUsersFromDB = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database]));
-    const plainUsers = useMemo(() => allUsersFromDB.map(u => ({ id: u.id, name: u.name, email: u.email!, avatar: u.avatar, groupId: u.groupId, tenantId: u.tenantId, is_verified: u.isVerified! })), [allUsersFromDB]);
-    const plainGroups = useMemo(() => allGroups.map(g => ({ id: g.id, name: g.name, permissions: g.parsedPermissions, tenantId: g.tenantId })), [allGroups]);
-    // FIX: Convert FarmerModel[] to Farmer[] to satisfy component prop types.
-    const plainFarmers: Farmer[] = useMemo(() => allFarmerModels.map(farmerModelToPlain).filter((f): f is Farmer => f !== null), [allFarmerModels]);
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(25);
+    const [listViewMode, setListViewMode] = useState<'table' | 'grid'>('table');
+    
+    const supabase = useMemo(() => initializeSupabase(), []);
 
-    // Seed initial data effect
+    // --- Auth Effects ---
     useEffect(() => {
-        if (database && currentUser) {
-            seedInitialData(database, currentUser.tenantId);
+        if (!supabase) {
+            setInitialAuthCheck(true);
+            return;
         }
-    }, [database, currentUser]);
-    
+
+        supabase.auth.getSession().then(({ data: { session } }: any) => {
+            setSession(session);
+            setInitialAuthCheck(true);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+            setSession(session);
+        });
+
+        return () => subscription.unsubscribe();
+    }, [supabase]);
+
     useEffect(() => {
-      const sp = initializeSupabase();
-      setSupabase(sp);
-  
-      if (!sp) {
-        setAppState('LANDING'); // Fallback if Supabase isn't configured
-        return;
-      }
-  
-      const { data: { subscription } } = sp.auth.onAuthStateChange(async (_event: string, session: any) => {
-        if (session?.user) {
-          const userEmail = session.user.email;
-          if (userEmail) {
-            const users = await database.get<UserModel>('users').query(Q.where('email', userEmail)).fetch();
-            if (users.length > 0) {
-              const userModel = users[0];
-              const plainUser: User = { id: userModel.id, name: userModel.name, email: userModel.email!, avatar: userModel.avatar, groupId: userModel.groupId, tenantId: userModel.tenantId, is_verified: userModel.isVerified! };
-              
-              if (!userModel.isVerified) {
-                  await database.write(async () => {
-                      await userModel.update(u => { u.isVerified = true; });
-                  });
-              }
-
-              setCurrentUser(plainUser);
-              const tenantModel = await database.get<TenantModel>('tenants').find(plainUser.tenantId);
-              setCurrentTenantName(tenantModel.name);
-              setAppState('APP');
-
-            } else {
-              setNotification({ message: 'User profile not found locally. Contact admin.', type: 'error' });
-              await sp.auth.signOut();
-            }
-          }
+        if (session) {
+            // In a real app, you'd fetch the user profile from your DB based on session.user.id
+            // For this PoC, we'll find a mock user by email.
+            const user = MOCK_USERS.find(u => u.email === session.user.email);
+            setCurrentUser(user || MOCK_USERS[2]); // Default to data entry if not found
+            setShowLandingPage(false);
         } else {
-          setCurrentUser(null);
-          setCurrentTenantName(null);
-          setAppState('AUTH');
+            setCurrentUser(null);
         }
-      });
-  
-      sp.auth.getSession().then(({ data: { session } }: any) => {
-        if (!session) {
-          setAppState('LANDING');
-        }
-      });
-  
-      return () => subscription.unsubscribe();
-    }, [database]);
+    }, [session]);
 
-
-    const handleLogout = async () => {
-        if (supabase) {
-            await supabase.auth.signOut();
+    // --- Routing ---
+    const handleNavigation = useCallback((view: ViewType, param: string | null = null) => {
+        if (view === 'farmer-details' && param) {
+            window.location.hash = `/${view}/${param}`;
+        } else if (view === 'register-farmer') {
+            setFarmerToEdit(null);
+            setShowRegistrationForm(true);
         }
-        setAppState('AUTH');
+        else {
+            window.location.hash = `/${view}`;
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleHashChange = () => {
+            const hash = window.location.hash.replace('#/', '');
+            const [view, param] = hash.split('/');
+            setCurrentView((view as ViewType) || 'dashboard');
+            setViewParam(param || null);
+        };
+        window.addEventListener('hashchange', handleHashChange, false);
+        handleHashChange(); // Initial load
+        return () => window.removeEventListener('hashchange', handleHashChange, false);
+    }, []);
+
+    const navigateWithFilter = (view: ViewType, newFilters: Partial<Omit<Filters, 'searchQuery' | 'registrationDateFrom' | 'registrationDateTo'>>) => {
+        setFilters(prev => ({...prev, ...newFilters}));
+        handleNavigation(view);
     };
 
-    const handleRegisterFarmer = async (farmerData: Farmer, photoFile?: File) => {
-        const farmersCollection = database.get<FarmerModel>('farmers');
-        await database.write(async () => {
-            let photoBase64 = farmerData.photo;
-            if (photoFile) {
-                photoBase64 = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(photoFile);
-                });
-            }
+    // --- User Permissions ---
+    const userPermissions = useMemo(() => {
+        if (!currentUser) return new Set<Permission>();
+        const group = allGroups.find(g => g.id === currentUser.groupId);
+        return new Set(group ? group.permissions : []);
+    }, [currentUser, allGroups]);
 
-            await farmersCollection.create(f => {
-                Object.assign(f, {
-                    ...farmerData,
-                    id: farmerData.id,
+    const canEdit = userPermissions.has(Permission.CAN_EDIT_FARMER);
+    const canDelete = userPermissions.has(Permission.CAN_DELETE_FARMER);
+    const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
+    
+    // --- Data Handlers ---
+
+    const handleRegisterFarmer = useCallback(async (farmerData: Farmer, photoFile?: File) => {
+        let photoBase64 = '';
+        if (photoFile) {
+            photoBase64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(photoFile);
+            });
+        }
+        
+        await database.write(async () => {
+            const newFarmer = await database.get<FarmerModel>('farmers').create(farmer => {
+                const { id, createdAt, updatedAt, ...rest } = farmerData;
+                Object.assign(farmer, {
+                    ...rest,
                     photo: photoBase64,
                     syncStatusLocal: 'pending',
-                    createdBy: currentUser!.id,
-                    updatedBy: currentUser!.id,
-                    tenantId: currentUser!.tenantId
+                    createdBy: currentUser?.id,
+                    updatedBy: currentUser?.id,
+                    tenantId: currentUser?.tenantId,
                 });
-                f._raw.id = farmerData.id;
             });
+            setNewlyAddedFarmerId(newFarmer.id);
         });
-        setNewlyAddedFarmerId(farmerData.id);
-    };
+        setShowRegistrationForm(false);
+        setNotification({ message: 'Farmer registered successfully!', type: 'success' });
+    }, [database, currentUser]);
     
-    const handleSaveProfile = async (updatedUser: User) => {
-        const usersCollection = database.get<UserModel>('users');
-        const userToUpdate = await usersCollection.find(updatedUser.id);
+     const handleUpdateFarmer = useCallback(async (updatedFarmerData: Farmer, photoFile?: File) => {
+        if (!farmerToEdit) return;
+
+        let photoBase64 = updatedFarmerData.photo;
+        if (photoFile) {
+            photoBase64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(photoFile);
+            });
+        }
+
         await database.write(async () => {
-            await userToUpdate.update(user => {
-                user.name = updatedUser.name;
-                user.avatar = updatedUser.avatar;
+            await farmerToEdit.update(farmer => {
+                const { id, createdAt, createdBy, farmerId, applicationId, asoId, ...updatableData } = updatedFarmerData;
+                Object.assign(farmer, {
+                    ...updatableData,
+                    photo: photoBase64,
+                    syncStatusLocal: 'pending',
+                    updatedBy: currentUser?.id,
+                });
             });
         });
-        setCurrentUser(updatedUser);
+        setShowRegistrationForm(false);
+        setFarmerToEdit(null);
+        setNotification({ message: 'Farmer details updated successfully.', type: 'success' });
+    }, [database, farmerToEdit, currentUser?.id]);
+    
+    const handleEditFarmer = (farmerId: string) => {
+        const farmer = allFarmers.find(f => f.id === farmerId);
+        if (farmer) {
+            setFarmerToEdit(farmer);
+            setShowRegistrationForm(true);
+        }
     };
 
-    const handleSaveUsers = async (updatedUsers: User[]) => {
-        const usersCollection = database.get<UserModel>('users');
-        await database.write(async () => {
-            for (const updatedUser of updatedUsers) {
-                const userToUpdate = await usersCollection.find(updatedUser.id);
-                await userToUpdate.update(user => {
-                    user.groupId = updatedUser.groupId;
-                });
-            }
-        });
+    const handleDeleteSelected = () => {
+        if(selectedFarmerIds.length > 0) {
+            setShowDeleteConfirmation(true);
+        }
     };
-    const handleSaveGroups = async (updatedGroups: Group[]) => {
-        const groupsCollection = database.get<GroupModel>('groups');
+    
+    const handleConfirmDelete = async () => {
         await database.write(async () => {
-            for (const updatedGroup of updatedGroups) {
-                try {
-                    const groupToUpdate = await groupsCollection.find(updatedGroup.id);
-                    await groupToUpdate.update(group => {
-                        group.name = updatedGroup.name;
-                        group.permissionsStr = JSON.stringify(updatedGroup.permissions);
-                    });
-                } catch (error) { // It might be a new group
-                    if (String(error).includes('not found')) {
-                        await groupsCollection.create(group => {
-                            group._raw.id = updatedGroup.id;
-                            group.name = updatedGroup.name;
-                            group.permissionsStr = JSON.stringify(updatedGroup.permissions);
-                            group.tenantId = updatedGroup.tenantId;
-                        });
-                    } else {
-                        throw error;
-                    }
+            // FIX: Import Q from watermelondb to fix query errors.
+            const farmersToDelete = await database.get<FarmerModel>('farmers').query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
+            for (const farmer of farmersToDelete) {
+                // If synced, mark for deletion. If not, delete permanently.
+                if (farmer.syncStatusLocal === 'synced') {
+                    await farmer.update(f => { f.syncStatusLocal = 'pending_delete'; });
+                } else {
+                    await farmer.destroyPermanently();
                 }
             }
         });
+        setNotification({ message: `${selectedFarmerIds.length} farmer(s) marked for deletion.`, type: 'info' });
+        setSelectedFarmerIds([]);
+        setShowDeleteConfirmation(false);
     };
 
-    if (appState === 'LOADING') {
-        return <ModalLoader />;
-    }
 
-    if (appState === 'LANDING') {
-        return (
-            <Suspense fallback={<ModalLoader />}>
-                <LandingPage onLaunch={() => setAppState('AUTH')} appContent={null} />
-            </Suspense>
-        );
+    const handleBatchUpdateStatus = async (newStatus: FarmerStatus) => {
+        await database.write(async () => {
+            // FIX: Import Q from watermelondb to fix query errors.
+            const farmersToUpdate = await database.get<FarmerModel>('farmers').query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
+            for (const farmer of farmersToUpdate) {
+                await farmer.update(f => {
+                    f.status = newStatus;
+                    f.syncStatusLocal = 'pending';
+                    f.updatedBy = currentUser?.id;
+                });
+            }
+        });
+        setNotification({ message: `Status updated for ${selectedFarmerIds.length} farmer(s).`, type: 'success' });
+        setSelectedFarmerIds([]);
+        setShowBatchUpdateModal(false);
+    };
+
+    // --- Sync & Export Handlers ---
+    
+    const handleSync = useCallback(async () => {
+        if (!supabase) {
+            setNotification({ message: 'Cloud sync is not configured.', type: 'error' });
+            return;
+        }
+        setIsSyncing(true);
+        try {
+            const { pushed, deleted } = await synchronize(database, supabase);
+            setLastSync(new Date());
+            setNotification({ message: `Sync complete. Pushed ${pushed} and deleted ${deleted} records.`, type: 'success' });
+        } catch (error: any) {
+            setNotification({ message: `Sync failed: ${error.message}`, type: 'error' });
+        } finally {
+            setIsSyncing(false);
+        }
+    }, [database, supabase]);
+
+    const handlePrint = useCallback((farmerId: string) => {
+        const farmer = allFarmers.find(f => f.id === farmerId);
+        if (farmer) {
+            setFarmerToPrint(farmer);
+            setTimeout(() => window.print(), 500);
+        }
+    }, [allFarmers]);
+    
+    const handleExportToPdf = useCallback(async (farmerId: string) => {
+        const farmer = allFarmers.find(f => f.id === farmerId);
+        if(farmer) {
+            const plots = await farmer.plots.fetch();
+            setPdfExportData({ farmer, plots });
+            setTimeout(async () => {
+                const element = document.getElementById('pdf-print-view');
+                if(element) {
+                    const canvas = await html2canvas(element, { scale: 2 });
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    pdf.save(`${farmer.farmerId}_${farmer.fullName}.pdf`);
+                    setPdfExportData(null);
+                }
+            }, 500);
+        }
+    }, [allFarmers]);
+    
+    const handleAddToPrintQueue = (farmerIds: string[]) => {
+        setPrintQueue(prev => [...new Set([...prev, ...farmerIds])]);
+        setNotification({ message: `${farmerIds.length} farmer(s) added to print queue.`, type: 'info' });
+        setSelectedFarmerIds([]); // Clear selection after adding
+    };
+
+
+    // --- Render Logic ---
+    if (!initialAuthCheck) {
+        return <div className="flex items-center justify-center h-screen">Loading...</div>;
     }
     
-    if (appState === 'AUTH') {
-        return (
-            <Suspense fallback={<ModalLoader />}>
-                <LoginScreen supabase={supabase} />
-            </Suspense>
-        );
+    if (!currentUser) {
+        if (showLandingPage) {
+            return <LandingPage onLaunch={() => setShowLandingPage(false)} appContent={null} />;
+        }
+        return <LoginScreen supabase={supabase} />;
     }
     
-    if (appState === 'APP' && currentUser) {
-        const parsed = parseHash();
-        const { view, params } = parsed;
-        const isSuperAdmin = currentUser.groupId === 'group-super-admin';
-        const tenants: Tenant[] = allTenants.map(t => ({ id: t.id, name: t.name, subscriptionStatus: t.subscriptionStatus, createdAt: new Date(t.createdAt).toISOString() }));
+    const renderView = () => {
+        const farmerListProps = {
+            canEdit, canDelete,
+            onPrint: handlePrint,
+            onExportToPdf: handleExportToPdf,
+            onEdit: handleEditFarmer,
+            onBatchUpdate: () => setShowBatchUpdateModal(true),
+            onDeleteSelected: handleDeleteSelected,
+            onNavigate: (path: string) => handleNavigation('farmer-details', path.split('/')[1]),
+        };
 
-        return (
-            <div className="flex h-screen bg-gray-100">
-                <Suspense fallback={<div />}>
-                    <Sidebar 
-                        isOpen={isSidebarOpen}
-                        isCollapsed={isSidebarCollapsed}
-                        onToggleCollapse={() => setIsSidebarCollapsed(c => !c)}
-                        currentUser={currentUser}
-                        currentTenantName={currentTenantName}
-                        onLogout={handleLogout}
-                        onNavigate={(path) => window.location.hash = path}
-                        currentView={parseHash().view as View}
-                        permissions={new Set(plainGroups.find(g => g.id === currentUser.groupId)?.permissions)}
-                        onImport={() => {}}
-                        onExportExcel={() => {}}
-                        onExportCsv={() => {}}
-                        onViewRawData={() => {}}
-                        onShowPrivacy={() => {}}
-                        onShowChangelog={() => {}}
-                        printQueueCount={0}
-                        onShowSupabaseSettings={() => {}}
-                    />
-                </Suspense>
-                <div className="flex-1 flex flex-col overflow-auto p-6">
-                    <Suspense fallback={<ModalLoader />}>
-                       {view === 'dashboard' && (
-                            <Dashboard 
-                                farmers={plainFarmers}
-                                onNavigateWithFilter={() => {
-                                    // This will be implemented in a future phase
-                                }}
-                            />
-                        )}
-                       {view === 'farmer-directory' && (
-                            <FarmerList
-                                farmers={plainFarmers}
-                                users={plainUsers}
-                                tenants={tenants}
-                                isSuperAdmin={isSuperAdmin}
-                                canEdit={true}
-                                canDelete={true}
-                                onPrint={() => {}}
-                                onExportToPdf={() => {}}
-                                selectedFarmerIds={[]}
-                                onSelectionChange={() => {}}
-                                onSelectAll={() => {}}
-                                sortConfig={sortConfig}
-                                onRequestSort={(key) => {}}
-                                newlyAddedFarmerId={null}
-                                onHighlightComplete={() => {}}
-                                onBatchUpdate={() => {}}
-                                onDeleteSelected={() => {}}
-                                totalRecords={allFarmerModels.length}
-                                currentPage={1}
-                                rowsPerPage={10}
-                                onPageChange={() => {}}
-                                onRowsPerPageChange={() => {}}
-                                isLoading={false}
-                                onAddToPrintQueue={() => {}}
-                                onNavigate={(path) => window.location.hash = path}
-                                listViewMode={listViewMode}
-                                onSetListViewMode={setListViewMode}
-                            />
-                        )}
-                        {view === 'profile' && (
-                            <ProfilePage
-                                currentUser={currentUser}
-                                groups={plainGroups}
-                                onSave={handleSaveProfile}
-                                onBack={() => window.location.hash = 'dashboard'}
-                                setNotification={setNotification}
-                            />
-                        )}
-                        {view === 'admin' && (
-                            <AdminPage
-                                users={plainUsers}
-                                groups={plainGroups}
-                                currentUser={currentUser}
-                                onSaveUsers={handleSaveUsers}
-                                onSaveGroups={handleSaveGroups}
-                                onBack={() => window.location.hash = 'dashboard'}
-                                onNavigate={(v) => window.location.hash = v}
-                                setNotification={setNotification}
-                            />
-                        )}
-                        {view === 'help' && (
-                           <HelpPage onBack={() => window.location.hash = 'dashboard'} />
-                        )}
-                        {view === 'reports' && (
-                            <ReportsPage allFarmers={plainFarmers} onBack={() => window.location.hash = 'dashboard'} />
-                        )}
-                        {view === 'crop-health-scanner' && (
-                            <CropHealthScannerPage onBack={() => window.location.hash = 'dashboard'} />
-                        )}
-                        {view === 'resource-management' && (
-                            <ResourceManagementPage onBack={() => window.location.hash = 'admin'} />
-                        )}
-                        {view === 'distribution-report' && (
-                            <DistributionReportPage onBack={() => window.location.hash = 'dashboard'} />
-                        )}
-                        {view === 'farmer-details' && 'farmerId' in params && (
-                            <FarmerDetailsPage
-                                farmerId={params.farmerId}
-                                users={plainUsers}
-                                currentUser={currentUser}
-                                onBack={() => window.location.hash = 'farmer-directory'}
-                                permissions={new Set(plainGroups.find(g => g.id === currentUser.groupId)?.permissions)}
-                                setNotification={setNotification}
-                            />
-                        )}
-                        {/* Phase 3 Placeholders */}
-                        {view === 'yield-prediction' && <YieldPredictionPage onBack={() => window.location.hash = 'dashboard'} />}
-                        {view === 'satellite-analysis' && <SatelliteAnalysisPage onBack={() => window.location.hash = 'dashboard'} />}
-                        {view === 'financial-ledger' && <FinancialLedgerPage onBack={() => window.location.hash = 'dashboard'} />}
-                        {/* Phase 2 Placeholders */}
-                        {view === 'task-management' && <TaskManagementPage onBack={() => window.location.hash = 'dashboard'} currentUser={currentUser} />}
+        switch (currentView) {
+            case 'dashboard': return <Dashboard farmers={allFarmers} onNavigateWithFilter={navigateWithFilter} />;
+            case 'farmer-directory': return (
+                <FarmerList 
+                    {...farmerListProps} 
+                    farmers={[]} 
+                    users={[]} 
+                    selectedFarmerIds={selectedFarmerIds}
+                    onSelectionChange={() => {}}
+                    onSelectAll={() => {}}
+                    sortConfig={null}
+                    onRequestSort={() => {}}
+                    newlyAddedFarmerId={null}
+                    onHighlightComplete={() => {}}
+                    totalRecords={0}
+                    currentPage={1}
+                    rowsPerPage={25}
+                    onPageChange={() => {}}
+                    onRowsPerPageChange={() => {}}
+                    isLoading={false}
+                    onAddToPrintQueue={handleAddToPrintQueue}
+                    listViewMode={listViewMode}
+                    onSetListViewMode={setListViewMode}
+                    isSuperAdmin={isSuperAdmin}
+                    tenants={[]}
+                />
+            );
+            case 'profile': return <ProfilePage currentUser={currentUser} groups={allGroups} onSave={async() => {}} onBack={() => handleNavigation('dashboard')} setNotification={setNotification} />;
+            case 'admin': return <AdminPage currentUser={currentUser} users={allUsers} groups={allGroups} onSaveUsers={async() => {}} onSaveGroups={async() => {}} onBack={() => handleNavigation('dashboard')} onNavigate={handleNavigation} setNotification={setNotification} />;
+            case 'farmer-details': return viewParam ? <FarmerDetailsPage farmerId={viewParam} users={allUsers} currentUser={currentUser} onBack={() => handleNavigation('farmer-directory')} permissions={userPermissions} setNotification={setNotification} /> : <NotFoundPage onBack={() => handleNavigation('dashboard')} />;
+            case 'print-queue': return <PrintQueuePage queuedFarmerIds={printQueue} users={allUsers} onRemove={(id) => setPrintQueue(q => q.filter(i => i !== id))} onClear={() => setPrintQueue([])} onBack={() => handleNavigation('farmer-directory')} />;
+            case 'reports': return <ReportsPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} />;
+            case 'id-verification': return <IdVerificationPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} />;
+            case 'data-health': return <DataHealthPage allFarmers={allFarmers} onNavigate={(path) => handleNavigation('farmer-details', path.split('/')[1])} onBack={() => handleNavigation('dashboard')} />;
+            case 'help': return <HelpPage onBack={() => handleNavigation('dashboard')} />;
+            case 'content-manager': return <ContentManagerPage supabase={supabase} currentContent={null} onContentSave={() => {}} onBack={() => handleNavigation('admin')} />;
+            case 'geo-management': return <GeoManagementPage onBack={() => handleNavigation('admin')} />;
+            case 'schema-manager': return <SchemaManagerPage onBack={() => handleNavigation('admin')} />;
+            case 'tenant-management': return <TenantManagementPage onBack={() => handleNavigation('admin')} />;
+            case 'crop-health': return <CropHealthScannerPage onBack={() => handleNavigation('dashboard')} />;
+            case 'satellite-analysis': return <SatelliteAnalysisPage onBack={() => handleNavigation('dashboard')} />;
+            case 'yield-prediction': return <YieldPredictionPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} />;
+            case 'performance-analytics': return <PerformanceAnalyticsPage onBack={() => handleNavigation('dashboard')} />;
+            case 'task-management': return <TaskManagementPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            case 'financial-ledger': return <FinancialLedgerPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            case 'map-view': return <MapView farmers={allFarmers} onNavigate={(path) => handleNavigation('farmer-details', path.split('/')[1])} />;
+            case 'subsidy-management': return <SubsidyManagementPage allFarmers={allFarmers} payments={[]} currentUser={currentUser} onBack={() => handleNavigation('dashboard')} database={database} setNotification={setNotification} />;
+            case 'assistance-schemes': return <AssistanceSchemesPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'quality-assessment': return <QualityAssessmentPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} allFarmers={allFarmers} setNotification={setNotification} />;
+            case 'processing-transparency': return <ProcessingPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'equipment-management': return <EquipmentManagementPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            case 'financial-dashboard': return <FinancialDashboardPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            case 'agri-store': return <AgriStorePage onBack={() => handleNavigation('dashboard')} />;
+            case 'equipment-access': return <EquipmentAccessProgramPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            default: return <NotFoundPage onBack={() => handleNavigation('dashboard')} />;
+        }
+    }
+
+    return (
+        <div className="flex h-screen bg-gray-100">
+            <Sidebar
+                currentView={currentView}
+                onNavigate={handleNavigation}
+                isCollapsed={isSidebarCollapsed}
+                onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                currentUser={currentUser}
+                userPermissions={userPermissions}
+            />
+            <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+                <main className="flex-1 overflow-y-auto p-6">
+                    <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-green-500"></div></div>}>
+                        {renderView()}
                     </Suspense>
-                </div>
-                {notification && (
-                    <Notification
-                        message={notification.message}
-                        type={notification.type}
-                        onDismiss={() => setNotification(null)}
-                    />
-                )}
-                 {isShowingRegistrationForm && (
-                    <Suspense fallback={<ModalLoader />}>
-                        <RegistrationForm
-                            onSubmit={handleRegisterFarmer}
-                            onCancel={() => {
-                                setIsShowingRegistrationForm(false);
-                                setEditingFarmer(null);
-                            }}
-                            existingFarmers={plainFarmers}
-                            mode={editingFarmer ? 'edit' : 'create'}
-                            existingFarmer={farmerModelToPlain(editingFarmer)}
-                            setNotification={setNotification}
-                        />
-                    </Suspense>
-                )}
-                 {/* --- Floating Action Buttons --- */}
-                <button
-                    onClick={() => setIsDiscussModeOpen(true)}
-                    className="fixed bottom-6 right-6 bg-green-600 text-white rounded-full p-4 shadow-lg hover:bg-green-700 transition-transform transform hover:scale-110 z-30"
-                    title="Open Discuss Mode"
-                    aria-label="Open Discuss Mode"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" />
-                    </svg>
-                </button>
-                <Suspense fallback={<div/>}>
-                    {isDiscussModeOpen && <DiscussModeModal onClose={() => setIsDiscussModeOpen(false)} />}
-                </Suspense>
+                </main>
             </div>
-        );
-    }
 
-    return <ModalLoader message="Initializing authentication..." />;
-}
+            {/* Modals and Overlays */}
+            {showRegistrationForm && (
+                <RegistrationForm
+                    onSubmit={farmerToEdit ? handleUpdateFarmer : handleRegisterFarmer}
+                    onCancel={() => { setShowRegistrationForm(false); setFarmerToEdit(null); }}
+                    existingFarmers={allFarmers}
+                    mode={farmerToEdit ? 'edit' : 'create'}
+                    existingFarmer={farmerToEdit ? farmerModelToPlain(farmerToEdit) : null}
+                    setNotification={setNotification}
+                />
+            )}
+             {showBulkImportModal && (
+                <BulkImportModal
+                    onClose={() => setShowBulkImportModal(false)}
+                    onSubmit={async (newFarmers) => { /* Logic to add multiple farmers */ }}
+                    existingFarmers={allFarmers}
+                />
+            )}
+            {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
+            {showBatchUpdateModal && <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleBatchUpdateStatus} onCancel={() => setShowBatchUpdateModal(false)} />}
+            {showDeleteConfirmation && <ConfirmationModal isOpen={showDeleteConfirmation} title="Confirm Deletion" message={`Are you sure you want to delete ${selectedFarmerIds.length} farmer(s)? This action cannot be undone.`} onConfirm={handleConfirmDelete} onCancel={() => setShowDeleteConfirmation(false)} confirmText="Delete" confirmButtonClass="bg-red-600 hover:bg-red-700" />}
+
+            {/* Hidden print views */}
+            <div className="hidden">
+                {farmerToPrint && <PrintView farmer={farmerModelToPlain(farmerToPrint)} plots={[]} users={allUsers} />}
+                {pdfExportData && <div id="pdf-print-view"><PrintView farmer={farmerModelToPlain(pdfExportData.farmer)} plots={pdfExportData.plots.map(p => plotModelToPlain(p))} users={allUsers} isForPdf={true} /></div>}
+            </div>
+        </div>
+    );
+};
 
 export default App;

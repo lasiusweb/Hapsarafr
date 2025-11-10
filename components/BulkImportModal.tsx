@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import { GEO_DATA } from '../data/geoData';
-import { GoogleGenAI } from '@google/genai';
+// FIX: Import `Type` from `@google/genai` to resolve type errors in the responseSchema.
+import { GoogleGenAI, Type } from '@google/genai';
 import { getGeoName } from '../lib/utils';
 
 // For CDN xlsx library
@@ -14,7 +15,6 @@ interface BulkImportModalProps {
 }
 
 // --- Internal Types ---
-type Step = 'upload' | 'review' | 'summary';
 type NewRecord = Farmer & { tempIndex: number; rowNum: number; rawData: any; };
 interface DuplicatePair {
     newRecord: NewRecord;
@@ -125,6 +125,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     const applicationId = `A${regYear}${districtCode}${mandalCode}${villageCode}${randomAppIdSuffix}`;
                     const asoId = `SO${regYear}${districtCode}${mandalCode}${Math.floor(100 + Math.random() * 900)}`;
 
+                    // FIX: Add missing properties from the 'Farmer' interface to ensure type compatibility with 'NewRecord'.
                     return {
                         tempIndex: i,
                         rowNum,
@@ -140,6 +141,16 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         photo: '', bankAccountNumber: String(row.bankAccountNumber || '').trim(),
                         ifscCode: String(row.ifscCode || '').trim(),
                         accountVerified: false,
+                        appliedExtent: Number(row.appliedExtent) || 0,
+                        approvedExtent: Number(row.approvedExtent) || 0,
+                        numberOfPlants: Number(row.numberOfPlants) || 0,
+                        methodOfPlantation: (Object.values(PlantationMethod).includes(row.methodOfPlantation) ? row.methodOfPlantation : PlantationMethod.Square) as PlantationMethod,
+                        plantType: (Object.values(PlantType).includes(row.plantType) ? row.plantType : PlantType.Imported) as PlantType,
+                        plantationDate: row.plantationDate ? new Date(row.plantationDate).toISOString().split('T')[0] : '',
+                        mlrdPlants: Number(row.mlrdPlants) || 0,
+                        fullCostPlants: Number(row.fullCostPlants) || 0,
+                        latitude: row.latitude ? parseFloat(row.latitude) : undefined,
+                        longitude: row.longitude ? parseFloat(row.longitude) : undefined,
                         proposedYear: '2024-25', registrationDate: now.split('T')[0],
                         paymentUtrDd: '', status: FarmerStatus.Registered,
                         district: districtCode, mandal: mandalCode, village: villageCode,
@@ -149,21 +160,33 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                 }).filter((r): r is NewRecord => r !== null);
                 
                 // --- Step 2: Generate unique IDs ---
-                const allFarmersForIdGen = [...existingFarmers, ...parsedRecords];
-                const farmersByVillageForIdGen = allFarmersForIdGen.reduce<Record<string, (Farmer | NewRecord)[]>>((acc, f) => {
+                // Create a map of existing farmers grouped by village key for efficient lookup
+                // FIX: Altered reduce syntax to use type assertion on the initial value, resolving a TSX parsing ambiguity.
+                const existingFarmersByVillage = existingFarmers.reduce((acc, f) => {
                     const key = `${f.district}-${f.mandal}-${f.village}`;
                     if (!acc[key]) acc[key] = [];
                     acc[key].push(f);
                     return acc;
-                }, {});
+                }, {} as Record<string, Farmer[]>);
+
+                // Keep a running count of newly added farmers per village within this batch to ensure sequential IDs
+                const newFarmerCountsInBatch: Record<string, number> = {};
 
                 parsedRecords.forEach(rec => {
                     const villageKey = `${rec.district}-${rec.mandal}-${rec.village}`;
-                    const farmersInVillage = farmersByVillageForIdGen[villageKey] || [];
-                    const seq = (farmersInVillage.length).toString().padStart(3, '0');
+                    
+                    const existingCount = existingFarmersByVillage[villageKey]?.length || 0;
+                    const newCount = newFarmerCountsInBatch[villageKey] || 0;
+                    
+                    // The sequence is the number of existing farmers + the number of new farmers already processed for this village + 1
+                    const seq = (existingCount + newCount + 1).toString().padStart(3, '0');
                     const farmerId = `${rec.district}${rec.mandal}${rec.village}${seq}`;
+                    
                     rec.id = farmerId;
                     rec.farmerId = farmerId;
+
+                    // Increment the count for the next farmer in the same village in this batch
+                    newFarmerCountsInBatch[villageKey] = newCount + 1;
                 });
                 setAllNewRecords(parsedRecords);
 
@@ -176,25 +199,25 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 
                 const responseSchema = {
-                    type: 'OBJECT', properties: {
+                    type: Type.OBJECT, properties: {
                         duplicatePairs: {
-                            type: 'ARRAY', items: {
-                                type: 'OBJECT', properties: {
-                                    newRecordIndex: { type: 'INTEGER' },
-                                    existingFarmerId: { type: 'STRING' },
-                                    reason: { type: 'STRING' }
+                            type: Type.ARRAY, items: {
+                                type: Type.OBJECT, properties: {
+                                    newRecordIndex: { type: Type.INTEGER },
+                                    existingFarmerId: { type: Type.STRING },
+                                    reason: { type: Type.STRING }
                                 }, required: ['newRecordIndex', 'existingFarmerId', 'reason']
                             }
                         }
                     }
                 };
                 
-                const newRecordsByVillage = parsedRecords.reduce<Record<string, NewRecord[]>>((acc, f) => {
+                const newRecordsByVillage = parsedRecords.reduce((acc, f) => {
                     const key = `${f.district}-${f.mandal}-${f.village}`;
                     if (!acc[key]) acc[key] = [];
                     acc[key].push(f);
                     return acc;
-                }, {});
+                }, {} as Record<string, NewRecord[]>);
 
                 const foundDuplicatePairs: DuplicatePair[] = [];
 

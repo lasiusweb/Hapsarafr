@@ -1,196 +1,138 @@
 import React, { useState } from 'react';
 import { User, Permission } from '../types';
 
-// FIX: Added 'schema-manager' and 'tenant-management' to align with App.tsx's View type, resolving type mismatch error.
-type View = 'dashboard' | 'farmer-directory' | 'profile' | 'admin' | 'billing' | 'usage-analytics' | 'content-manager' | 'subscription-management' | 'print-queue' | 'subsidy-management' | 'map-view' | 'help' | 'id-verification' | 'reports' | 'crop-health-scanner' | 'data-health' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'resource-management' | 'distribution-report' | 'yield-prediction' | 'satellite-analysis' | 'financial-ledger' | 'task-management';
+type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management'| 'financial-dashboard' | 'agri-store' | 'equipment-access';
 
 interface SidebarProps {
-    isOpen: boolean;
-    isCollapsed: boolean;
-    onToggleCollapse: () => void;
-    currentUser: User | null;
-    currentTenantName: string | null;
-    onLogout: () => void;
-    onNavigate: (path: string) => void;
-    currentView: View;
-    permissions: Set<Permission>;
-    onImport: () => void;
-    onExportExcel: () => void;
-    onExportCsv: () => void;
-    onViewRawData: () => void;
-    onShowPrivacy: () => void;
-    onShowChangelog: () => void;
-    printQueueCount: number;
-    onShowSupabaseSettings: () => void;
+  currentView: ViewType;
+  onNavigate: (view: ViewType) => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  currentUser: User | null;
+  userPermissions: Set<Permission>;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-    isOpen, isCollapsed, onToggleCollapse, currentUser, currentTenantName, onLogout, onNavigate, currentView, permissions, 
-    onImport, onExportExcel, onExportCsv, onViewRawData,
-    onShowPrivacy, onShowChangelog, printQueueCount, onShowSupabaseSettings
-}) => {
-    
-    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-    const canManageAdmin = permissions.has(Permission.CAN_MANAGE_GROUPS) || permissions.has(Permission.CAN_MANAGE_USERS);
-    const canManageContent = permissions.has(Permission.CAN_MANAGE_CONTENT);
-    const canImport = permissions.has(Permission.CAN_IMPORT_DATA);
-    const canExport = permissions.has(Permission.CAN_EXPORT_DATA);
-    const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
+const NavItem: React.FC<{
+  view: ViewType;
+  currentView: ViewType;
+  onNavigate: (view: ViewType) => void;
+  isCollapsed: boolean;
+  icon: React.ReactNode;
+  text: string;
+  requiredPermission?: Permission;
+  userPermissions: Set<Permission>;
+}> = ({ view, currentView, onNavigate, isCollapsed, icon, text, requiredPermission, userPermissions }) => {
+  if (requiredPermission && !userPermissions.has(requiredPermission)) {
+    return null;
+  }
+  const isActive = currentView === view;
+  const itemClasses = `
+    flex items-center p-2.5 rounded-lg transition-colors group relative
+    ${isActive ? 'bg-green-100 text-green-800 font-semibold' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
+  `;
 
-    const NavItem: React.FC<{ icon: React.ReactNode; text: string; view: View; isSubItem?: boolean; badgeCount?: number; }> = ({ icon, text, view, isSubItem = false, badgeCount = 0 }) => {
-        const isActive = currentView === view;
-        return (
-            <li className="relative group">
-                <button
-                    onClick={() => onNavigate(view)}
-                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} ${isActive ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
-                >
-                    {icon}
-                    <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
-                    {badgeCount > 0 && !isCollapsed && <span className="ml-auto bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">{badgeCount}</span>}
-                </button>
-                 {isCollapsed && 
+  return (
+    <li>
+      <button onClick={() => onNavigate(view)} className={itemClasses} style={{ width: '100%' }}>
+        <div className="flex-shrink-0 w-6 h-6">{icon}</div>
+        {!isCollapsed && <span className="ml-3 sidebar-item-text">{text}</span>}
+        {isCollapsed && (
+          <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            {text}
+          </div>
+        )}
+      </button>
+    </li>
+  );
+};
+
+const SidebarCategory: React.FC<{ text: string; isCollapsed: boolean }> = ({ text, isCollapsed }) => {
+  if (isCollapsed) return <hr className="my-3 border-t border-gray-200" />;
+  return (
+    <h3 className="px-3 pt-4 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider sidebar-category-text">
+      {text}
+    </h3>
+  );
+};
+
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isCollapsed, onToggleCollapse, currentUser, userPermissions }) => {
+  const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
+  
+  return (
+    <>
+      <div className={`fixed top-0 left-0 h-full bg-white border-r z-40 sidebar ${isCollapsed ? 'w-20' : 'w-64'}`}>
+        <div className="flex flex-col h-full">
+          <div className={`flex items-center justify-between p-4 border-b ${isCollapsed ? 'flex-col gap-2' : ''}`}>
+             <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
+                {!isCollapsed && <h1 className="text-xl font-bold sidebar-item-text">Hapsara</h1>}
+            </div>
+            <button onClick={onToggleCollapse} className="p-1 rounded-full text-gray-500 hover:bg-gray-200">
+              {isCollapsed ? 
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg> :
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              }
+            </button>
+          </div>
+          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+            <ul>
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="dashboard" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} text="Dashboard" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="task-management" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>} text="My Tasks" />
+                
+                <SidebarCategory text="Farmer Management" isCollapsed={isCollapsed} />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="farmer-directory" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} text="Farmer Directory" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="register-farmer" requiredPermission={Permission.CAN_REGISTER_FARMER} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>} text="Register Farmer" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="map-view" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Map View" />
+
+                <SidebarCategory text="Farmer Finances" isCollapsed={isCollapsed} />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="financial-dashboard" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>} text="Financial Dashboard" />
+                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="agri-store" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" /></svg>} text="Agri-Store" />
+                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="equipment-access" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.34 3.03a1 1 0 01.63 1.265l-4 12a1 1 0 11-1.898-.63L9.34 3.695a1 1 0 011.265-.665zM4 6a1 1 0 011-1h4a1 1 0 110 2H5a1 1 0 01-1-1zm1 4a1 1 0 100 2h3a1 1 0 100-2H5z" clipRule="evenodd" /></svg>} text="Equipment Access" />
+
+                <SidebarCategory text="AI & Analytics" isCollapsed={isCollapsed} />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="reports" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>} text="Reports" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="yield-prediction" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} text="Yield Prediction" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="crop-health" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>} text="Crop Health Scanner" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="satellite-analysis" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h1a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.884 5.337l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM15.116 5.337l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM5.337 7.884l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM17.663 7.884l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} text="Satellite Analysis" />
+
+                <SidebarCategory text="Operations" isCollapsed={isCollapsed} />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="subsidy-management" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.5 2.5 0 00-1.134 0V7.418zM12.5 8.5h-5a2.5 2.5 0 000 5h5a2.5 2.5 0 000-5zM11 10a1 1 0 11-2 0 1 1 0 012 0z" /><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8 6a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" /></svg>} text="Subsidy Management" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="assistance-schemes" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 005 18h10a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4z" clipRule="evenodd" /></svg>} text="Assistance Schemes" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="quality-assessment" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6.672 1.911a1 1 0 10-1.344 1.478L11.586 10l-6.258 6.611a1 1 0 001.344 1.478L14.414 10 6.672 1.911z" clipRule="evenodd" /></svg>} text="Quality Assessment" />
+                
+                <SidebarCategory text="Processing & Value" isCollapsed={isCollapsed} />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="processing-transparency" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>} text="Processing Hub" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="equipment-management" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" /></svg>} text="Equipment Mgmt" />
+
+
+                {(userPermissions.has(Permission.CAN_MANAGE_USERS) || isSuperAdmin) && (
                     <>
-                        {badgeCount > 0 && <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center text-xs rounded-full bg-green-600 text-white font-bold">{badgeCount > 9 ? '9+' : badgeCount}</span>}
-                        <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>
+                        <SidebarCategory text="Administration" isCollapsed={isCollapsed} />
+                        <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="admin" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Admin Panel" />
+                        <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="help" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} text="Help & Support" />
                     </>
-                 }
-            </li>
-        );
-    };
-    
-     const DataNavItem: React.FC<{ icon: React.ReactNode; text: string; onClick: () => void; isSubItem?: boolean; }> = ({ icon, text, onClick, isSubItem = false }) => {
-        return (
-            <li className="relative group">
-                <button
-                    onClick={onClick}
-                    className={`flex items-center w-full text-left p-3 rounded-md transition-colors ${isSubItem ? 'pl-12' : ''} text-gray-300 hover:bg-gray-700 hover:text-white`}
-                >
-                    {icon}
-                    <span className={`ml-4 whitespace-nowrap sidebar-item-text`}>{text}</span>
-                </button>
-                {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{text}</div>}
-            </li>
-        );
-    };
-
-    const NavCategory: React.FC<{ text: string }> = ({ text }) => (
-        <li className="px-3 pt-4 pb-2">
-            <span className={`text-xs font-semibold text-gray-500 uppercase sidebar-category-text`}>{text}</span>
-        </li>
-    );
-
-    const sidebarClasses = `
-        bg-gray-800 text-white flex-shrink-0 flex flex-col z-40
-        ${isCollapsed ? 'sidebar-collapsed w-20' : 'w-64'}
-        hidden lg:flex sidebar
-    `;
-
-    return (
-        <>
-            {/* Desktop Sidebar */}
-            <nav className={sidebarClasses}>
-                <div className="flex items-center gap-2 p-4 border-b border-gray-700 flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M17.721 1.256a.75.75 0 01.316 1.018l-3.208 5.05a.75.75 0 01-1.09.213l-2.103-1.752a.75.75 0 00-1.09.213l-3.208 5.05a.75.75 0 01-1.127.039L1.96 6.544a.75.75 0 01.173-1.082l4.478-3.183a.75.75 0 01.916.027l2.458 2.048a.75.75 0 001.09-.213l3.208-5.05a.75.75 0 011.018-.316zM3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0V2.75z"/></svg>
-                    <span className={`text-xl font-bold sidebar-item-text`}>Hapsara</span>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-2">
-                    <ul className="space-y-1">
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} text="Dashboard" view="dashboard" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>} text="Reports & Analytics" view="reports" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>} text="Farmer Directory" view="farmer-directory" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Map View" view="map-view" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} text="Subsidy Management" view="subsidy-management" />
-                        
-                        <NavCategory text="Inventory" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>} text="Distribution Log" view="distribution-report" />
-                        {(canManageAdmin || isSuperAdmin) && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>} text="Resource Definitions" view="resource-management" />}
-                        <li className="relative group opacity-50 cursor-not-allowed">
-                            <div className="flex items-center w-full text-left p-3 rounded-md text-gray-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
-                                <span className="ml-4 whitespace-nowrap sidebar-item-text">Stock Management</span>
-                                {!isCollapsed && <span className="ml-auto bg-gray-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">Soon</span>}
-                            </div>
-                            {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Stock Management (Coming Soon)</div>}
-                        </li>
-
-                        {(canManageAdmin || canManageContent || isSuperAdmin) && <NavCategory text="Administration" />}
-                        {canManageAdmin && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066 2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text={isSuperAdmin ? "Super Admin Panel" : "Admin Panel"} view="admin" />}
-                        {canManageContent && <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>} text="Content Manager" view="content-manager" />}
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.79 4 4s-1.79 4-4 4c-1.742 0-3.223-.835-3.772-2M12 12h.01M12 12a9 9 0 110-18 9 9 0 010 18z" /></svg>} text="Help & Support" view="help" />
-
-                        <NavCategory text="Field Officer Tools" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>} text="Task Management" view="task-management" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.293 2.293a1 1 0 010 1.414L11 12l-2 2-2.293-2.293a1 1 0 010-1.414L10 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 19l-2.293-2.293a1 1 0 00-1.414 0L12 21l2-2 2.293 2.293a1 1 0 001.414 0L19 19z" /></svg>} text="Crop Health Scanner" view="crop-health-scanner" />
-
-                        {(canImport || canExport || canManageAdmin || canManageContent) && <NavCategory text="Tools" />}
-                        {canImport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>} text="Import Data" onClick={onImport} />}
-                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} text="Export to Excel" onClick={onExportExcel} />}
-                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>} text="Export to CSV" onClick={onExportCsv} />}
-                        {canExport && <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>} text="View Raw Data" onClick={onViewRawData} />}
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h2a2 2 0 012 2v1m-6 0h6" /></svg>} text="ID Verification" view="id-verification" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>} text="Data Health" view="data-health" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a1 1 0 11-2 0 1 1 0 012 0z" /></svg>} text="Print Queue" view="print-queue" badgeCount={printQueueCount} />
-                        
-                        <NavCategory text="Advanced Analytics" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} text="Yield Prediction" view="yield-prediction" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h1a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.884 5.337l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM15.116 5.337l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM5.337 7.884l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708zM17.663 7.884l.003.003.002.002a.5.5 0 10.704-.708l-.004-.003a.5.5 0 00-.704.708z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} text="Satellite Analysis" view="satellite-analysis" />
-                        <NavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>} text="Financial Ledger" view="financial-ledger" />
-
-
-                        <NavCategory text="System" />
-                        <DataNavItem icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>} text="Cloud Sync Settings" onClick={onShowSupabaseSettings} />
-                    </ul>
-                </div>
-                
-                <div className="mt-auto flex-shrink-0">
-                    <div className="p-2 border-t border-gray-700">
-                        <div className="relative">
-                            {isUserMenuOpen && (
-                                <div className={`
-                                    absolute z-50 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 bg-gray-700
-                                    ${isCollapsed
-                                        ? 'left-full bottom-2 ml-2 w-56' // Position to the side when collapsed
-                                        : 'bottom-full mb-2 w-full' // Position above when expanded
-                                    }
-                                `}>
-                                    <div className="py-1">
-                                        <button onClick={() => { onNavigate('profile'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-t-md">Settings</button>
-                                        <button onClick={() => { onNavigate('billing'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Billing</button>
-                                        <button onClick={() => { onNavigate('usage-analytics'); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Usage</button>
-                                        <div className="border-t border-gray-600 my-1"></div>
-                                        <button onClick={() => { onShowChangelog(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">What's New</button>
-                                        <button onClick={() => { onShowPrivacy(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Privacy</button>
-                                        <div className="border-t border-gray-600 my-1"></div>
-                                        <button onClick={() => { onLogout(); setIsUserMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 rounded-b-md">Logout</button>
-                                    </div>
-                                </div>
-                            )}
-                             {currentUser && (
-                                <button onClick={() => setIsUserMenuOpen(o => !o)} className="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-700">
-                                    <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full border-2 border-gray-600 flex-shrink-0" />
-                                    <div className={`ml-3 overflow-hidden sidebar-item-text`}>
-                                        <p className="font-semibold text-sm text-white whitespace-nowrap">{currentUser.name}</p>
-                                        <p className="text-xs text-gray-400 whitespace-nowrap truncate">{currentTenantName || 'Hapsara Platform'}</p>
-                                    </div>
-                                </button>
-                             )}
-                        </div>
-                    </div>
-                     <div className="p-2 border-t border-gray-700 relative group">
-                        <button onClick={onToggleCollapse} className="flex items-center justify-center w-full p-3 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white">
-                            {isCollapsed 
-                                ? <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg> 
-                                : <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
-                            }
-                        </button>
-                        {isCollapsed && <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Expand</div>}
-                    </div>
-                </div>
-            </nav>
-        </>
-    );
+                )}
+            </ul>
+          </nav>
+          {currentUser && (
+            <div className="p-2 border-t">
+              <button onClick={() => onNavigate('profile')} className="w-full flex items-center p-2 rounded-lg hover:bg-gray-100">
+                <img src={currentUser.avatar} alt="User avatar" className="w-10 h-10 rounded-full" />
+                {!isCollapsed && (
+                  <div className="ml-3 text-left sidebar-item-text">
+                    <p className="font-semibold text-sm">{currentUser.name}</p>
+                    <p className="text-xs text-gray-500">View Profile</p>
+                  </div>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Overlay for mobile */}
+      {!isCollapsed && <div onClick={onToggleCollapse} className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden sidebar-overlay"></div>}
+    </>
+  );
 };
 
 export default Sidebar;

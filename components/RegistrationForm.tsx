@@ -52,6 +52,7 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
     village: '',
     syncStatus: 'pending',
     tenantId: '', // Added for multi-tenancy
+    is_in_ne_region: false,
 };
 
 const DRAFT_STORAGE_KEY = 'hapsara-farmer-registration-draft';
@@ -516,6 +517,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                         <DetailItem label="District" value={getGeoName('district', preparedFarmerData)} />
                         <DetailItem label="Mandal" value={getGeoName('mandal', preparedFarmerData)} />
                         <DetailItem label="Village" value={getGeoName('village', preparedFarmerData)} />
+                        <DetailItem label="NE Region Farmer" value={preparedFarmerData.is_in_ne_region ? 'Yes' : 'No'} />
                     </div>
     
                     {/* Bank Details */}
@@ -588,6 +590,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                             {currentStep === 2 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3><FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')} disabled={mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select District --</option>{districts.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
                                 <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')}/></FormField></FormRow>
                                 <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleChange} className={getSelectClass('village')} disabled={!formData.mandal || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
+                                <FormRow><FormLabel><div className="relative flex items-center gap-1.5 group cursor-help"><span>NE Region Farmer</span><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">Check this box if the farmer belongs to a North Eastern State or the Andaman & Nicobar Islands to apply for special assistance packages.</div></div></FormLabel><FormField><label className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-green-50 transition w-max"><input type="checkbox" name="is_in_ne_region" checked={formData.is_in_ne_region} onChange={handleChange} className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500" /><span className="ml-3 text-gray-700 font-medium">Is North Eastern / A&N Islands Farmer</span></label></FormField></FormRow>
                             </section>}
                             {currentStep === 3 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">3. Bank Details</h3><FormRow><FormLabel required>Bank Account Number</FormLabel><FormField><input type="text" name="bankAccountNumber" value={formData.bankAccountNumber} onChange={handleChange} className={getInputClass('bankAccountNumber')} /><InputError message={errors.bankAccountNumber} onDismiss={() => handleDismissError('bankAccountNumber')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>IFSC Code</FormLabel><FormField><input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={getInputClass('ifscCode')} /><InputError message={errors.ifscCode} onDismiss={() => handleDismissError('ifscCode')} /></FormField></FormRow>
@@ -627,8 +630,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 </div>
             )}
             
-            {/* FIX: Pass plotsData prop to AiReviewModal by creating a plot object from formData. */}
-            {showAiReview && <AiReviewModal farmerData={formData} plotsData={[{
+            {showAiReview && <AiReviewModal farmerData={formData} plotsData={ (formData.approvedExtent || formData.numberOfPlants) ? [{
                 acreage: formData.approvedExtent,
                 numberOfPlants: formData.numberOfPlants,
                 methodOfPlantation: formData.methodOfPlantation,
@@ -636,7 +638,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 plantationDate: formData.plantationDate,
                 mlrdPlants: formData.mlrdPlants,
                 fullCostPlants: formData.fullCostPlants
-            }]} onClose={() => setShowAiReview(false)} />}
+            }] : []} onClose={() => setShowAiReview(false)} />}
 
             {preparedFarmerData && currentStep === 5 && (
                 <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center">

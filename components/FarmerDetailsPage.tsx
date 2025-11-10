@@ -1,19 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel } from '../db';
-import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot } from '../types';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel, AssistanceApplicationModel } from '../db';
+import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme } from '../types';
 import SubsidyPaymentForm from './SubsidyPaymentForm';
 import DistributionForm from './DistributionForm';
-import AiReviewModal from './AiReviewModal';
 import ConfirmationModal from './ConfirmationModal';
 import { farmerModelToPlain, getGeoName, plotModelToPlain } from '../lib/utils';
 import { useDatabase } from '../DatabaseContext';
 import { Q } from '@nozbe/watermelondb';
 import { useQuery } from '../hooks/useQuery';
+import CustomSelect from './CustomSelect';
+import { ASSISTANCE_SCHEMES } from '../data/assistanceSchemes';
 
 const RegistrationForm = lazy(() => import('./RegistrationForm'));
 const LiveAssistantModal = lazy(() => import('./LiveAssistantModal'));
+const ProfitabilitySimulator = lazy(() => import('./ProfitabilitySimulator'));
+
 
 // Extend window type for SpeechRecognition
 declare global {
@@ -23,6 +26,137 @@ declare global {
     }
 }
 
+const PlotFormModal: React.FC<{
+    onClose: () => void;
+    onSubmit: (data: Partial<Plot>) => Promise<void>;
+    plot?: Plot | null;
+    farmerId: string;
+}> = ({ onClose, onSubmit, plot, farmerId }) => {
+    const isEditMode = !!plot;
+    const [formData, setFormData] = useState({
+        acreage: plot?.acreage || '',
+        soilType: plot?.soilType || SoilType.Loamy,
+        plantationDate: plot?.plantationDate?.split('T')[0] || '',
+        numberOfPlants: plot?.numberOfPlants || '',
+        methodOfPlantation: plot?.methodOfPlantation || PlantationMethod.Square,
+        plantType: plot?.plantType || PlantType.Imported,
+        mlrdPlants: plot?.mlrdPlants || '',
+        fullCostPlants: plot?.fullCostPlants || '',
+        geojson: plot?.geojson || '',
+    });
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const validate = () => {
+        const newErrors: Record<string, string> = {};
+        const acreage = Number(formData.acreage);
+        const numberOfPlants = Number(formData.numberOfPlants);
+        const mlrdPlants = Number(formData.mlrdPlants) || 0;
+        const fullCostPlants = Number(formData.fullCostPlants) || 0;
+
+        if (acreage <= 0) newErrors.acreage = 'Acreage must be a positive number.';
+        if (numberOfPlants <= 0) newErrors.numberOfPlants = 'Number of plants must be a positive number.';
+        if (mlrdPlants + fullCostPlants > numberOfPlants) {
+            newErrors.mlrdPlants = 'Sum of MLRD and Full Cost plants cannot exceed total plants.';
+        }
+        if (formData.plantationDate && new Date(formData.plantationDate) > new Date()) {
+            newErrors.plantationDate = 'Plantation date cannot be in the future.';
+        }
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!validate()) return;
+        
+        setIsSubmitting(true);
+        try {
+            await onSubmit({
+                id: plot?.id,
+                farmerId: farmerId,
+                acreage: Number(formData.acreage),
+                soilType: formData.soilType as SoilType,
+                plantationDate: formData.plantationDate || undefined,
+                numberOfPlants: Number(formData.numberOfPlants),
+                methodOfPlantation: formData.methodOfPlantation as PlantationMethod,
+                plantType: formData.plantType as PlantType,
+                mlrdPlants: Number(formData.mlrdPlants) || 0,
+                fullCostPlants: Number(formData.fullCostPlants) || 0,
+                geojson: formData.geojson || undefined,
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const soilTypeOptions = Object.values(SoilType).map(s => ({ value: s, label: s }));
+    const plantationMethodOptions = Object.values(PlantationMethod).map(s => ({ value: s, label: s }));
+    const plantTypeOptions = Object.values(PlantType).map(s => ({ value: s, label: s }));
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-2xl w-full max-w-2xl">
+                <div className="p-6 border-b">
+                    <h2 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Plot' : 'Add New Plot'}</h2>
+                </div>
+                <div className="p-8 space-y-4 max-h-[70vh] overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Acreage *</label>
+                        <input type="number" step="0.01" name="acreage" value={formData.acreage} onChange={handleChange} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                        {errors.acreage && <p className="text-xs text-red-600 mt-1">{errors.acreage}</p>}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Number of Plants *</label>
+                        <input type="number" name="numberOfPlants" value={formData.numberOfPlants} onChange={handleChange} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                        {errors.numberOfPlants && <p className="text-xs text-red-600 mt-1">{errors.numberOfPlants}</p>}
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700">Soil Type</label>
+                        <CustomSelect value={formData.soilType} onChange={v => setFormData(s => ({ ...s, soilType: v as SoilType }))} options={soilTypeOptions} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Plantation Date</label>
+                        <input type="date" name="plantationDate" value={formData.plantationDate} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                        {errors.plantationDate && <p className="text-xs text-red-600 mt-1">{errors.plantationDate}</p>}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Method of Plantation</label>
+                        <CustomSelect value={formData.methodOfPlantation} onChange={v => setFormData(s => ({ ...s, methodOfPlantation: v as PlantationMethod }))} options={plantationMethodOptions} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Plant Type</label>
+                        <CustomSelect value={formData.plantType} onChange={v => setFormData(s => ({ ...s, plantType: v as PlantType }))} options={plantTypeOptions} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">MLRD Plants</label>
+                        <input type="number" name="mlrdPlants" value={formData.mlrdPlants} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                        {errors.mlrdPlants && <p className="text-xs text-red-600 mt-1">{errors.mlrdPlants}</p>}
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700">Full Cost Plants</label>
+                        <input type="number" name="fullCostPlants" value={formData.fullCostPlants} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                    </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700">GeoJSON (Optional)</label>
+                        <textarea name="geojson" value={formData.geojson} onChange={handleChange} rows={4} className="mt-1 w-full p-2 border border-gray-300 rounded-md font-mono text-xs" placeholder='e.g., {"type": "Polygon", "coordinates": [...] }'></textarea>
+                    </div>
+                </div>
+                <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
+                    <button type="button" onClick={onClose} disabled={isSubmitting} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                    <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold disabled:bg-green-300">
+                        {isSubmitting ? 'Saving...' : 'Save Plot'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
 
 interface FarmerDetailsPageProps {
     farmerId: string;
@@ -206,23 +340,6 @@ const SubsidyStatusView: React.FC<{ farmer: Farmer; payments: SubsidyPaymentMode
 
 // --- New Land & Plantation Components ---
 
-const PlotFormModal: React.FC<{ onClose: () => void; plot?: Plot | null }> = ({ onClose, plot }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg">
-            <div className="p-6 border-b">
-                <h2 className="text-2xl font-bold text-gray-800">{plot ? 'Edit Plot' : 'Add New Plot'}</h2>
-            </div>
-            <div className="p-8 text-center">
-                <p className="text-lg font-semibold text-gray-700 mb-4">Coming Soon!</p>
-                <p className="text-gray-500">The ability to add and edit individual farm plots is under development and will be available in a future update.</p>
-            </div>
-            <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
-                <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">Close</button>
-            </div>
-        </div>
-    </div>
-);
-
 const PlotCard: React.FC<{ plot: Plot; onEdit: () => void; onDelete: () => void }> = ({ plot, onEdit, onDelete }) => (
     <div className="bg-gray-50 border rounded-lg p-4 space-y-3">
         <div className="flex justify-between items-start">
@@ -281,11 +398,120 @@ const PlotsTabContent = withObservables(['farmer'], ({ farmer }: { farmer: Farme
     );
 });
 
+// --- New Assistance Application Component ---
 
-const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: SubsidyPaymentModel[], activityLogs: ActivityLogModel[], resourceDistributions: ResourceDistributionModel[] } & Omit<FarmerDetailsPageProps, 'farmerId' | 'database'>> = ({
+const AssistanceStatusBadge: React.FC<{ status: AssistanceApplicationStatus }> = ({ status }) => {
+    const colors: Record<AssistanceApplicationStatus, string> = {
+        [AssistanceApplicationStatus.NotApplied]: 'bg-gray-100 text-gray-600',
+        [AssistanceApplicationStatus.Applied]: 'bg-blue-100 text-blue-800',
+        [AssistanceApplicationStatus.Approved]: 'bg-green-100 text-green-800',
+        [AssistanceApplicationStatus.Rejected]: 'bg-red-100 text-red-800',
+    };
+    return <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status]}`}>{status}</span>;
+};
+
+const AssistanceTabContent = withObservables(
+    ['farmer'],
+    ({ farmer }: { farmer: FarmerModel }) => ({
+        assistanceApplications: farmer.assistanceApplications.observe(),
+    })
+)(({ assistanceApplications, farmer, currentUser, setNotification }: { assistanceApplications: AssistanceApplicationModel[], farmer: FarmerModel, currentUser: User, setNotification: (n: any) => void }) => {
+    const database = useDatabase();
+    const [openMenu, setOpenMenu] = useState<string | null>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setOpenMenu(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const applicationsMap = useMemo(() => new Map(assistanceApplications.map(app => [app.schemeId, app])), [assistanceApplications]);
+
+    const handleStatusChange = async (scheme: AssistanceScheme, newStatus: AssistanceApplicationStatus) => {
+        const existingApp = applicationsMap.get(scheme.id);
+        setOpenMenu(null);
+
+        if (window.confirm(`Are you sure you want to change the status for "${scheme.title}" to "${newStatus}"?`)) {
+            try {
+                await database.write(async () => {
+                    if (existingApp) {
+                        await existingApp.update(app => {
+                            app.status = newStatus;
+                        });
+                    } else {
+                        await database.get<AssistanceApplicationModel>('assistance_applications').create(app => {
+                            app.farmerId = farmer.id;
+                            app.schemeId = scheme.id;
+                            app.status = newStatus;
+                            app.syncStatusLocal = 'pending';
+                            app.tenantId = farmer.tenantId;
+                        });
+                    }
+                    await database.get<ActivityLogModel>('activity_logs').create(log => {
+                        log.farmerId = farmer.id;
+                        log.activityType = ActivityType.ASSISTANCE_STATUS_CHANGE;
+                        log.description = `Status for "${scheme.title}" changed to ${newStatus}.`;
+                        log.createdBy = currentUser.id;
+                        log.tenantId = farmer.tenantId;
+                    });
+                });
+                setNotification({ message: 'Status updated successfully.', type: 'success' });
+            } catch (e) {
+                console.error("Failed to update status", e);
+                setNotification({ message: 'Failed to update status.', type: 'error' });
+            }
+        }
+    };
+    
+    return (
+        <div className="space-y-4">
+            {ASSISTANCE_SCHEMES.map(scheme => {
+                const application = applicationsMap.get(scheme.id);
+                const status = application?.status || AssistanceApplicationStatus.NotApplied;
+                
+                return (
+                    <div key={scheme.id} className="bg-gray-50 p-4 rounded-lg border flex justify-between items-center">
+                        <div className="flex-1">
+                            <h4 className="font-bold text-gray-800">{scheme.title}</h4>
+                            <p className="text-sm text-gray-600">{scheme.description}</p>
+                            <p className="text-xs font-semibold text-green-700 mt-1">{scheme.assistance}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <AssistanceStatusBadge status={status} />
+                            <div className="relative">
+                                <button onClick={() => setOpenMenu(openMenu === scheme.id ? null : scheme.id)} className="p-2 rounded-full hover:bg-gray-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+                                </button>
+                                {openMenu === scheme.id && (
+                                    <div ref={menuRef} className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+                                        <ul className="py-1">
+                                            {Object.values(AssistanceApplicationStatus).map(s => {
+                                                if (s === status) return null;
+                                                return <li key={s}><button onClick={() => handleStatusChange(scheme, s)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Mark as {s}</button></li>
+                                            })}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+});
+
+
+const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: SubsidyPaymentModel[], activityLogs: ActivityLogModel[], plots: PlotModel[], resourceDistributions: ResourceDistributionModel[] } & Omit<FarmerDetailsPageProps, 'farmerId' | 'database'>> = ({
     farmer,
     subsidyPayments,
     activityLogs,
+    plots,
     resourceDistributions,
     users,
     currentUser,
@@ -298,6 +524,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const [showDistributionModal, setShowDistributionModal] = useState(false);
     const [paymentToDelete, setPaymentToDelete] = useState<SubsidyPaymentModel | null>(null);
     const [plotFormState, setPlotFormState] = useState<{ isOpen: boolean; plot?: Plot | null }>({ isOpen: false });
+    const [plotToDelete, setPlotToDelete] = useState<PlotModel | null>(null);
     const [isLiveAssistantOpen, setIsLiveAssistantOpen] = useState(false);
     const database = useDatabase();
 
@@ -307,6 +534,8 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     // Fetch all available resources for the distribution form dropdown
     const allResources = useQuery(useMemo(() => database.get<ResourceModel>('resources').query(Q.sortBy('name', Q.asc)), [database]));
     const resourceMap = useMemo(() => new Map(allResources.map(r => [r.id, r])), [allResources]);
+
+    const plainPlots = useMemo(() => plots.map(p => plotModelToPlain(p) as Plot), [plots]);
 
     // State for voice notes
     const [isRecording, setIsRecording] = useState(false);
@@ -503,7 +732,77 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             setNotification({ message: 'Failed to save voice note.', type: 'error' });
         }
     };
+    
+    const handleSavePlot = useCallback(async (plotData: Partial<Plot>) => {
+        try {
+            await database.write(async () => {
+                if (plotData.id) { // Edit mode
+                    const plotToUpdate = await database.get<PlotModel>('plots').find(plotData.id);
+                    await plotToUpdate.update(p => {
+                        Object.assign(p, { ...plotData, syncStatusLocal: 'pending' });
+                    });
+                    setNotification({ message: 'Plot updated successfully.', type: 'success' });
+                } else { // Create mode
+                    await database.get<PlotModel>('plots').create(p => {
+                        Object.assign(p, { 
+                            ...plotData, 
+                            syncStatusLocal: 'pending',
+                            tenantId: farmer.tenantId,
+                        });
+                    });
+                    setNotification({ message: 'Plot added successfully.', type: 'success' });
+                }
+                
+                // Log activity
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = farmer.id;
+                    log.activityType = ActivityType.PLANTATION_UPDATE;
+                    log.description = plotData.id ? `Updated plot details (${plotData.acreage} acres).` : `Added a new plot of ${plotData.acreage} acres.`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = farmer.tenantId;
+                });
+            });
+        } catch (error) {
+            console.error("Failed to save plot:", error);
+            setNotification({ message: 'Failed to save plot. Please try again.', type: 'error' });
+        } finally {
+            setPlotFormState({ isOpen: false });
+        }
+    }, [database, farmer, currentUser.id, setNotification]);
 
+    const handleDeletePlot = (plot: Plot) => {
+        database.get<PlotModel>('plots').find(plot.id).then(plotModel => {
+            setPlotToDelete(plotModel);
+        });
+    };
+
+    const handleConfirmDeletePlot = async () => {
+        if (plotToDelete) {
+            await database.write(async () => {
+                await plotToDelete.destroyPermanently();
+            });
+            setNotification({ message: 'Plot deleted.', type: 'success' });
+            setPlotToDelete(null);
+        }
+    };
+
+    const handleExecuteCoPilotAction = useCallback((actionName: string) => {
+        switch (actionName) {
+            case 'SHOW_PROFIT_SIMULATOR':
+                setActiveTab('simulator');
+                setNotification({
+                    message: "CoPilot switched view to the Profitability Simulator.",
+                    type: 'info'
+                });
+                break;
+            default:
+                console.warn(`Unknown CoPilot action: ${actionName}`);
+                setNotification({
+                    message: `CoPilot suggested an unknown action: ${actionName}`,
+                    type: 'info'
+                });
+        }
+    }, [setNotification]);
 
     const getUserName = (userId?: string) => users.find(u => u.id === userId)?.name || 'System';
     const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
@@ -524,7 +823,9 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             case ActivityType.REGISTRATION:
                 return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>;
             case ActivityType.STATUS_CHANGE:
-                return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v1h-2V4H7v1H5V4zM5 7v10a2 2 0 002 2h6a2 2 0 002-2V7H5zm2 4h6a1 1 0 110 2H7a1 1 0 110-2z" /></svg>;
+                 return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v1h-2V4H7v1H5V4zM5 7v10a2 2 0 002 2h6a2 2 0 002-2V7H5zm2 4h6a1 1 0 110 2H7a1 1 0 110-2z" /></svg>;
+            case ActivityType.ASSISTANCE_STATUS_CHANGE:
+                return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 005 18h10a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4z" clipRule="evenodd" /></svg>;
             case ActivityType.PAYMENT_RECORDED:
                 return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.5 2.5 0 00-1.134 0V7.418zM12.5 8.5h-5a2.5 2.5 0 000 5h5a2.5 2.5 0 000-5zM11 10a1 1 0 11-2 0 1 1 0 012 0z" /><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8 6a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" /></svg>;
             case ActivityType.RESOURCE_DISTRIBUTED:
@@ -560,8 +861,10 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
 
                 <div className="mt-6">
                     <div className="border-b border-gray-200">
-                        <nav className="-mb-px flex space-x-4">
+                        <nav className="-mb-px flex space-x-4 overflow-x-auto">
                             <TabButton tab="profile" label="Profile" />
+                            <TabButton tab="assistance" label="Assistance" />
+                            <TabButton tab="simulator" label="Simulator" />
                             <TabButton tab="subsidy" label="Subsidy Eligibility" />
                             <TabButton tab="land" label="Land & Plantation" />
                             <TabButton tab="bank" label="Bank Details" />
@@ -586,6 +889,12 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                                 <DetailItem label="Registration Date" value={new Date(farmer.registrationDate).toLocaleDateString()} />
                             </dl>
                         )}
+                        {activeTab === 'simulator' && (
+                            <React.Suspense fallback={<div className="text-center p-10">Loading Simulator...</div>}>
+                                <ProfitabilitySimulator plots={plainPlots} />
+                            </React.Suspense>
+                        )}
+                        {activeTab === 'assistance' && <AssistanceTabContent farmer={farmer} currentUser={currentUser} setNotification={setNotification} />}
                          {activeTab === 'subsidy' && (
                             <SubsidyStatusView 
                                 farmer={farmerModelToPlain(farmer)!} 
@@ -598,7 +907,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                                 farmer={farmer}
                                 onAdd={() => setPlotFormState({ isOpen: true, plot: null })}
                                 onEdit={(plot) => setPlotFormState({ isOpen: true, plot })}
-                                onDelete={(plot) => alert(`Deletion for plot ${plot.id} is not yet implemented.`)}
+                                onDelete={handleDeletePlot}
                             />
                         )}
                          {activeTab === 'bank' && (
@@ -768,7 +1077,20 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             {plotFormState.isOpen && (
                 <PlotFormModal
                     onClose={() => setPlotFormState({ isOpen: false })}
+                    onSubmit={handleSavePlot}
                     plot={plotFormState.plot}
+                    farmerId={farmer.id}
+                />
+            )}
+            {plotToDelete && (
+                <ConfirmationModal
+                    isOpen={!!plotToDelete}
+                    title="Delete Plot?"
+                    message={<><p>Are you sure you want to permanently delete this plot of <strong>{plotToDelete.acreage} acres</strong>?</p><p className="mt-2 text-sm">This action cannot be undone.</p></>}
+                    onConfirm={handleConfirmDeletePlot}
+                    onCancel={() => setPlotToDelete(null)}
+                    confirmText="Delete"
+                    confirmButtonClass="bg-red-600 hover:bg-red-700"
                 />
             )}
             {isLiveAssistantOpen && (
@@ -776,14 +1098,15 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     <LiveAssistantModal
                         farmer={farmerModelToPlain(farmer)!}
                         onClose={() => setIsLiveAssistantOpen(false)}
+                        onExecuteAction={handleExecuteCoPilotAction}
                     />
                 </React.Suspense>
             )}
             <button
                 onClick={() => setIsLiveAssistantOpen(true)}
-                className="fixed bottom-6 right-6 bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-110 z-30"
-                title="Open Live AI Assistant"
-                aria-label="Open Live AI Assistant"
+                className="fixed bottom-6 right-24 bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-110 z-30"
+                title="Start CoPilot Session"
+                aria-label="Start CoPilot Session"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
@@ -810,6 +1133,7 @@ const EnhancedFarmerDetailsPage: React.FC<Omit<FarmerDetailsPageProps, 'database
     const farmer = farmers?.[0]; // The query will return an array with 0 or 1 item.
     const [subsidyPayments, setSubsidyPayments] = useState<SubsidyPaymentModel[]>([]);
     const [activityLogs, setActivityLogs] = useState<ActivityLogModel[]>([]);
+    const [plots, setPlots] = useState<PlotModel[]>([]);
     const [resourceDistributions, setResourceDistributions] = useState<ResourceDistributionModel[]>([]);
 
 
@@ -818,17 +1142,19 @@ const EnhancedFarmerDetailsPage: React.FC<Omit<FarmerDetailsPageProps, 'database
             const sub1 = farmer.subsidyPayments.observe().subscribe(setSubsidyPayments);
             const sub2 = farmer.activityLogs.observe().subscribe(setActivityLogs);
             const sub3 = farmer.resourceDistributions.observe().subscribe(setResourceDistributions);
+            const sub4 = farmer.plots.observe().subscribe(setPlots);
             return () => {
                 sub1.unsubscribe();
                 sub2.unsubscribe();
                 sub3.unsubscribe();
+                sub4.unsubscribe();
             };
         }
     }, [farmer]);
     
     // The component will re-render when `farmer` changes. If it becomes undefined (e.g., user navigated to a farmer they can't see),
     // `InnerFarmerDetailsPage` will correctly show the "not found" message.
-    return <InnerFarmerDetailsPage farmer={farmer!} subsidyPayments={subsidyPayments} activityLogs={activityLogs} resourceDistributions={resourceDistributions} {...rest} />;
+    return <InnerFarmerDetailsPage farmer={farmer!} subsidyPayments={subsidyPayments} activityLogs={activityLogs} plots={plots} resourceDistributions={resourceDistributions} {...rest} />;
 });
 
 

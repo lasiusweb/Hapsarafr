@@ -13,9 +13,10 @@ interface CustomSelectProps {
   disabled?: boolean;
   className?: string;
   error?: boolean;
+  label?: string;
 }
 
-const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, placeholder = 'Select an option', disabled = false, className = '', error = false }) => {
+const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, placeholder = 'Select an option', disabled = false, className = '', error = false, label }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const selectRef = useRef<HTMLDivElement>(null);
@@ -49,7 +50,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, p
   const disabledClasses = "bg-gray-100 cursor-not-allowed text-gray-500";
 
   return (
-    <div ref={selectRef} className={`relative ${className}`}>
+    <div className={`relative ${className}`}>
+        {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
       <button
         type="button"
         disabled={disabled}

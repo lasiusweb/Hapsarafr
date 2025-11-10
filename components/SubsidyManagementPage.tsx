@@ -31,6 +31,18 @@ const TABLE_STAGES: PaymentStage[] = [
     PaymentStage.IntercroppingYear1, PaymentStage.IntercroppingYear2, PaymentStage.IntercroppingYear3, PaymentStage.IntercroppingYear4,
 ];
 
+// FIX: Define a type for the subsidy status object for better type safety.
+type SubsidyStatusInfo = {
+    status: 'Paid' | 'Eligible' | 'Pending' | 'Not Yet Eligible' | 'N/A';
+    payment?: SubsidyPaymentModel;
+};
+
+// FIX: Corrected a TypeScript type inference issue by extracting the inline type for a mapped farmer object into a named type.
+type FarmerWithStatuses = {
+    farmer: Farmer;
+    statuses: Record<PaymentStage, SubsidyStatusInfo>;
+};
+
 const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, payments, currentUser, onBack, database, setNotification }) => {
     const [filters, setFilters] = useState({ district: '', mandal: '', subsidyStage: '', status: '' });
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -62,32 +74,46 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
         return map;
     }, [payments]);
 
-    const processedData = useMemo(() => {
+    // FIX: Explicitly typing `processedData` resolves the type inference issue within the `.filter()` method.
+    const processedData: FarmerWithStatuses[] = useMemo(() => {
         const now = new Date();
-        const yearsAgo = (years: number) => new Date(now.getFullYear() - years, now.getMonth(), now.getDate());
 
         return farmers
             .map(farmer => {
                 const farmerPayments = paymentsByFarmerId.get(farmer.id) || [];
                 const plantationDate = farmer.plantationDate ? new Date(farmer.plantationDate) : null;
 
-                const getStatus = (stage: PaymentStage, eligibilityDate: Date | null, previousStagePayment?: SubsidyPaymentModel) => {
+                const getStatus = (stage: PaymentStage, year: number, previousStagePayment?: SubsidyPaymentModel): SubsidyStatusInfo => {
                     const paid = farmerPayments.find(p => p.paymentStage === stage);
                     if (paid) return { status: 'Paid', payment: paid };
-                    
+
                     if (!plantationDate) return { status: 'N/A' };
                     
-                    // For Year 1 stages, eligibility starts from plantation date itself
-                    if (previousStagePayment === undefined) { 
-                        return { status: 'Pending' };
+                    const eligibilityStartDate = new Date(plantationDate);
+                    eligibilityStartDate.setFullYear(eligibilityStartDate.getFullYear() + year - 1);
+
+                    if (year === 1) {
+                        // For year 1, eligible if plantation date is in the past.
+                        return plantationDate <= now ? { status: 'Pending' } : { status: 'Not Yet Eligible' };
                     }
                     
-                    // For subsequent years, requires previous payment AND time eligibility
-                    if (previousStagePayment && eligibilityDate && plantationDate <= eligibilityDate) {
+                    // For subsequent years, previous payment must be made and time must have passed.
+                    if (!previousStagePayment) {
+                        return { status: 'Not Yet Eligible' };
+                    }
+                    
+                    if (now >= eligibilityStartDate) {
                         return { status: 'Eligible' };
                     }
 
                     return { status: 'Not Yet Eligible' };
+                };
+                
+                // FIX: Add a helper function to determine status for one-time payments.
+                const getOneTimeStatus = (stage: PaymentStage): SubsidyStatusInfo => {
+                    const paid = farmerPayments.find(p => p.paymentStage === stage);
+                    if (paid) return { status: 'Paid', payment: paid };
+                    return { status: 'Pending' };
                 };
                 
                 const maintenancePayments = {
@@ -101,25 +127,36 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
                     y3: farmerPayments.find(p => p.paymentStage === PaymentStage.IntercroppingYear3),
                 };
 
-                const statuses = {
-                    [PaymentStage.MaintenanceYear1]: getStatus(PaymentStage.MaintenanceYear1, null),
-                    [PaymentStage.MaintenanceYear2]: getStatus(PaymentStage.MaintenanceYear2, yearsAgo(1), maintenancePayments.y1),
-                    [PaymentStage.MaintenanceYear3]: getStatus(PaymentStage.MaintenanceYear3, yearsAgo(2), maintenancePayments.y2),
-                    [PaymentStage.MaintenanceYear4]: getStatus(PaymentStage.MaintenanceYear4, yearsAgo(3), maintenancePayments.y3),
-                    [PaymentStage.IntercroppingYear1]: getStatus(PaymentStage.IntercroppingYear1, null),
-                    [PaymentStage.IntercroppingYear2]: getStatus(PaymentStage.IntercroppingYear2, yearsAgo(1), intercroppingPayments.y1),
-                    [PaymentStage.IntercroppingYear3]: getStatus(PaymentStage.IntercroppingYear3, yearsAgo(2), intercroppingPayments.y2),
-                    [PaymentStage.IntercroppingYear4]: getStatus(PaymentStage.IntercroppingYear4, yearsAgo(3), intercroppingPayments.y3),
+                // FIX: Explicitly type `statuses` and include all PaymentStage enum members to ensure type safety.
+                const statuses: Record<PaymentStage, SubsidyStatusInfo> = {
+                    [PaymentStage.MaintenanceYear1]: getStatus(PaymentStage.MaintenanceYear1, 1),
+                    [PaymentStage.MaintenanceYear2]: getStatus(PaymentStage.MaintenanceYear2, 2, maintenancePayments.y1),
+                    [PaymentStage.MaintenanceYear3]: getStatus(PaymentStage.MaintenanceYear3, 3, maintenancePayments.y2),
+                    [PaymentStage.MaintenanceYear4]: getStatus(PaymentStage.MaintenanceYear4, 4, maintenancePayments.y3),
+                    [PaymentStage.IntercroppingYear1]: getStatus(PaymentStage.IntercroppingYear1, 1),
+                    [PaymentStage.IntercroppingYear2]: getStatus(PaymentStage.IntercroppingYear2, 2, intercroppingPayments.y1),
+                    [PaymentStage.IntercroppingYear3]: getStatus(PaymentStage.IntercroppingYear3, 3, intercroppingPayments.y2),
+                    [PaymentStage.IntercroppingYear4]: getStatus(PaymentStage.IntercroppingYear4, 4, intercroppingPayments.y3),
+                    [PaymentStage.PlantingMaterialDomestic]: getOneTimeStatus(PaymentStage.PlantingMaterialDomestic),
+                    [PaymentStage.PlantingMaterialImported]: getOneTimeStatus(PaymentStage.PlantingMaterialImported),
+                    [PaymentStage.BoreWell]: getOneTimeStatus(PaymentStage.BoreWell),
+                    [PaymentStage.VermiCompost]: getOneTimeStatus(PaymentStage.VermiCompost),
+                    [PaymentStage.Replanting]: getOneTimeStatus(PaymentStage.Replanting),
+                    [PaymentStage.Fertilizer]: getOneTimeStatus(PaymentStage.Fertilizer),
+                    [PaymentStage.Other]: getOneTimeStatus(PaymentStage.Other),
                 };
 
                 return { farmer, statuses };
             })
-            .filter(item => {
+            // FIX: Explicitly type the 'item' parameter in the filter callback to correct a type inference issue.
+            .filter((item: FarmerWithStatuses) => {
                 if (filters.district && item.farmer.district !== filters.district) return false;
                 if (filters.mandal && item.farmer.mandal !== filters.mandal) return false;
                 if (filters.subsidyStage && filters.status) {
-                    const stage = filters.subsidyStage as keyof typeof item.statuses;
-                    if (item.statuses[stage]?.status !== filters.status) return false;
+                    const stage = filters.subsidyStage as PaymentStage;
+                    // FIX: Type error resolved by typing 'item'. 'statusInfo' is now correctly inferred.
+                    const statusInfo = item.statuses[stage];
+                    if (statusInfo.status !== filters.status) return false;
                 }
                 return true;
             });
