@@ -24,13 +24,13 @@ const DiscussModeModal: React.FC<DiscussModeModalProps> = ({ onClose }) => {
         }
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const systemInstruction = "You are a helpful AI assistant. The user is a business owner (tenant) using the Hapsara application to manage oil palm farmers. A key point to remember is that subsidy payments are made by the Government, not the business owner. The business owner's primary concern is tracking whether a farmer has *received* the subsidy, not paying it themselves. Frame your discussions and answers with this context in mind. You can chat about anything, but keep this context in mind if the topic is about subsidies or finances.";
+            const systemInstruction = "You are a helpful AI assistant acting as a team of senior engineers (Sr. Architect, Sr. Algorithm Engineer, Sr. Full Stack Developer). The user is interacting with the Hapsara application, a tool for managing oil palm farmers. Your role is to provide expert advice, review logic, suggest optimizations, and offer 'Next Step Recommendations' for the user's workflow. You can chat about anything, but always maintain your expert persona and relate your advice back to the Hapsara application's context where possible. A key point to remember is that subsidy payments are made by the Government, not the business owner (the 'tenant' using this app). The business owner's primary concern is tracking whether a farmer has *received* the subsidy, not paying it themselves. Frame your discussions and answers with this context in mind.";
             const chatSession = ai.chats.create({
                 model: 'gemini-2.5-flash',
                 config: { systemInstruction }
             });
             setChat(chatSession);
-            setConversation([{ role: 'model', text: 'Welcome to Discuss Mode! You can chat with me about anything. How can I help?' }]);
+            setConversation([{ role: 'model', text: 'Welcome to Discuss Mode! As your senior engineering advisor, I can help review logic, suggest optimizations, or provide next-step recommendations. How can I help?' }]);
         } catch (e: any) {
             console.error("Failed to initialize chat:", e);
             setError("Failed to initialize the AI Assistant. Please check your API key and network connection.");

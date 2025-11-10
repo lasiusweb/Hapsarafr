@@ -19,6 +19,8 @@ const ProfitabilitySimulator = lazy(() => import('./ProfitabilitySimulator'));
 const PlantingRecordFormModal = lazy(() => import('./components/PlantingRecordFormModal'));
 const HarvestForm = lazy(() => import('./HarvestForm'));
 const QualityAssessmentDetailsModal = lazy(() => import('./QualityAssessmentDetailsModal'));
+const CoPilotSuggestions = lazy(() => import('./CoPilotSuggestions'));
+
 
 declare var QRCode: any;
 
@@ -1187,6 +1189,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     <div className="border-b border-gray-200">
                         <nav className="-mb-px flex space-x-4 overflow-x-auto">
                             <TabButton tab="profile" label="Profile" />
+                            <TabButton tab="copilot" label="CoPilot" />
                             <TabButton tab="harvests" label="Harvests" />
                             <TabButton tab="traceability" label="Traceability" />
                             <TabButton tab="assistance" label="Assistance" />
@@ -1214,6 +1217,14 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                                 <DetailItem label="Registered By" value={getUserName(farmer.createdBy)} />
                                 <DetailItem label="Registration Date" value={new Date(farmer.registrationDate).toLocaleDateString()} />
                             </dl>
+                        )}
+                        {activeTab === 'copilot' && (
+                            <React.Suspense fallback={<div className="text-center p-10">Loading CoPilot...</div>}>
+                                <CoPilotSuggestions
+                                    farmer={farmerModelToPlain(farmer)!}
+                                    plots={plots.map(p => plotModelToPlain(p)!)}
+                                />
+                            </React.Suspense>
                         )}
                         {activeTab === 'harvests' && (
                             <React.Suspense fallback={<div className="text-center p-10">Loading...</div>}>
