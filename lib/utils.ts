@@ -1,6 +1,6 @@
 import { GEO_DATA } from '../data/geoData';
-import { Farmer, Plot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, FinancialTransaction, FarmerWallet, EquipmentLease } from '../types';
-import { FarmerModel, PlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, FinancialTransactionModel, FarmerWalletModel, EquipmentLeaseModel } from '../db';
+import { Farmer, Plot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, FinancialTransaction, FarmerWallet, EquipmentLease, PlantingRecord } from '../types';
+import { FarmerModel, PlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, FinancialTransactionModel, FarmerWalletModel, EquipmentLeaseModel, PlantingRecordModel } from '../db';
 import DOMPurify from 'dompurify';
 
 
@@ -26,6 +26,7 @@ export const plotModelToPlain = (model: PlotModel | null): Plot | null => {
     plainPlot.is_replanting = !!plainPlot.is_replanting;
     return plainPlot;
 };
+export const plantingRecordModelToPlain = (model: PlantingRecordModel | null): PlantingRecord | null => model ? modelToPlain<PlantingRecord>(model) : null;
 export const subsidyPaymentModelToPlain = (model: SubsidyPaymentModel | null): SubsidyPayment | null => model ? modelToPlain<SubsidyPayment>(model) : null;
 export const userModelToPlain = (model: UserModel | null): User | null => model ? modelToPlain<User>(model) : null;
 export const groupModelToPlain = (model: GroupModel | null): Group | null => model ? modelToPlain<Group>(model) : null;

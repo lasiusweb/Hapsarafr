@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+// FIX: Import Q from watermelondb to fix query builder errors.
 import { Database, Q } from '@nozbe/watermelondb';
-import { FarmerModel, UserModel, GroupModel, TenantModel } from './db';
+import { FarmerModel, UserModel, GroupModel, TenantModel, PlotModel } from './db';
 import { useDatabase } from './DatabaseContext';
 import { useQuery } from './hooks/useQuery';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 // FIX: Import FarmerStatus to resolve type errors.
-import { Farmer, User, Group, Filters, Permission, Tenant, FarmerStatus } from './types';
+import { Farmer, User, Group, Filters, Permission, Tenant, FarmerStatus, Plot } from './types';
 import Sidebar from './components/Sidebar';
 import FarmerList from './components/FarmerList';
 import FilterBar from './components/FilterBar';
@@ -24,6 +25,7 @@ import LandingPage from './components/LandingPage';
 import { MOCK_USERS } from './data/userData';
 import { DEFAULT_GROUPS } from './data/permissionsData';
 import { farmerModelToPlain, plotModelToPlain } from './lib/utils';
+import { useDebounce } from './hooks/useDebounce';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const ProfilePage = lazy(() => import('./components/ProfilePage'));
@@ -49,15 +51,26 @@ const FinancialLedgerPage = lazy(() => import('./components/FinancialLedgerPage'
 const MapView = lazy(() => import('./components/MapView'));
 const SubsidyManagementPage = lazy(() => import('./components/SubsidyManagementPage'));
 const AssistanceSchemesPage = lazy(() => import('./components/AssistanceSchemesPage'));
-const QualityAssessmentPage = lazy(() => import('./components/QualityAssessmentPage'));
 const ProcessingPage = lazy(() => import('./components/ProcessingPage'));
 const EquipmentManagementPage = lazy(() => import('./components/EquipmentManagementPage'));
 const FinancialDashboardPage = lazy(() => import('./components/FinancialDashboardPage'));
 const AgriStorePage = lazy(() => import('./components/AgriStorePage'));
 const EquipmentAccessProgramPage = lazy(() => import('./components/EquipmentAccessProgramPage'));
+const DiscussModeModal = lazy(() => import('./components/DiscussModeModal'));
 
 
 type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management'| 'financial-dashboard' | 'agri-store' | 'equipment-access';
+
+// FIX: Define initialFilters constant to resolve reference error.
+const initialFilters: Filters = {
+  searchQuery: '',
+  district: '',
+  mandal: '',
+  village: '',
+  status: '',
+  registrationDateFrom: '',
+  registrationDateTo: '',
+};
 
 const App: React.FC = () => {
     const database = useDatabase();
@@ -74,14 +87,16 @@ const App: React.FC = () => {
     // Data State
     const allFarmersQuery = useMemo(() => database.get<FarmerModel>('farmers').query(), [database]);
     const allFarmers = useQuery(allFarmersQuery);
+    // FIX: Convert FarmerModel[] to Farmer[] for use in components
+    const plainFarmers: Farmer[] = useMemo(() => allFarmers.map(f => farmerModelToPlain(f)).filter((f): f is Farmer => f !== null), [allFarmers]);
     const allUsersQuery = useMemo(() => database.get<UserModel>('users').query(), [database]);
-    const allUsers = useQuery(allUsersQuery);
+    const allUsers: User[] = useQuery(allUsersQuery).map(u => u._raw as any as User);
     const allGroupsQuery = useMemo(() => database.get<GroupModel>('groups').query(), [database]);
-    const allGroups = useQuery(allGroupsQuery);
+    const allGroups: Group[] = useQuery(allGroupsQuery).map(g => ({...g._raw, permissions: JSON.parse(g.permissionsStr)} as any as Group));
     const allTenantsQuery = useMemo(() => database.get<TenantModel>('tenants').query(), [database]);
-    const allTenants = useQuery(allTenantsQuery);
+    const allTenants: Tenant[] = useQuery(allTenantsQuery).map(t => t._raw as any as Tenant);
     
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [filters, setFilters] = useState<Filters>({ searchQuery: '', district: '', mandal: '', village: '', status: '', registrationDateFrom: '', registrationDateTo: '' });
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
@@ -90,13 +105,15 @@ const App: React.FC = () => {
     const [showBulkImportModal, setShowBulkImportModal] = useState(false);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+    const [showDiscussMode, setShowDiscussMode] = useState(false);
     // Sync state
     const [isSyncing, setIsSyncing] = useState(false);
     const [lastSync, setLastSync] = useState<Date | null>(null);
 
     // PDF/Print state
     const [farmerToPrint, setFarmerToPrint] = useState<FarmerModel | null>(null);
-    const [pdfExportData, setPdfExportData] = useState<{ farmer: FarmerModel, plots: any[] } | null>(null);
+    const [plotsForPrint, setPlotsForPrint] = useState<Plot[]>([]);
+    const [pdfExportData, setPdfExportData] = useState<{ farmer: Farmer, plots: Plot[] } | null>(null);
     const [printQueue, setPrintQueue] = useState<string[]>([]);
     
     // Edit state
@@ -114,6 +131,7 @@ const App: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(25);
     const [listViewMode, setListViewMode] = useState<'table' | 'grid'>('table');
+    const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id' | 'tenantId'; direction: 'ascending' | 'descending' } | null>({ key: 'createdAt', direction: 'descending'});
     
     const supabase = useMemo(() => initializeSupabase(), []);
 
@@ -174,7 +192,7 @@ const App: React.FC = () => {
     }, []);
 
     const navigateWithFilter = (view: ViewType, newFilters: Partial<Omit<Filters, 'searchQuery' | 'registrationDateFrom' | 'registrationDateTo'>>) => {
-        setFilters(prev => ({...prev, ...newFilters}));
+        setFilters(prev => ({...initialFilters, ...newFilters}));
         handleNavigation(view);
     };
 
@@ -182,7 +200,8 @@ const App: React.FC = () => {
     const userPermissions = useMemo(() => {
         if (!currentUser) return new Set<Permission>();
         const group = allGroups.find(g => g.id === currentUser.groupId);
-        return new Set(group ? group.permissions : []);
+        // FIX: Cast group permissions to Permission[] to satisfy Set<Permission> type
+        return new Set(group ? (group.permissions as Permission[]) : []);
     }, [currentUser, allGroups]);
 
     const canEdit = userPermissions.has(Permission.CAN_EDIT_FARMER);
@@ -190,6 +209,67 @@ const App: React.FC = () => {
     const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
     
     // --- Data Handlers ---
+    
+    const debouncedSearchQuery = useDebounce(filters.searchQuery, 300);
+
+    const filteredAndSortedFarmers = useMemo(() => {
+        let farmersToProcess = plainFarmers.filter(f => f.syncStatus !== 'pending_delete');
+
+        // Filtering
+        if (debouncedSearchQuery) {
+            const lowercasedQuery = debouncedSearchQuery.toLowerCase();
+            farmersToProcess = farmersToProcess.filter(f => 
+                f.fullName.toLowerCase().includes(lowercasedQuery) ||
+                f.farmerId.toLowerCase().includes(lowercasedQuery) ||
+                f.mobileNumber.includes(lowercasedQuery)
+            );
+        }
+        if (filters.district) {
+            farmersToProcess = farmersToProcess.filter(f => f.district === filters.district);
+        }
+        if (filters.mandal) {
+            farmersToProcess = farmersToProcess.filter(f => f.mandal === filters.mandal);
+        }
+        if (filters.village) {
+            farmersToProcess = farmersToProcess.filter(f => f.village === filters.village);
+        }
+        if (filters.status) {
+            farmersToProcess = farmersToProcess.filter(f => f.status === filters.status);
+        }
+        if (filters.registrationDateFrom) {
+            farmersToProcess = farmersToProcess.filter(f => new Date(f.registrationDate) >= new Date(filters.registrationDateFrom));
+        }
+        if (filters.registrationDateTo) {
+            farmersToProcess = farmersToProcess.filter(f => new Date(f.registrationDate) <= new Date(filters.registrationDateTo));
+        }
+
+        // Sorting
+        if (sortConfig !== null) {
+            farmersToProcess.sort((a, b) => {
+                const aValue = a[sortConfig.key as keyof Farmer];
+                const bValue = b[sortConfig.key as keyof Farmer];
+                
+                if (aValue === null || aValue === undefined) return 1;
+                if (bValue === null || bValue === undefined) return -1;
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        
+        return farmersToProcess;
+
+    }, [plainFarmers, debouncedSearchQuery, filters, sortConfig]);
+
+    const paginatedFarmers = useMemo(() => {
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        return filteredAndSortedFarmers.slice(startIndex, startIndex + rowsPerPage);
+    }, [filteredAndSortedFarmers, currentPage, rowsPerPage]);
 
     const handleRegisterFarmer = useCallback(async (farmerData: Farmer, photoFile?: File) => {
         let photoBase64 = '';
@@ -208,7 +288,7 @@ const App: React.FC = () => {
                 Object.assign(farmer, {
                     ...rest,
                     photo: photoBase64,
-                    syncStatusLocal: 'pending',
+                    syncStatus: 'pending',
                     createdBy: currentUser?.id,
                     updatedBy: currentUser?.id,
                     tenantId: currentUser?.tenantId,
@@ -239,7 +319,7 @@ const App: React.FC = () => {
                 Object.assign(farmer, {
                     ...updatableData,
                     photo: photoBase64,
-                    syncStatusLocal: 'pending',
+                    syncStatus: 'pending',
                     updatedBy: currentUser?.id,
                 });
             });
@@ -265,7 +345,6 @@ const App: React.FC = () => {
     
     const handleConfirmDelete = async () => {
         await database.write(async () => {
-            // FIX: Import Q from watermelondb to fix query errors.
             const farmersToDelete = await database.get<FarmerModel>('farmers').query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
             for (const farmer of farmersToDelete) {
                 // If synced, mark for deletion. If not, delete permanently.
@@ -284,7 +363,6 @@ const App: React.FC = () => {
 
     const handleBatchUpdateStatus = async (newStatus: FarmerStatus) => {
         await database.write(async () => {
-            // FIX: Import Q from watermelondb to fix query errors.
             const farmersToUpdate = await database.get<FarmerModel>('farmers').query(Q.where('id', Q.oneOf(selectedFarmerIds))).fetch();
             for (const farmer of farmersToUpdate) {
                 await farmer.update(f => {
@@ -318,10 +396,12 @@ const App: React.FC = () => {
         }
     }, [database, supabase]);
 
-    const handlePrint = useCallback((farmerId: string) => {
+    const handlePrint = useCallback(async (farmerId: string) => {
         const farmer = allFarmers.find(f => f.id === farmerId);
         if (farmer) {
             setFarmerToPrint(farmer);
+            const plots = await farmer.plots.fetch();
+            setPlotsForPrint(plots.map(p => plotModelToPlain(p)!));
             setTimeout(() => window.print(), 500);
         }
     }, [allFarmers]);
@@ -330,7 +410,7 @@ const App: React.FC = () => {
         const farmer = allFarmers.find(f => f.id === farmerId);
         if(farmer) {
             const plots = await farmer.plots.fetch();
-            setPdfExportData({ farmer, plots });
+            setPdfExportData({ farmer: farmerModelToPlain(farmer)!, plots: plots.map(p => plotModelToPlain(p)!) });
             setTimeout(async () => {
                 const element = document.getElementById('pdf-print-view');
                 if(element) {
@@ -378,39 +458,42 @@ const App: React.FC = () => {
         };
 
         switch (currentView) {
-            case 'dashboard': return <Dashboard farmers={allFarmers} onNavigateWithFilter={navigateWithFilter} />;
+            case 'dashboard': return <Dashboard farmers={plainFarmers} onNavigateWithFilter={navigateWithFilter} />;
             case 'farmer-directory': return (
+                <>
+                <FilterBar filters={filters} onFilterChange={setFilters} />
                 <FarmerList 
                     {...farmerListProps} 
-                    farmers={[]} 
-                    users={[]} 
+                    farmers={paginatedFarmers} 
+                    users={allUsers} 
                     selectedFarmerIds={selectedFarmerIds}
-                    onSelectionChange={() => {}}
-                    onSelectAll={() => {}}
-                    sortConfig={null}
-                    onRequestSort={() => {}}
-                    newlyAddedFarmerId={null}
-                    onHighlightComplete={() => {}}
-                    totalRecords={0}
-                    currentPage={1}
-                    rowsPerPage={25}
-                    onPageChange={() => {}}
-                    onRowsPerPageChange={() => {}}
-                    isLoading={false}
+                    onSelectionChange={(id, isSelected) => setSelectedFarmerIds(prev => isSelected ? [...prev, id] : prev.filter(i => i !== id))}
+                    onSelectAll={(allSelected) => setSelectedFarmerIds(allSelected ? paginatedFarmers.map(f => f.id) : [])}
+                    sortConfig={sortConfig}
+                    onRequestSort={(key) => setSortConfig(prev => ({key, direction: prev?.key === key && prev.direction === 'ascending' ? 'descending' : 'ascending'}))}
+                    newlyAddedFarmerId={newlyAddedFarmerId}
+                    onHighlightComplete={() => setNewlyAddedFarmerId(null)}
+                    totalRecords={filteredAndSortedFarmers.length}
+                    currentPage={currentPage}
+                    rowsPerPage={rowsPerPage}
+                    onPageChange={setCurrentPage}
+                    onRowsPerPageChange={setRowsPerPage}
+                    isLoading={isLoading}
                     onAddToPrintQueue={handleAddToPrintQueue}
                     listViewMode={listViewMode}
                     onSetListViewMode={setListViewMode}
                     isSuperAdmin={isSuperAdmin}
-                    tenants={[]}
+                    tenants={allTenants}
                 />
+                </>
             );
             case 'profile': return <ProfilePage currentUser={currentUser} groups={allGroups} onSave={async() => {}} onBack={() => handleNavigation('dashboard')} setNotification={setNotification} />;
             case 'admin': return <AdminPage currentUser={currentUser} users={allUsers} groups={allGroups} onSaveUsers={async() => {}} onSaveGroups={async() => {}} onBack={() => handleNavigation('dashboard')} onNavigate={handleNavigation} setNotification={setNotification} />;
             case 'farmer-details': return viewParam ? <FarmerDetailsPage farmerId={viewParam} users={allUsers} currentUser={currentUser} onBack={() => handleNavigation('farmer-directory')} permissions={userPermissions} setNotification={setNotification} /> : <NotFoundPage onBack={() => handleNavigation('dashboard')} />;
             case 'print-queue': return <PrintQueuePage queuedFarmerIds={printQueue} users={allUsers} onRemove={(id) => setPrintQueue(q => q.filter(i => i !== id))} onClear={() => setPrintQueue([])} onBack={() => handleNavigation('farmer-directory')} />;
-            case 'reports': return <ReportsPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} />;
-            case 'id-verification': return <IdVerificationPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} />;
-            case 'data-health': return <DataHealthPage allFarmers={allFarmers} onNavigate={(path) => handleNavigation('farmer-details', path.split('/')[1])} onBack={() => handleNavigation('dashboard')} />;
+            case 'reports': return <ReportsPage allFarmers={plainFarmers} onBack={() => handleNavigation('dashboard')} />;
+            case 'id-verification': return <IdVerificationPage allFarmers={plainFarmers} onBack={() => handleNavigation('dashboard')} />;
+            case 'data-health': return <DataHealthPage allFarmers={plainFarmers} onNavigate={(path) => handleNavigation('farmer-details', path.split('/')[1])} onBack={() => handleNavigation('dashboard')} />;
             case 'help': return <HelpPage onBack={() => handleNavigation('dashboard')} />;
             case 'content-manager': return <ContentManagerPage supabase={supabase} currentContent={null} onContentSave={() => {}} onBack={() => handleNavigation('admin')} />;
             case 'geo-management': return <GeoManagementPage onBack={() => handleNavigation('admin')} />;
@@ -418,14 +501,14 @@ const App: React.FC = () => {
             case 'tenant-management': return <TenantManagementPage onBack={() => handleNavigation('admin')} />;
             case 'crop-health': return <CropHealthScannerPage onBack={() => handleNavigation('dashboard')} />;
             case 'satellite-analysis': return <SatelliteAnalysisPage onBack={() => handleNavigation('dashboard')} />;
-            case 'yield-prediction': return <YieldPredictionPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} />;
+            case 'yield-prediction': return <YieldPredictionPage allFarmers={plainFarmers} onBack={() => handleNavigation('dashboard')} />;
             case 'performance-analytics': return <PerformanceAnalyticsPage onBack={() => handleNavigation('dashboard')} />;
             case 'task-management': return <TaskManagementPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
-            case 'financial-ledger': return <FinancialLedgerPage allFarmers={allFarmers} onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            case 'financial-ledger': return <FinancialLedgerPage allFarmers={plainFarmers} onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
             case 'map-view': return <MapView farmers={allFarmers} onNavigate={(path) => handleNavigation('farmer-details', path.split('/')[1])} />;
-            case 'subsidy-management': return <SubsidyManagementPage allFarmers={allFarmers} payments={[]} currentUser={currentUser} onBack={() => handleNavigation('dashboard')} database={database} setNotification={setNotification} />;
+            // FIX: Pass plainFarmers to SubsidyManagementPage and use the correct prop name 'farmers'
+            case 'subsidy-management': return <SubsidyManagementPage farmers={plainFarmers} payments={[]} currentUser={currentUser} onBack={() => handleNavigation('dashboard')} database={database} setNotification={setNotification} />;
             case 'assistance-schemes': return <AssistanceSchemesPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
-            case 'quality-assessment': return <QualityAssessmentPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} allFarmers={allFarmers} setNotification={setNotification} />;
             case 'processing-transparency': return <ProcessingPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
             case 'equipment-management': return <EquipmentManagementPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
             case 'financial-dashboard': return <FinancialDashboardPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
@@ -443,6 +526,7 @@ const App: React.FC = () => {
                 isCollapsed={isSidebarCollapsed}
                 onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 currentUser={currentUser}
+                // FIX: Cast permissions to the correct type.
                 userPermissions={userPermissions}
             />
             <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
@@ -458,8 +542,10 @@ const App: React.FC = () => {
                 <RegistrationForm
                     onSubmit={farmerToEdit ? handleUpdateFarmer : handleRegisterFarmer}
                     onCancel={() => { setShowRegistrationForm(false); setFarmerToEdit(null); }}
-                    existingFarmers={allFarmers}
+                    // FIX: Pass plainFarmers to satisfy the Farmer[] type.
+                    existingFarmers={plainFarmers}
                     mode={farmerToEdit ? 'edit' : 'create'}
+                    // FIX: This requires a plain object, so converting the model is correct.
                     existingFarmer={farmerToEdit ? farmerModelToPlain(farmerToEdit) : null}
                     setNotification={setNotification}
                 />
@@ -468,7 +554,8 @@ const App: React.FC = () => {
                 <BulkImportModal
                     onClose={() => setShowBulkImportModal(false)}
                     onSubmit={async (newFarmers) => { /* Logic to add multiple farmers */ }}
-                    existingFarmers={allFarmers}
+                    // FIX: Pass plainFarmers to satisfy the Farmer[] type.
+                    existingFarmers={plainFarmers}
                 />
             )}
             {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
@@ -477,9 +564,24 @@ const App: React.FC = () => {
 
             {/* Hidden print views */}
             <div className="hidden">
-                {farmerToPrint && <PrintView farmer={farmerModelToPlain(farmerToPrint)} plots={[]} users={allUsers} />}
-                {pdfExportData && <div id="pdf-print-view"><PrintView farmer={farmerModelToPlain(pdfExportData.farmer)} plots={pdfExportData.plots.map(p => plotModelToPlain(p))} users={allUsers} isForPdf={true} /></div>}
+                {farmerToPrint && <PrintView farmer={farmerModelToPlain(farmerToPrint)} plots={plotsForPrint} users={allUsers} />}
+                {/* FIX: Correctly pass 'plots' and 'users' props to PrintView for PDF export. */}
+                {pdfExportData && <div id="pdf-print-view"><PrintView farmer={pdfExportData.farmer} plots={pdfExportData.plots} users={allUsers} isForPdf={true} /></div>}
             </div>
+
+            {showDiscussMode && (
+                <Suspense fallback={<div/>}>
+                    <DiscussModeModal onClose={() => setShowDiscussMode(false)} />
+                </Suspense>
+            )}
+            <button
+                onClick={() => setShowDiscussMode(true)}
+                className="fixed bottom-6 right-6 bg-green-600 text-white rounded-full p-4 shadow-lg hover:bg-green-700 transition-transform transform hover:scale-110 z-30"
+                title="Open Discuss Mode"
+                aria-label="Open Discuss Mode"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.08-3.242A8.904 8.904 0 012 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM4.72 14.48A7 7 0 0010 16a7 7 0 007-7c0-2.828-2.682-5-6-5S4 7.172 4 10c0 .736.223 1.424.609 2.023l.28.432-.923 2.77 2.79-.93.42-.28z" clipRule="evenodd" /></svg>
+            </button>
         </div>
     );
 };

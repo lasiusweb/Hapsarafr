@@ -77,6 +77,7 @@ export enum ActivityType {
   FUNDS_WITHDRAWN = 'FUNDS_WITHDRAWN',
   AGRI_STORE_PURCHASE = 'AGRI_STORE_PURCHASE',
   EQUIPMENT_LEASE_STARTED = 'EQUIPMENT_LEASE_STARTED',
+  HARVEST_RECORDED = 'HARVEST_RECORDED',
 }
 
 export enum OverallGrade {
@@ -204,6 +205,21 @@ export interface Plot {
   fullCostPlants: number;
   geojson?: string;
   is_replanting: boolean;
+}
+
+export interface PlantingRecord {
+  id: string;
+  plotId: string;
+  seedSource: string;
+  plantingDate: string;
+  geneticVariety: string;
+  careInstructionsUrl?: string;
+  numberOfPlants: number;
+  qrCodeData?: string;
+  syncStatus: 'synced' | 'pending';
+  createdAt: string;
+  updatedAt: string;
+  tenantId: string;
 }
 
 export interface User {

@@ -37,6 +37,8 @@ GEO_DATA.forEach(district => {
     });
 });
 
+// FIX: Define the 'Step' type to resolve the 'Cannot find name' error.
+type Step = 'upload' | 'review' | 'summary';
 
 const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, existingFarmers }) => {
     const [step, setStep] = useState<Step>('upload');
@@ -156,6 +158,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         district: districtCode, mandal: mandalCode, village: villageCode,
                         syncStatus: 'pending', createdAt: now, updatedAt: now,
                         tenantId: '', // Will be filled by parent
+                        is_in_ne_region: false,
                     };
                 }).filter((r): r is NewRecord => r !== null);
                 

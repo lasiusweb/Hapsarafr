@@ -5,7 +5,6 @@ import { FarmerModel, SubsidyPaymentModel } from '../db';
 // It removes WatermelonDB-specific fields (_status, _changed).
 // It also maps the model's 'syncStatusLocal' property to 'syncStatus' for the backend.
 const modelToSupabaseReadyObject = (model: FarmerModel | SubsidyPaymentModel) => {
-    // FIX: Property '_raw' is not publicly exposed in types. Cast to 'any' to access it.
     // FIX: Cast model to `any` to access the internal `_raw` property for creating a plain object.
     const plainObject: { [key: string]: any } = { ...(model as any)._raw };
     delete plainObject._status;
@@ -68,10 +67,10 @@ export const synchronize = async (database: Database, supabase: any): Promise<{ 
         // Mark upserted records as 'synced'
         const farmersToMarkSynced = pendingFarmers.filter(f => f.syncStatusLocal !== 'pending_delete');
         for (const farmer of farmersToMarkSynced) {
-            await farmer.update(rec => { rec.syncStatusLocal = 'synced'; });
+            await farmer.update(rec => { (rec as any).syncStatus = 'synced'; });
         }
         for (const payment of pendingPayments) {
-            await payment.update(rec => { rec.syncStatusLocal = 'synced'; });
+            await payment.update(rec => { (rec as any).syncStatus = 'synced'; });
         }
         
         // Permanently delete the 'pending_delete' records locally

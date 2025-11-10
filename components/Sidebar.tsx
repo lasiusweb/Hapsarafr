@@ -33,7 +33,7 @@ const NavItem: React.FC<{
 
   return (
     <li>
-      <button onClick={() => onNavigate(view)} className={itemClasses} style={{ width: '100%' }}>
+      <button onClick={() => onNavigate(view)} className={itemClasses} style={{ width: '100%' }} title={text}>
         <div className="flex-shrink-0 w-6 h-6">{icon}</div>
         {!isCollapsed && <span className="ml-3 sidebar-item-text">{text}</span>}
         {isCollapsed && (
@@ -98,7 +98,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isCollapsed,
                 <SidebarCategory text="Operations" isCollapsed={isCollapsed} />
                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="subsidy-management" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.5 2.5 0 00-1.134 0V7.418zM12.5 8.5h-5a2.5 2.5 0 000 5h5a2.5 2.5 0 000-5zM11 10a1 1 0 11-2 0 1 1 0 012 0z" /><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8 6a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" /></svg>} text="Subsidy Management" />
                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="assistance-schemes" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 005 18h10a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4z" clipRule="evenodd" /></svg>} text="Assistance Schemes" />
-                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="quality-assessment" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6.672 1.911a1 1 0 10-1.344 1.478L11.586 10l-6.258 6.611a1 1 0 001.344 1.478L14.414 10 6.672 1.911z" clipRule="evenodd" /></svg>} text="Quality Assessment" />
                 
                 <SidebarCategory text="Processing & Value" isCollapsed={isCollapsed} />
                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="processing-transparency" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>} text="Processing Hub" />

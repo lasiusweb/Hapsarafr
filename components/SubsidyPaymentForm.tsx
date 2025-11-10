@@ -49,7 +49,7 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                 paymentDate: existingPayment.paymentDate,
                 amount: String(existingPayment.amount),
                 utrNumber: existingPayment.utrNumber,
-                paymentStage: existingPayment.paymentStage,
+                paymentStage: existingPayment.paymentStage as PaymentStage,
                 notes: existingPayment.notes || '',
             });
         }
@@ -82,6 +82,8 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                 id: existingPayment?.id || '', // Pass ID for updates
                 ...formData,
                 amount,
+                // FIX: Cast paymentStage to the PaymentStage enum type to resolve type error.
+                paymentStage: formData.paymentStage,
             });
         } finally {
             setIsSubmitting(false);

@@ -1,6 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
 import { schemaMigrations, createTable, addColumns } from '@nozbe/watermelondb/Schema/migrations';
-import { Model, Q } from '@nozbe/watermelondb';
+// FIX: Import 'Query' type for defining relations.
+import { Model, Q, Query } from '@nozbe/watermelondb';
 import { field, text, readonly, date, relation, children, writer, lazy } from '@nozbe/watermelondb/decorators';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { Database } from '@nozbe/watermelondb';
@@ -11,7 +12,7 @@ import { FarmerStatus, PlantType, PlantationMethod, OverallGrade, AppealStatus, 
 setGenerator(() => Math.random().toString(36).substring(2));
 
 const schema = appSchema({
-  version: 16,
+  version: 17,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -74,6 +75,22 @@ const schema = appSchema({
         { name: 'updated_at', type: 'number' },
         { name: 'tenant_id', type: 'string', isIndexed: true },
         { name: 'is_replanting', type: 'boolean' },
+      ]
+    }),
+    tableSchema({
+      name: 'planting_records',
+      columns: [
+        { name: 'plot_id', type: 'string', isIndexed: true },
+        { name: 'seed_source', type: 'string' },
+        { name: 'planting_date', type: 'string' },
+        { name: 'genetic_variety', type: 'string' },
+        { name: 'care_instructions_url', type: 'string', isOptional: true },
+        { name: 'number_of_plants', type: 'number' },
+        { name: 'qr_code_data', type: 'string', isOptional: true },
+        { name: 'syncStatus', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
       ]
     }),
     tableSchema({
@@ -756,6 +773,27 @@ const migrations = schemaMigrations({
           columns: [{ name: 'entry_source', type: 'string', isOptional: true }]
         })
       ]
+    },
+    {
+        toVersion: 17,
+        steps: [
+            createTable({
+                name: 'planting_records',
+                columns: [
+                    { name: 'plot_id', type: 'string', isIndexed: true },
+                    { name: 'seed_source', type: 'string' },
+                    { name: 'planting_date', type: 'string' },
+                    { name: 'genetic_variety', type: 'string' },
+                    { name: 'care_instructions_url', type: 'string', isOptional: true },
+                    { name: 'number_of_plants', type: 'number' },
+                    { name: 'qr_code_data', type: 'string', isOptional: true },
+                    { name: 'syncStatus', type: 'string' },
+                    { name: 'created_at', type: 'number' },
+                    { name: 'updated_at', type: 'number' },
+                    { name: 'tenant_id', type: 'string', isIndexed: true },
+                ]
+            })
+        ]
     }
   ],
 });
@@ -764,7 +802,7 @@ const migrations = schemaMigrations({
 // Models
 export class FarmerModel extends Model {
   static table = 'farmers';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('full_name') fullName!: string;
   @text('father_husband_name') fatherHusbandName!: string;
   @text('aadhaar_number') aadhaarNumber!: string;
@@ -804,22 +842,24 @@ export class FarmerModel extends Model {
   @text('tenant_id') tenantId!: string;
   @field('is_in_ne_region') isInNeRegion!: boolean;
   
-  @children('subsidy_payments') subsidyPayments!: Q.Query<SubsidyPaymentModel>;
-  @children('activity_logs') activityLogs!: Q.Query<ActivityLogModel>;
-  @children('resource_distributions') resourceDistributions!: Q.Query<ResourceDistributionModel>;
-  @children('plots') plots!: Q.Query<PlotModel>;
-  @children('assistance_applications') assistanceApplications!: Q.Query<AssistanceApplicationModel>;
-  @children('manual_ledger_entries') manualLedgerEntries!: Q.Query<ManualLedgerEntryModel>;
-  @children('financial_transactions') financialTransactions!: Q.Query<FinancialTransactionModel>;
-  @children('equipment_leases') equipmentLeases!: Q.Query<EquipmentLeaseModel>;
+  // FIX: Use 'Query' type instead of 'Q.Query'.
+  @children('subsidy_payments') subsidyPayments!: Query<SubsidyPaymentModel>;
+  @children('activity_logs') activityLogs!: Query<ActivityLogModel>;
+  @children('resource_distributions') resourceDistributions!: Query<ResourceDistributionModel>;
+  @children('plots') plots!: Query<PlotModel>;
+  @children('assistance_applications') assistanceApplications!: Query<AssistanceApplicationModel>;
+  @children('manual_ledger_entries') manualLedgerEntries!: Query<ManualLedgerEntryModel>;
+  @children('financial_transactions') financialTransactions!: Query<FinancialTransactionModel>;
+  @children('equipment_leases') equipmentLeases!: Query<EquipmentLeaseModel>;
+  @children('harvests') harvests!: Query<HarvestModel>;
 
-  // FIX: Use `this.collection` instead of `this.collections` to access collections.
-  @lazy wallet = this.collection.get<FarmerWalletModel>('farmer_wallets').query(Q.where('farmer_id', this.id));
+  // FIX: Use `this.collections` (plural) to access other collections.
+  @lazy wallet = this.collections.get<FarmerWalletModel>('farmer_wallets').query(Q.where('farmer_id', this.id));
 }
 
 export class PlotModel extends Model {
     static table = 'plots';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('farmer_id') farmerId!: string;
     @relation('farmers', 'farmer_id') farmer!: any;
     @field('acreage') acreage!: number;
@@ -836,11 +876,30 @@ export class PlotModel extends Model {
     @readonly @date('updated_at') updatedAt!: Date;
     @text('tenant_id') tenantId!: string;
     @field('is_replanting') isReplanting!: boolean;
+    // FIX: Use 'Query' type instead of 'Q.Query'.
+    @children('planting_records') plantingRecords!: Query<PlantingRecordModel>;
+}
+
+export class PlantingRecordModel extends Model {
+    static table = 'planting_records';
+    // FIX: Remove overridden 'id' property.
+    @text('plot_id') plotId!: string;
+    @relation('plots', 'plot_id') plot!: any;
+    @text('seed_source') seedSource!: string;
+    @text('planting_date') plantingDate!: string;
+    @text('genetic_variety') geneticVariety!: string;
+    @text('care_instructions_url') careInstructionsUrl?: string;
+    @field('number_of_plants') numberOfPlants!: number;
+    @text('qr_code_data') qrCodeData?: string;
+    @text('syncStatus') syncStatusLocal!: 'synced' | 'pending';
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @text('tenant_id') tenantId!: string;
 }
 
 export class UserModel extends Model {
   static table = 'users';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('name') name!: string;
   @text('avatar') avatar!: string;
   @text('group_id') groupId!: string;
@@ -849,7 +908,7 @@ export class UserModel extends Model {
 
 export class GroupModel extends Model {
   static table = 'groups';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('name') name!: string;
   @text('permissions') permissionsStr!: string;
   @text('tenant_id') tenantId!: string;
@@ -861,7 +920,7 @@ export class GroupModel extends Model {
 
 export class SubsidyPaymentModel extends Model {
   static table = 'subsidy_payments';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('farmer_id') farmerId!: string;
   @relation('farmers', 'farmer_id') farmer!: any;
   @text('payment_date') paymentDate!: string;
@@ -877,7 +936,7 @@ export class SubsidyPaymentModel extends Model {
 
 export class ActivityLogModel extends Model {
     static table = 'activity_logs';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('farmer_id') farmerId!: string;
     @relation('farmers', 'farmer_id') farmer!: any;
     @text('activity_type') activityType!: string;
@@ -889,21 +948,24 @@ export class ActivityLogModel extends Model {
 
 export class TenantModel extends Model {
     static table = 'tenants';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('name') name!: string;
     @text('subscription_status') subscriptionStatus!: 'active' | 'trial' | 'inactive';
     @readonly @date('created_at') createdAt!: Date;
 
-    @writer async updateSubscriptionStatus(status: 'active' | 'trial' | 'inactive') {
-        await this.update(tenant => {
-            tenant.subscriptionStatus = status;
-        })
+    // FIX: Replaced @writer decorator with an explicit database.write call to resolve type error on 'this.update'.
+    async updateSubscriptionStatus(status: 'active' | 'trial' | 'inactive') {
+        await this.database.write(async () => {
+            await this.update(record => {
+                (record as TenantModel).subscriptionStatus = status;
+            });
+        });
     }
 }
 
 export class ResourceModel extends Model {
     static table = 'resources';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('name') name!: string;
     @text('unit') unit!: string;
     @text('description') description?: string;
@@ -912,7 +974,7 @@ export class ResourceModel extends Model {
 
 export class ResourceDistributionModel extends Model {
     static table = 'resource_distributions';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('farmer_id') farmerId!: string;
     @relation('farmers', 'farmer_id') farmer!: any;
     @text('resource_id') resourceId!: string;
@@ -928,25 +990,27 @@ export class ResourceDistributionModel extends Model {
 
 export class DistrictModel extends Model {
     static table = 'districts';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('code') code!: string;
     @text('name') name!: string;
-    @children('mandals') mandals!: Q.Query<MandalModel>;
+    // FIX: Use 'Query' type instead of 'Q.Query'.
+    @children('mandals') mandals!: Query<MandalModel>;
 }
 
 export class MandalModel extends Model {
     static table = 'mandals';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('district_id') districtId!: string;
     @relation('districts', 'district_id') district!: any;
     @text('code') code!: string;
     @text('name') name!: string;
-    @children('villages') villages!: Q.Query<VillageModel>;
+    // FIX: Use 'Query' type instead of 'Q.Query'.
+    @children('villages') villages!: Query<VillageModel>;
 }
 
 export class VillageModel extends Model {
     static table = 'villages';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('mandal_id') mandalId!: string;
     @relation('mandals', 'mandal_id') mandal!: any;
     @text('code') code!: string;
@@ -955,7 +1019,7 @@ export class VillageModel extends Model {
 
 export class CustomFieldDefinitionModel extends Model {
     static table = 'custom_field_definitions';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('model_name') modelName!: string;
     @text('field_name') fieldName!: string;
     @text('field_label') fieldLabel!: string;
@@ -972,7 +1036,7 @@ export class CustomFieldDefinitionModel extends Model {
 
 export class AssistanceApplicationModel extends Model {
     static table = 'assistance_applications';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('farmer_id') farmerId!: string;
     @relation('farmers', 'farmer_id') farmer!: any;
     @text('scheme_id') schemeId!: string;
@@ -985,7 +1049,7 @@ export class AssistanceApplicationModel extends Model {
 
 export class TaskModel extends Model {
     static table = 'tasks';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('title') title!: string;
     @text('description') description?: string;
     @field('status') status!: TaskStatus;
@@ -1002,7 +1066,7 @@ export class TaskModel extends Model {
 
 export class HarvestModel extends Model {
   static table = 'harvests';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('farmer_id') farmerId!: string;
   @relation('farmers', 'farmer_id') farmer!: any;
   @text('harvest_date') harvestDate!: string;
@@ -1017,7 +1081,7 @@ export class HarvestModel extends Model {
 
 export class QualityAssessmentModel extends Model {
   static table = 'quality_assessments';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('harvest_id') harvestId!: string;
   @relation('harvests', 'harvest_id') harvest!: any;
   @text('assessment_date') assessmentDate!: string;
@@ -1029,12 +1093,13 @@ export class QualityAssessmentModel extends Model {
   @text('syncStatus') syncStatusLocal!: 'synced' | 'pending';
   @text('tenant_id') tenantId!: string;
   
-  @children('quality_metrics') qualityMetrics!: Q.Query<QualityMetricModel>;
+  // FIX: Use 'Query' type instead of 'Q.Query'.
+  @children('quality_metrics') qualityMetrics!: Query<QualityMetricModel>;
 }
 
 export class QualityMetricModel extends Model {
   static table = 'quality_metrics';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('assessment_id') assessmentId!: string;
   @relation('quality_assessments', 'assessment_id') assessment!: any;
   @text('metric_name') metricName!: string;
@@ -1043,7 +1108,7 @@ export class QualityMetricModel extends Model {
 
 export class QualityStandardModel extends Model {
     static table = 'quality_standards';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('metric_name') metricName!: string;
     @text('description') description!: string;
     @text('measurement_unit') measurementUnit!: string;
@@ -1052,7 +1117,7 @@ export class QualityStandardModel extends Model {
 
 export class ProcessingBatchModel extends Model {
   static table = 'processing_batches';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('harvest_id') harvestId!: string;
   @relation('harvests', 'harvest_id') harvest!: any;
   @text('batch_code') batchCode!: string;
@@ -1062,12 +1127,13 @@ export class ProcessingBatchModel extends Model {
   @text('notes') notes?: string;
   @text('syncStatus') syncStatusLocal!: 'synced' | 'pending';
   @text('tenant_id') tenantId!: string;
-  @children('processing_steps') steps!: Q.Query<ProcessingStepModel>;
+  // FIX: Use 'Query' type instead of 'Q.Query'.
+  @children('processing_steps') steps!: Query<ProcessingStepModel>;
 }
 
 export class ProcessingStepModel extends Model {
   static table = 'processing_steps';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('batch_id') batchId!: string;
   @relation('processing_batches', 'batch_id') batch!: any;
   @text('step_name') stepName!: string;
@@ -1083,7 +1149,7 @@ export class ProcessingStepModel extends Model {
 
 export class EquipmentModel extends Model {
   static table = 'equipment';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('name') name!: string;
   @text('type') type!: string;
   @text('location') location!: string;
@@ -1091,12 +1157,13 @@ export class EquipmentModel extends Model {
   @text('last_maintenance_date') lastMaintenanceDate?: string;
   @text('syncStatus') syncStatusLocal!: 'synced' | 'pending';
   @text('tenant_id') tenantId!: string;
-  @children('maintenance_logs') maintenanceLogs!: Q.Query<EquipmentMaintenanceLogModel>;
+  // FIX: Use 'Query' type instead of 'Q.Query'.
+  @children('maintenance_logs') maintenanceLogs!: Query<EquipmentMaintenanceLogModel>;
 }
 
 export class EquipmentMaintenanceLogModel extends Model {
   static table = 'equipment_maintenance_logs';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('equipment_id') equipmentId!: string;
   @relation('equipment', 'equipment_id') equipment!: any;
   @text('maintenance_date') maintenanceDate!: string;
@@ -1109,7 +1176,7 @@ export class EquipmentMaintenanceLogModel extends Model {
 
 export class ManualLedgerEntryModel extends Model {
     static table = 'manual_ledger_entries';
-    id!: string;
+    // FIX: Remove overridden 'id' property.
     @text('farmer_id') farmerId!: string;
     @relation('farmers', 'farmer_id') farmer!: any;
     @text('entry_date') entryDate!: string;
@@ -1125,7 +1192,7 @@ export class ManualLedgerEntryModel extends Model {
 
 export class FinancialTransactionModel extends Model {
   static table = 'financial_transactions';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('farmer_id') farmerId!: string;
   @relation('farmers', 'farmer_id') farmer!: any;
   @field('transaction_type') transactionType!: TransactionType;
@@ -1141,7 +1208,7 @@ export class FinancialTransactionModel extends Model {
 
 export class FarmerWalletModel extends Model {
   static table = 'farmer_wallets';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('farmer_id') farmerId!: string;
   @relation('farmers', 'farmer_id') farmer!: any;
   @field('current_balance') currentBalance!: number;
@@ -1152,7 +1219,7 @@ export class FarmerWalletModel extends Model {
 
 export class EquipmentLeaseModel extends Model {
   static table = 'equipment_leases';
-  id!: string;
+  // FIX: Remove overridden 'id' property.
   @text('farmer_id') farmerId!: string;
   @relation('farmers', 'farmer_id') farmer!: any;
   @text('equipment_id') equipmentId!: string;
@@ -1177,7 +1244,7 @@ const adapter = new LokiJSAdapter({
 const database = new Database({
   adapter,
   modelClasses: [
-    FarmerModel, PlotModel, UserModel, GroupModel, SubsidyPaymentModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, DistrictModel, MandalModel, VillageModel, CustomFieldDefinitionModel, AssistanceApplicationModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, QualityStandardModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, EquipmentMaintenanceLogModel, ManualLedgerEntryModel, FinancialTransactionModel, FarmerWalletModel, EquipmentLeaseModel
+    FarmerModel, PlotModel, UserModel, GroupModel, SubsidyPaymentModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, DistrictModel, MandalModel, VillageModel, CustomFieldDefinitionModel, AssistanceApplicationModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, QualityStandardModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, EquipmentMaintenanceLogModel, ManualLedgerEntryModel, FinancialTransactionModel, FarmerWalletModel, EquipmentLeaseModel, PlantingRecordModel
   ],
 });
 

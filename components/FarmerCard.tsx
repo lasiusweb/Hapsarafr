@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Farmer } from '../types';
+import { Farmer, FarmerStatus } from '../types';
 import StatusBadge from './StatusBadge';
 import { getGeoName } from '../lib/utils';
 
@@ -80,7 +80,8 @@ const FarmerCard: React.FC<FarmerCardProps> = ({ farmer, isSelected, onSelection
                     <div className="space-y-2 text-sm">
                         <div className="flex justify-between items-center">
                             <span className="text-gray-500">Status</span>
-                            <StatusBadge status={farmer.status} />
+                            {/* FIX: Cast status from string to FarmerStatus enum type to satisfy StatusBadge props. */}
+                            <StatusBadge status={farmer.status as FarmerStatus} />
                         </div>
                         <div className="flex justify-between">
                             <span className="text-gray-500">Location</span>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Farmer, ManualLedgerEntry, User } from '../types';
+import { Farmer, ManualLedgerEntry, User, EntrySource } from '../types';
 import CustomSelect from './CustomSelect';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -60,6 +60,7 @@ const AddEntryModal: React.FC<{
             ...formState,
             farmerId,
             amount: parseFloat(formState.amount) || 0,
+            entrySource: EntrySource.ManualEntry,
         });
     };
 
@@ -108,10 +109,10 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
     const resourceMap = useMemo(() => new Map(allResources.map(r => [r.id, r])), [allResources]);
 
     // Fetch data for the selected farmer
-    const selectedFarmer = useQuery(useMemo(() => selectedFarmerId ? database.get<FarmerModel>('farmers').query(Q.where('id', selectedFarmerId)) : database.get<FarmerModel>('farmers').query(Q.where('id', 'null')), [database, selectedFarmerId]))[0];
-    const subsidyPayments = useQuery(selectedFarmer?.subsidyPayments.observe() || database.get<SubsidyPaymentModel>('subsidy_payments').query(Q.where('id', 'null')));
-    const resourceDistributions = useQuery(selectedFarmer?.resourceDistributions.observe() || database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('id', 'null')));
-    const manualEntries = useQuery(selectedFarmer?.manualLedgerEntries.observe() || database.get<ManualLedgerEntryModel>('manual_ledger_entries').query(Q.where('id', 'null')));
+    const selectedFarmer = useQuery<FarmerModel>(useMemo(() => selectedFarmerId ? database.get<FarmerModel>('farmers').query(Q.where('id', selectedFarmerId)) : database.get<FarmerModel>('farmers').query(Q.where('id', 'null')), [database, selectedFarmerId]))[0];
+    const subsidyPayments = useQuery<SubsidyPaymentModel>(useMemo(() => selectedFarmer ? selectedFarmer.subsidyPayments : database.get<SubsidyPaymentModel>('subsidy_payments').query(Q.where('id', 'null')), [selectedFarmer]));
+    const resourceDistributions = useQuery<ResourceDistributionModel>(useMemo(() => selectedFarmer ? selectedFarmer.resourceDistributions : database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('id', 'null')), [selectedFarmer]));
+    const manualEntries = useQuery<ManualLedgerEntryModel>(useMemo(() => selectedFarmer ? selectedFarmer.manualLedgerEntries : database.get<ManualLedgerEntryModel>('manual_ledger_entries').query(Q.where('id', 'null')), [selectedFarmer]));
     
     const ledgerData = useMemo((): { items: LedgerItem[], totalIncome: number, totalExpense: number, net: number } => {
         if (!selectedFarmerId) return { items: [], totalIncome: 0, totalExpense: 0, net: 0 };
@@ -173,6 +174,7 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
                 entry.description = entryData.description;
                 entry.category = entryData.category;
                 entry.amount = entryData.amount;
+                entry.entrySource = entryData.entrySource;
                 entry.syncStatusLocal = 'pending';
                 entry.tenantId = currentUser.tenantId;
             });
@@ -190,7 +192,7 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
                         <p className="text-gray-500">Track income and expenses for individual farmers.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back
                     </button>
                 </div>
@@ -241,7 +243,7 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
                 ) : (
                      <div className="text-center py-20 text-gray-500 bg-white rounded-lg shadow-md">
                         <h2 className="text-2xl font-semibold">Select a Farmer to Begin</h2>
-                        <p className="mt-2">Choose a farmer from the dropdown above to view their financial ledger.</p>
+                        <p className="mt-2">Choose a farmer from the dropdown to view their financial ledger.</p>
                     </div>
                 )}
 

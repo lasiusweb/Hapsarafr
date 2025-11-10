@@ -306,7 +306,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                         <p className="text-gray-500">Visualize farmer data and gain insights.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back to Dashboard
                     </button>
                 </div>
@@ -329,12 +329,12 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><CustomPieChart title="Farmer Status" data={statusDistribution} /><CustomPieChart title="Plantation Method" data={methodDistribution} /><CustomPieChart title="Gender Distribution" data={genderDistribution} /></div>
                     {filters.district && <CustomBarChart title={`Total Extent by Mandal in ${getGeoName('district', { district: filters.district })}`} data={extentByMandal} />}
 
-                     <div className="bg-white p-6 rounded-lg shadow-md border-2 border-dashed border-gray-300 text-center text-gray-500">
-                        <h3 className="font-bold text-gray-700">Coming Soon: Regional Outbreak Detection</h3>
-                        <p className="text-sm mt-2">AI will analyze incoming crop health images to identify potential disease outbreaks in specific regions, enabling proactive administrative action.</p>
+                    <div className="bg-white p-6 rounded-lg shadow-md border-2 border-dashed border-gray-300 text-center">
+                         <h3 className="font-bold text-gray-700">Coming Soon: Genetic Variety Performance Report</h3>
+                         <p className="text-sm mt-2 text-gray-500">Analyze the performance of different oil palm genetic varieties across regions to provide data-driven recommendations to farmers.</p>
                     </div>
 
-                    <div className="bg-white rounded-lg shadow-md p-6">
+                    <div className="bg-white p-6 rounded-lg shadow-md">
                         <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
                             AI Report Assistant

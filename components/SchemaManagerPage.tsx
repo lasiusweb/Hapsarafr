@@ -25,7 +25,8 @@ const SchemaManagerPage: React.FC<SchemaManagerPageProps> = ({ onBack }) => {
     const [formState, setFormState] = useState({
         fieldName: '',
         fieldLabel: '',
-        fieldType: 'text' as CustomFieldType,
+        // FIX: Cast initial value to CustomFieldType to ensure correct type inference.
+        fieldType: CustomFieldType.Text,
         options: '',
         isRequired: false,
     });
@@ -35,12 +36,13 @@ const SchemaManagerPage: React.FC<SchemaManagerPageProps> = ({ onBack }) => {
             setFormState({
                 fieldName: modalState.item.fieldName,
                 fieldLabel: modalState.item.fieldLabel,
-                fieldType: modalState.item.fieldType,
+                fieldType: modalState.item.fieldType as CustomFieldType,
                 options: modalState.item.options.join(', '),
                 isRequired: modalState.item.isRequired,
             });
         } else {
-            setFormState({ fieldName: '', fieldLabel: '', fieldType: 'text', options: '', isRequired: false });
+             // FIX: Cast initial value to CustomFieldType to ensure correct type inference.
+            setFormState({ fieldName: '', fieldLabel: '', fieldType: CustomFieldType.Text, options: '', isRequired: false });
         }
     }, [modalState]);
 

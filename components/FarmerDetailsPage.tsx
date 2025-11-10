@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel, AssistanceApplicationModel } from '../db';
-import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme } from '../types';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel, AssistanceApplicationModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel } from '../db';
+import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme, PlantingRecord, Harvest, QualityAssessment, AppealStatus, OverallGrade } from '../types';
 import SubsidyPaymentForm from './SubsidyPaymentForm';
 import DistributionForm from './DistributionForm';
 import ConfirmationModal from './ConfirmationModal';
-import { farmerModelToPlain, getGeoName, plotModelToPlain } from '../lib/utils';
+import { farmerModelToPlain, getGeoName, plotModelToPlain, plantingRecordModelToPlain, harvestModelToPlain, qualityAssessmentModelToPlain } from '../lib/utils';
 import { useDatabase } from '../DatabaseContext';
 import { Q } from '@nozbe/watermelondb';
 import { useQuery } from '../hooks/useQuery';
@@ -16,6 +16,11 @@ import { ASSISTANCE_SCHEMES } from '../data/assistanceSchemes';
 const RegistrationForm = lazy(() => import('./RegistrationForm'));
 const LiveAssistantModal = lazy(() => import('./LiveAssistantModal'));
 const ProfitabilitySimulator = lazy(() => import('./ProfitabilitySimulator'));
+const PlantingRecordFormModal = lazy(() => import('./components/PlantingRecordFormModal'));
+const HarvestForm = lazy(() => import('./HarvestForm'));
+const QualityAssessmentDetailsModal = lazy(() => import('./QualityAssessmentDetailsModal'));
+
+declare var QRCode: any;
 
 
 // Extend window type for SpeechRecognition
@@ -506,6 +511,189 @@ const AssistanceTabContent = withObservables(
     );
 });
 
+// --- NEW Genetic Traceability Components ---
+
+const PlantingRecordCard: React.FC<{ record: PlantingRecord, onEdit: () => void; onDelete: () => void; }> = ({ record, onEdit, onDelete }) => {
+    const qrCodeRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        if (qrCodeRef.current && record.id) {
+            QRCode.toCanvas(qrCodeRef.current, record.id, { width: 100 }, (error: any) => {
+                if (error) console.error('QR Code generation failed:', error);
+            });
+        }
+    }, [record.id]);
+    
+    return (
+        <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 flex flex-col md:flex-row gap-4">
+            <div className="flex-1 space-y-2">
+                <div className="flex justify-between items-start">
+                    <h5 className="font-bold text-blue-800">{record.geneticVariety}</h5>
+                    <div className="flex gap-2">
+                        <button onClick={onEdit} className="text-sm font-semibold text-blue-600 hover:underline">Edit</button>
+                        <button onClick={onDelete} className="text-sm font-semibold text-red-600 hover:underline">Delete</button>
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <DetailItem label="Seed Source" value={record.seedSource} />
+                    <DetailItem label="No. of Plants" value={record.numberOfPlants} />
+                    <DetailItem label="Planting Date" value={new Date(record.plantingDate).toLocaleDateString()} />
+                    <DetailItem label="Care Guide" value={record.careInstructionsUrl ? <a href={record.careInstructionsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a> : 'N/A'} />
+                </div>
+            </div>
+             <div className="text-center flex-shrink-0">
+                <canvas ref={qrCodeRef}></canvas>
+                <p className="text-xs text-gray-500 mt-1 font-mono">ID: ...{record.id.slice(-6)}</p>
+            </div>
+        </div>
+    );
+};
+
+
+const PlotTraceabilityCard = withObservables(
+    ['plot'], 
+    ({ plot }: { plot: PlotModel }) => ({
+        plantingRecords: plot.plantingRecords.observe()
+    })
+)(({ plot, plantingRecords, onAdd, onEdit, onDelete }: { plot: PlotModel, plantingRecords: PlantingRecordModel[], onAdd: (plotId: string) => void, onEdit: (record: PlantingRecord) => void, onDelete: (record: PlantingRecordModel) => void }) => {
+    
+    const plainPlot = plotModelToPlain(plot)!;
+    const plainRecords = plantingRecords.map(r => plantingRecordModelToPlain(r)!);
+
+    return (
+        <div className="bg-white border rounded-lg p-4 space-y-3 shadow-sm">
+            <div className="flex justify-between items-center border-b pb-2">
+                <div>
+                    <h4 className="font-bold text-gray-800">{plainPlot.acreage} Acres</h4>
+                    <p className="text-xs text-gray-500">Plot ID: ...{plainPlot.id.slice(-6)}</p>
+                </div>
+                <button onClick={() => onAdd(plainPlot.id)} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 font-semibold">+ Add Record</button>
+            </div>
+            
+            {plainRecords.length > 0 ? (
+                <div className="space-y-3">
+                    {plainRecords.map(rec => <PlantingRecordCard key={rec.id} record={rec} onEdit={() => onEdit(rec)} onDelete={() => onDelete(plantingRecords.find(r => r.id === rec.id)!)} />)}
+                </div>
+            ) : (
+                <div className="text-center py-6">
+                    <p className="text-sm text-gray-500">No genetic traceability records for this plot.</p>
+                </div>
+            )}
+        </div>
+    );
+});
+
+
+const TraceabilityTabContent = withObservables(
+    ['farmer'], 
+    ({ farmer }: { farmer: FarmerModel }) => ({
+        plots: farmer.plots.observe()
+    })
+)(({ plots, onAdd, onEdit, onDelete }: { plots: PlotModel[], onAdd: (plotId: string) => void, onEdit: (record: PlantingRecord) => void, onDelete: (record: PlantingRecordModel) => void }) => {
+    
+    if (!plots) {
+        return <div className="text-center p-10">Loading plots...</div>;
+    }
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Genetic Traceability by Plot</h3>
+            </div>
+            {plots.length > 0 ? (
+                <div className="space-y-6">
+                    {plots.map(plot => (
+                       <PlotTraceabilityCard key={plot.id} plot={plot} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-16 border-2 border-dashed rounded-lg">
+                    <p className="font-semibold text-gray-600">No plots have been registered for this farmer.</p>
+                    <p className="text-sm text-gray-500 mt-2">Add a plot under the "Land & Plantation" tab first.</p>
+                </div>
+            )}
+        </div>
+    );
+});
+
+// --- NEW Harvest Tab Components ---
+interface CombinedHarvestData {
+    harvest: Harvest;
+    assessment: QualityAssessment | null;
+}
+
+// FIX: Fix 'Cannot find name 'database' error by including 'database' in withObservables dependencies and props.
+const HarvestsTabContent = withObservables(
+    ['farmer', 'database'],
+    ({ farmer, database }: { farmer: FarmerModel; database: Database }) => ({
+        harvests: farmer.harvests.observe(),
+        assessments: database.get<QualityAssessmentModel>('quality_assessments').query(Q.on('harvests', Q.where('farmer_id', farmer.id))).observe()
+    })
+)(({ harvests, assessments, onRecord, onDetails }: { harvests: HarvestModel[], assessments: QualityAssessmentModel[], onRecord: () => void, onDetails: (data: CombinedHarvestData) => void }) => {
+    
+    const assessmentMap = useMemo(() => new Map(assessments.map(a => [a.harvestId, a])), [assessments]);
+
+    const combinedData: CombinedHarvestData[] = useMemo(() => {
+        return harvests.map(harvest => ({
+            harvest: harvestModelToPlain(harvest)!,
+            assessment: qualityAssessmentModelToPlain(assessmentMap.get(harvest.id) || null),
+        })).sort((a, b) => new Date(b.harvest.harvestDate).getTime() - new Date(a.harvest.harvestDate).getTime());
+    }, [harvests, assessmentMap]);
+    
+    const AppealStatusBadge: React.FC<{ status: AppealStatus }> = ({ status }) => {
+        const colors: Record<AppealStatus, string> = {
+            [AppealStatus.None]: 'bg-gray-100 text-gray-600',
+            [AppealStatus.Pending]: 'bg-yellow-100 text-yellow-800',
+            [AppealStatus.Approved]: 'bg-green-100 text-green-800',
+            [AppealStatus.Rejected]: 'bg-red-100 text-red-800',
+        };
+        return <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status]}`}>{status}</span>;
+    };
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Harvest & Quality History</h3>
+                <button onClick={onRecord} className="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 font-semibold">
+                    + Record New Harvest
+                </button>
+            </div>
+            {combinedData.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harvest Date</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Net Weight (kg)</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Overall Grade</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Appeal Status</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                        {combinedData.map(data => (
+                            <tr key={data.harvest.id}>
+                                <td className="px-4 py-3 text-sm">{new Date(data.harvest.harvestDate).toLocaleDateString()}</td>
+                                <td className="px-4 py-3 text-sm">{data.harvest.netWeight.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-sm font-semibold">{data.assessment?.overallGrade || 'N/A'}</td>
+                                <td className="px-4 py-3 text-sm"><AppealStatusBadge status={data.assessment?.appealStatus || AppealStatus.None} /></td>
+                                <td className="px-4 py-3 text-sm">
+                                    <button onClick={() => onDetails(data)} disabled={!data.assessment} className="font-semibold text-green-600 hover:underline disabled:text-gray-400 disabled:no-underline">View Details</button>
+                                </td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="text-center py-16 border-2 border-dashed rounded-lg">
+                    <p className="font-semibold text-gray-600">No harvests have been recorded for this farmer.</p>
+                </div>
+            )}
+        </div>
+    );
+});
+
 
 const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: SubsidyPaymentModel[], activityLogs: ActivityLogModel[], plots: PlotModel[], resourceDistributions: ResourceDistributionModel[] } & Omit<FarmerDetailsPageProps, 'farmerId' | 'database'>> = ({
     farmer,
@@ -526,6 +714,11 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const [plotFormState, setPlotFormState] = useState<{ isOpen: boolean; plot?: Plot | null }>({ isOpen: false });
     const [plotToDelete, setPlotToDelete] = useState<PlotModel | null>(null);
     const [isLiveAssistantOpen, setIsLiveAssistantOpen] = useState(false);
+    const [plantingRecordModal, setPlantingRecordModal] = useState<{ isOpen: boolean; plotId?: string; record?: PlantingRecord | null; }>({ isOpen: false });
+    const [recordToDelete, setRecordToDelete] = useState<PlantingRecordModel | null>(null);
+    const [isHarvestModalOpen, setIsHarvestModalOpen] = useState(false);
+    // FIX: Update state type to include farmerName for compatibility with QualityAssessmentDetailsModal.
+    const [selectedHarvestDetails, setSelectedHarvestDetails] = useState<(CombinedHarvestData & { farmerName: string; }) | null>(null);
     const database = useDatabase();
 
     // Refactored state for payment modal
@@ -785,6 +978,134 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             setPlotToDelete(null);
         }
     };
+    
+    // --- NEW Planting Record Handlers ---
+    const handleSavePlantingRecord = useCallback(async (recordData: Partial<PlantingRecord>, mode: 'create' | 'edit') => {
+        try {
+            await database.write(async () => {
+                if (mode === 'edit' && recordData.id) {
+                    const recordToUpdate = await database.get<PlantingRecordModel>('planting_records').find(recordData.id);
+                    await recordToUpdate.update(r => { Object.assign(r, { ...recordData, syncStatusLocal: 'pending' }); });
+                    setNotification({ message: 'Planting record updated.', type: 'success' });
+                } else {
+                    await database.get<PlantingRecordModel>('planting_records').create(r => {
+                        Object.assign(r, { ...recordData, syncStatusLocal: 'pending', tenantId: farmer.tenantId });
+                    });
+                    setNotification({ message: 'Planting record added.', type: 'success' });
+                }
+                 await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = farmer.id;
+                    log.activityType = ActivityType.PLANTATION_UPDATE;
+                    log.description = `${mode === 'edit' ? 'Updated' : 'Added'} planting record for variety "${recordData.geneticVariety}".`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = farmer.tenantId;
+                });
+            });
+        } catch (error) {
+            console.error("Failed to save planting record:", error);
+            setNotification({ message: 'Failed to save planting record.', type: 'error' });
+        } finally {
+            setPlantingRecordModal({ isOpen: false });
+        }
+    }, [database, farmer, currentUser.id, setNotification]);
+    
+    const handleDeletePlantingRecord = (record: PlantingRecordModel) => {
+        setRecordToDelete(record);
+    };
+
+    const handleConfirmDeleteRecord = async () => {
+        if (recordToDelete) {
+            await database.write(async () => {
+                await recordToDelete.destroyPermanently();
+            });
+            setNotification({ message: 'Planting record deleted.', type: 'success' });
+            setRecordToDelete(null);
+        }
+    };
+
+    // --- NEW Harvest Handlers ---
+    const handleSaveHarvest = async (data: any) => {
+        try {
+            await database.write(async () => {
+                const harvest = await database.get<HarvestModel>('harvests').create(h => {
+                    h.farmerId = data.harvest.farmerId;
+                    h.harvestDate = data.harvest.harvestDate;
+                    h.grossWeight = data.harvest.grossWeight;
+                    h.tareWeight = data.harvest.tareWeight;
+                    h.netWeight = data.harvest.netWeight;
+                    h.assessedById = currentUser.id;
+                    h.tenantId = currentUser.tenantId;
+                    h.syncStatusLocal = 'pending';
+                });
+
+                const assessment = await database.get<QualityAssessmentModel>('quality_assessments').create(qa => {
+                    qa.harvestId = harvest.id;
+                    qa.overallGrade = data.assessment.overallGrade;
+                    qa.priceAdjustment = 0; // Placeholder
+                    qa.notes = data.assessment.notes;
+                    qa.appealStatus = AppealStatus.None;
+                    qa.assessmentDate = new Date().toISOString();
+                    qa.tenantId = currentUser.tenantId;
+                    qa.syncStatusLocal = 'pending';
+                });
+
+                for (const metric of data.metrics) {
+                    await database.get('quality_metrics').create(m => {
+                        (m as any).assessmentId = assessment.id;
+                        (m as any).metricName = metric.metricName;
+                        (m as any).metricValue = metric.metricValue;
+                    });
+                }
+
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = farmer.id;
+                    log.activityType = ActivityType.HARVEST_RECORDED;
+                    log.description = `Recorded a harvest of ${data.harvest.netWeight.toFixed(2)} kg with a grade of ${data.assessment.overallGrade}.`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = farmer.tenantId;
+                });
+            });
+            setNotification({ message: 'Harvest assessment saved successfully!', type: 'success' });
+            setIsHarvestModalOpen(false);
+        } catch (error) {
+            console.error('Failed to save harvest assessment:', error);
+            setNotification({ message: 'Failed to save assessment.', type: 'error' });
+        }
+    };
+    
+    const handleUpdateAppealStatus = useCallback(async (assessmentId: string, newStatus: AppealStatus) => {
+        try {
+            await database.write(async () => {
+                const assessmentModel = await database.get<QualityAssessmentModel>('quality_assessments').find(assessmentId);
+                await assessmentModel.update(a => {
+                    a.appealStatus = newStatus;
+                    a.syncStatusLocal = 'pending';
+                });
+
+                const harvest = await assessmentModel.harvest.fetch();
+                
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = harvest.farmerId;
+                    log.activityType = ActivityType.QUALITY_APPEAL_STATUS_CHANGED;
+                    log.description = `Appeal status for harvest on ${new Date(harvest.harvestDate).toLocaleDateString()} changed to ${newStatus}.`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = currentUser.tenantId;
+                });
+            });
+            // Optimistically update the UI
+            setSelectedHarvestDetails(prev => {
+                if (prev && prev.assessment) {
+                    return { ...prev, assessment: { ...prev.assessment, appealStatus: newStatus } };
+                }
+                return prev;
+            });
+            setNotification({ message: 'Appeal status updated successfully.', type: 'success' });
+        } catch (e) {
+            console.error("Failed to update appeal status", e);
+            setNotification({ message: 'Failed to update status.', type: 'error' });
+        }
+    }, [database, currentUser, setNotification]);
+
 
     const handleExecuteCoPilotAction = useCallback((actionName: string) => {
         switch (actionName) {
@@ -806,6 +1127,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
 
     const getUserName = (userId?: string) => users.find(u => u.id === userId)?.name || 'System';
     const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
+    const allFarmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
 
     if (!farmer) return <div className="text-center p-10">Farmer not found or you do not have permission to view them.</div>;
 
@@ -832,6 +1154,8 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>;
             case ActivityType.VOICE_NOTE:
                 return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" /></svg>;
+            case ActivityType.HARVEST_RECORDED:
+                 return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
             case ActivityType.TRAINING_ATTENDED:
                 return <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-800" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /></svg>;
             default:
@@ -844,7 +1168,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             <div className="max-w-7xl mx-auto">
                 <div className="mb-6 flex justify-between items-center">
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back to Directory
                     </button>
                     {canEdit && (
@@ -863,6 +1187,8 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     <div className="border-b border-gray-200">
                         <nav className="-mb-px flex space-x-4 overflow-x-auto">
                             <TabButton tab="profile" label="Profile" />
+                            <TabButton tab="harvests" label="Harvests" />
+                            <TabButton tab="traceability" label="Traceability" />
                             <TabButton tab="assistance" label="Assistance" />
                             <TabButton tab="simulator" label="Simulator" />
                             <TabButton tab="subsidy" label="Subsidy Eligibility" />
@@ -889,6 +1215,26 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                                 <DetailItem label="Registration Date" value={new Date(farmer.registrationDate).toLocaleDateString()} />
                             </dl>
                         )}
+                        {activeTab === 'harvests' && (
+                            <React.Suspense fallback={<div className="text-center p-10">Loading...</div>}>
+                                <HarvestsTabContent
+                                    farmer={farmer}
+                                    database={database}
+                                    onRecord={() => setIsHarvestModalOpen(true)}
+                                    onDetails={(data) => setSelectedHarvestDetails({ ...data, farmerName: farmer.fullName })}
+                                />
+                            </React.Suspense>
+                        )}
+                         {activeTab === 'traceability' && (
+                            <React.Suspense fallback={<div className="text-center p-10">Loading...</div>}>
+                                <TraceabilityTabContent
+                                    farmer={farmer}
+                                    onAdd={(plotId) => setPlantingRecordModal({ isOpen: true, plotId })}
+                                    onEdit={(record) => setPlantingRecordModal({ isOpen: true, plotId: record.plotId, record })}
+                                    onDelete={handleDeletePlantingRecord}
+                                />
+                            </React.Suspense>
+                         )}
                         {activeTab === 'simulator' && (
                             <React.Suspense fallback={<div className="text-center p-10">Loading Simulator...</div>}>
                                 <ProfitabilitySimulator plots={plainPlots} />
@@ -1092,6 +1438,47 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     confirmText="Delete"
                     confirmButtonClass="bg-red-600 hover:bg-red-700"
                 />
+            )}
+            {plantingRecordModal.isOpen && (
+                <React.Suspense fallback={null}>
+                    <PlantingRecordFormModal 
+                        onClose={() => setPlantingRecordModal({ isOpen: false })}
+                        onSubmit={handleSavePlantingRecord}
+                        plotId={plantingRecordModal.plotId!}
+                        plantingRecord={plantingRecordModal.record}
+                    />
+                </React.Suspense>
+            )}
+            {recordToDelete && (
+                <ConfirmationModal
+                    isOpen={!!recordToDelete}
+                    title="Delete Planting Record?"
+                    message="Are you sure you want to delete this genetic traceability record? This action cannot be undone."
+                    onConfirm={handleConfirmDeleteRecord}
+                    onCancel={() => setRecordToDelete(null)}
+                    confirmText="Delete"
+                    confirmButtonClass="bg-red-600 hover:bg-red-700"
+                />
+            )}
+            {isHarvestModalOpen && (
+                <React.Suspense fallback={null}>
+                    <HarvestForm 
+                        allFarmers={[farmerModelToPlain(farmer)!]}
+                        currentUser={currentUser}
+                        onClose={() => setIsHarvestModalOpen(false)}
+                        onSubmit={handleSaveHarvest}
+                    />
+                </React.Suspense>
+            )}
+            {selectedHarvestDetails && selectedHarvestDetails.assessment && (
+                <React.Suspense fallback={null}>
+                    <QualityAssessmentDetailsModal
+                        assessmentData={{ ...selectedHarvestDetails, assessment: selectedHarvestDetails.assessment! }}
+                        currentUser={currentUser}
+                        onClose={() => setSelectedHarvestDetails(null)}
+                        onUpdateAppealStatus={handleUpdateAppealStatus}
+                    />
+                </React.Suspense>
             )}
             {isLiveAssistantOpen && (
                 <React.Suspense fallback={<div />}>
