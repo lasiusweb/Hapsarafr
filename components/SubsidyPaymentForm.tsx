@@ -83,7 +83,7 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                 ...formData,
                 amount,
                 // FIX: Cast paymentStage to the PaymentStage enum type to resolve type error.
-                paymentStage: formData.paymentStage,
+                paymentStage: formData.paymentStage as PaymentStage,
             });
         } finally {
             setIsSubmitting(false);

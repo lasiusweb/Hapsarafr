@@ -59,7 +59,7 @@ const IdVerificationPage: React.FC<IdVerificationPageProps> = ({ allFarmers, onB
         const verificationResults: VerificationResult[] = farmersInVillage.map((farmer, index) => {
             const seq = (index + 1).toString().padStart(3, '0');
             const expectedId = `${location.district}${location.mandal}${location.village}${seq}`;
-            const actualId = farmer.farmerId;
+            const actualId = farmer.hap_id || '';
             return {
                 farmer,
                 actualId,
@@ -161,7 +161,7 @@ const IdVerificationPage: React.FC<IdVerificationPageProps> = ({ allFarmers, onB
                                         <tr key={res.farmer.id} className={!res.isMatch ? 'bg-red-50' : ''}>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{res.farmer.fullName}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(res.farmer.registrationDate || res.farmer.createdAt).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{res.actualId}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{res.actualId || 'Not Synced'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{res.expectedId}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                 {res.isMatch 

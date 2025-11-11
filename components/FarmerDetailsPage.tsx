@@ -16,7 +16,7 @@ import { ASSISTANCE_SCHEMES } from '../data/assistanceSchemes';
 const RegistrationForm = lazy(() => import('./RegistrationForm'));
 const LiveAssistantModal = lazy(() => import('./LiveAssistantModal'));
 const ProfitabilitySimulator = lazy(() => import('./ProfitabilitySimulator'));
-const PlantingRecordFormModal = lazy(() => import('./components/PlantingRecordFormModal'));
+const PlantingRecordFormModal = lazy(() => import('./PlantingRecordFormModal'));
 const HarvestForm = lazy(() => import('./HarvestForm'));
 const QualityAssessmentDetailsModal = lazy(() => import('./QualityAssessmentDetailsModal'));
 const CoPilotSuggestions = lazy(() => import('./CoPilotSuggestions'));

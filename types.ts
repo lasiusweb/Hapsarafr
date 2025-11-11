@@ -73,11 +73,8 @@ export enum ActivityType {
   PROCESSING_STEP_COMPLETED = 'PROCESSING_STEP_COMPLETED',
   MAINTENANCE_LOGGED = 'MAINTENANCE_LOGGED',
   EQUIPMENT_ADDED = 'EQUIPMENT_ADDED',
-  PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
-  FUNDS_WITHDRAWN = 'FUNDS_WITHDRAWN',
-  AGRI_STORE_PURCHASE = 'AGRI_STORE_PURCHASE',
-  EQUIPMENT_LEASE_STARTED = 'EQUIPMENT_LEASE_STARTED',
   HARVEST_RECORDED = 'HARVEST_RECORDED',
+  IDS_UPDATED = 'IDS_UPDATED',
 }
 
 export enum OverallGrade {
@@ -127,19 +124,6 @@ export enum ProcessingStatus {
   Cancelled = 'Cancelled',
 }
 
-export enum TransactionType {
-  PaymentIn = 'Payment In', // e.g., subsidy received, harvest sale
-  Withdrawal = 'Withdrawal', // to bank account
-  Purchase = 'Purchase', // from Agri-Store
-  LeasePayment = 'Lease Payment', // for equipment
-}
-
-export enum TransactionStatus {
-  Pending = 'Pending',
-  Completed = 'Completed',
-  Failed = 'Failed',
-}
-
 export enum EntrySource {
   ProcessorPayment = 'Processor Payment',
   GovernmentVGP = 'Government VGP',
@@ -147,6 +131,12 @@ export enum EntrySource {
   ManualEntry = 'Manual Entry',
 }
 
+export enum SustainabilityTier {
+    Bronze = 'Bronze',
+    Silver = 'Silver',
+    Gold = 'Gold',
+    Platinum = 'Platinum',
+}
 
 // --- INTERFACES ---
 
@@ -173,8 +163,10 @@ export interface Farmer {
   fullCostPlants: number;
   latitude?: number;
   longitude?: number;
-  applicationId: string;
-  farmerId: string;
+  hap_id?: string; // App-generated, human-readable ID, assigned on sync
+  // FIX: Replaced gov_... IDs with applicationId and farmerId to match what is actually used in the app and DB schema.
+  applicationId: string; // App-generated Application ID
+  farmerId: string; // App-generated Farmer ID
   proposedYear: string;
   registrationDate: string;
   asoId: string;
@@ -319,6 +311,7 @@ export interface Resource {
   unit: string;
   description?: string;
   tenantId: string;
+  cost?: number;
 }
 
 export interface ResourceDistribution {
@@ -477,26 +470,6 @@ export interface ManualLedgerEntry {
     tenantId: string;
 }
 
-export interface FinancialTransaction {
-  id: string;
-  farmerId: string;
-  transactionType: TransactionType;
-  status: TransactionStatus;
-  amount: number;
-  transactionDate: string;
-  notes?: string;
-  thirdPartyRefId?: string;
-  createdAt: string;
-  tenantId: string;
-}
-
-export interface FarmerWallet {
-  id: string; // Should be the same as farmerId
-  currentBalance: number;
-  lastUpdatedAt: string;
-  tenantId: string;
-}
-
 export interface EquipmentLease {
   id: string;
   farmerId: string;
@@ -507,6 +480,36 @@ export interface EquipmentLease {
   paymentStatus: 'Pending' | 'Paid';
   createdAt: string;
   tenantId: string;
+}
+
+export interface SustainabilityPractice {
+    id: string;
+    name: string;
+    description: string;
+    category: 'Water Management' | 'Soil Health' | 'Pest Management' | 'Biodiversity';
+    tier: SustainabilityTier;
+}
+
+export interface SustainabilityVerification {
+    id: string;
+    farmerId: string;
+    practiceId: string;
+    officerId: string;
+    verificationDate: string;
+    status: 'Verified' | 'Pending' | 'Rejected' | 'Under Review';
+    notes?: string;
+    evidenceUrl?: string; // Link to photo/video evidence
+    createdAt: string;
+}
+
+export interface FarmInput {
+    id: string;
+    farmerId: string;
+    inputType: 'Fertilizer' | 'Pesticide' | 'Water' | 'Labor' | 'Other';
+    date: string;
+    cost: number;
+    quantity: number;
+    unit: string;
 }
 
 

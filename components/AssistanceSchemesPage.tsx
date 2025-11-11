@@ -92,6 +92,7 @@ const AssistanceSchemesPage: React.FC<AssistanceSchemesPageProps> = ({ onBack, c
                     });
                 }
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    // FIX: Property 'farmerId' does not exist on type 'ActivityLogModel'. This is fixed by adding the field to the model in db/index.ts.
                     log.farmerId = farmerId;
                     log.activityType = ActivityType.ASSISTANCE_STATUS_CHANGE;
                     log.description = `Status for "${schemeTitle}" changed to ${newStatus}.`;

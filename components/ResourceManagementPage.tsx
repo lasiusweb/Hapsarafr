@@ -4,6 +4,7 @@ import { useQuery } from '../hooks/useQuery';
 import { ResourceModel, ResourceDistributionModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import ConfirmationModal from './ConfirmationModal';
+import { formatCurrency } from '../lib/utils';
 
 interface ResourceManagementPageProps {
     onBack: () => void;
@@ -14,7 +15,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
     const resources = useQuery(useMemo(() => database.get<ResourceModel>('resources').query(Q.sortBy('name', Q.asc)), [database]));
 
     const [modalState, setModalState] = useState<{ isOpen: boolean; mode: 'add' | 'edit'; item?: ResourceModel }>({ isOpen: false, mode: 'add' });
-    const [formState, setFormState] = useState({ name: '', unit: '', description: '' });
+    const [formState, setFormState] = useState({ name: '', unit: '', description: '', cost: '' });
     const [itemToDelete, setItemToDelete] = useState<ResourceModel | null>(null);
 
     const handleOpenModal = (mode: 'add' | 'edit', item?: ResourceModel) => {
@@ -23,6 +24,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
             name: item?.name || '',
             unit: item?.unit || '',
             description: item?.description || '',
+            cost: String(item?.cost || ''),
         });
     };
 
@@ -38,12 +40,14 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
                     r.name = formState.name;
                     r.unit = formState.unit;
                     r.description = formState.description;
+                    r.cost = parseFloat(formState.cost) || 0;
                 });
             } else {
                 await database.get<ResourceModel>('resources').create(r => {
                     r.name = formState.name;
                     r.unit = formState.unit;
                     r.description = formState.description;
+                    r.cost = parseFloat(formState.cost) || 0;
                     r.tenantId = 'default-tenant'; // This should be dynamic in a multi-tenant app
                 });
             }
@@ -94,6 +98,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unit</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost (₹)</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
@@ -103,6 +108,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
                                     <tr key={r.id}>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{r.name}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{r.unit}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">{formatCurrency(r.cost || 0)}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-xs truncate">{r.description}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <button onClick={() => handleOpenModal('edit', r)} className="text-green-600 hover:text-green-900">Edit</button>
@@ -125,9 +131,15 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
                                 <label className="block text-sm font-medium text-gray-700">Name</label>
                                 <input value={formState.name} onChange={e => setFormState(s => ({ ...s, name: e.target.value }))} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., Imported Saplings" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Unit of Measurement</label>
-                                <input value={formState.unit} onChange={e => setFormState(s => ({ ...s, unit: e.target.value }))} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., sapling, kg, bag, kit" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Unit of Measurement</label>
+                                    <input value={formState.unit} onChange={e => setFormState(s => ({ ...s, unit: e.target.value }))} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., sapling, kg, bag" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Cost (₹)</label>
+                                    <input type="number" step="0.01" value={formState.cost} onChange={e => setFormState(s => ({ ...s, cost: e.target.value }))} className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., 250.50" />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Description (Optional)</label>

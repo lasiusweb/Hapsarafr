@@ -22,7 +22,8 @@ const RawDataView: React.FC<{ farmers: FarmerModel[]; onClose: () => void; }> = 
 
     // Define table headers
     const headers: { key: keyof Farmer | 'id', label: string }[] = [
-        { key: 'farmerId', label: 'Hap ID' },
+        // FIX: Changed label to match the key 'farmerId'. 'hap_id' is a separate field.
+        { key: 'farmerId', label: 'Farmer ID' },
         { key: 'fullName', label: 'Full Name' },
         { key: 'applicationId', label: 'Application ID' },
         { key: 'status', label: 'Status' },

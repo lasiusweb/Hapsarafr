@@ -10,11 +10,24 @@ interface AdminPageProps {
     onSaveUsers: (updatedUsers: User[]) => Promise<void>;
     onSaveGroups: (updatedGroups: Group[]) => Promise<void>;
     onBack: () => void;
-    onNavigate: (view: 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management') => void;
+    onNavigate: (view: 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'resource-management') => void;
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
 const SUPER_ADMIN_GROUP_ID = 'group-super-admin';
+
+const AdminCard: React.FC<{ title: string; description: string; onClick: () => void; icon: React.ReactNode; }> = ({ title, description, onClick, icon }) => (
+    <button onClick={onClick} className="bg-gray-50 p-6 rounded-lg shadow-sm hover:shadow-md hover:border-green-300 border border-transparent transition-all text-left w-full flex items-start gap-4">
+        <div className="bg-green-100 p-3 rounded-lg flex-shrink-0">
+            {icon}
+        </div>
+        <div>
+            <h4 className="font-bold text-gray-800">{title}</h4>
+            <p className="text-sm text-gray-600 mt-1">{description}</p>
+        </div>
+    </button>
+);
+
 
 const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSaveUsers, onSaveGroups, onBack, onNavigate, setNotification }) => {
     const permissions = useMemo(() => {
@@ -124,8 +137,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                         <h1 className="text-3xl font-bold text-gray-800">User &amp; Role Management</h1>
-                         <p className="text-gray-500">Manage user access and group permissions.</p>
+                         <h1 className="text-3xl font-bold text-gray-800">Admin Panel</h1>
+                         <p className="text-gray-500">Manage users, permissions, and system settings.</p>
                     </div>
                      <div className="flex items-center gap-4 flex-shrink-0">
                          <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
@@ -248,6 +261,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                          {(canManageUsers || canManageGroups) && <button onClick={handleSaveChanges} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Save All Changes</button>}
                     </div>
                 </div>
+
+                <div className="mt-12">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-6">Advanced Management</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <AdminCard title="Content Manager" description="Edit content for the landing page, help modal, and privacy policy." onClick={() => onNavigate('content-manager')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>} />
+                        <AdminCard title="Geo Management" description="Add, edit, or remove districts, mandals, and villages." onClick={() => onNavigate('geo-management')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>} />
+                        <AdminCard title="Schema Manager" description="Define custom data fields for the farmer registration form." onClick={() => onNavigate('schema-manager')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>} />
+                        <AdminCard title="Resource Definitions" description="Manage inventory items like saplings and fertilizer for distribution." onClick={() => onNavigate('resource-management')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" /><path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" /></svg>} />
+                         {isSuperAdmin && <AdminCard title="Tenant Management" description="Onboard new organizations and manage their subscription status." onClick={() => onNavigate('tenant-management')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" /></svg>} />}
+                    </div>
+                </div>
+
             </div>
         </div>
     );

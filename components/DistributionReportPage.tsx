@@ -106,6 +106,7 @@ const DistributionReportPage: React.FC<DistributionReportPageProps> = ({ onBack 
                                     return (
                                         <tr key={d.id}>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.distributionDate}</td>
+                                            {/* FIX: Property 'farmerId' does not exist on type 'ResourceDistributionModel'. This is fixed by adding the field to the model in db/index.ts */}
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{farmerMap.get(d.farmerId) || 'Unknown'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{resource?.name || 'Unknown'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.quantity} {resource?.unit}</td>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, LiveSession, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
+// FIX: Removed 'LiveSession' as it's not an exported member of '@google/genai'.
+import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from '@google/genai';
 import { Farmer } from '../types';
 
 // --- Audio Helper Functions ---
@@ -88,7 +89,8 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [error, setError] = useState<string | null>(null);
 
-    const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
+    // FIX: Use `any` for LiveSession as it is not an exported type.
+    const sessionPromiseRef = useRef<Promise<any> | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const audioResourcesRef = useRef<{
         stream: MediaStream | null;
@@ -184,11 +186,13 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
                             }
 
                             if (message.toolCall?.functionCalls) {
-                                setSuggestions(prev => [...prev, ...message.toolCall.functionCalls]);
+                                // FIX: Cast functionCalls to `any` to resolve type incompatibility between FunctionCall[] and Suggestion[].
+                                setSuggestions(prev => [...prev, ...message.toolCall!.functionCalls as any]);
                             }
 
                             if (message.serverContent?.inputTranscription) {
-                                const { text, isFinal } = message.serverContent.inputTranscription;
+                                // FIX: Cast to `any` to access `isFinal` property, which is not in the current type definition but is expected by the logic.
+                                const { text, isFinal } = message.serverContent.inputTranscription as any;
                                 setTranscript(prev => {
                                     const last = prev[prev.length - 1];
                                     if (last && last.role === 'user' && !last.isFinal) {
@@ -199,7 +203,8 @@ const LiveAssistantModal: React.FC<LiveAssistantModalProps> = ({ farmer, onClose
                             }
 
                             if (message.serverContent?.outputTranscription) {
-                                const { text, isFinal } = message.serverContent.outputTranscription;
+                                // FIX: Cast to `any` to access `isFinal` property, which is not in the current type definition but is expected by the logic.
+                                const { text, isFinal } = message.serverContent.outputTranscription as any;
                                  setTranscript(prev => {
                                     const last = prev[prev.length - 1];
                                     if (last && last.role === 'model' && !last.isFinal) {

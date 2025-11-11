@@ -53,13 +53,13 @@ const SubsidyManagementPage = lazy(() => import('./components/SubsidyManagementP
 const AssistanceSchemesPage = lazy(() => import('./components/AssistanceSchemesPage'));
 const ProcessingPage = lazy(() => import('./components/ProcessingPage'));
 const EquipmentManagementPage = lazy(() => import('./components/EquipmentManagementPage'));
-const FinancialDashboardPage = lazy(() => import('./components/FinancialDashboardPage'));
-const AgriStorePage = lazy(() => import('./components/AgriStorePage'));
-const EquipmentAccessProgramPage = lazy(() => import('./components/EquipmentAccessProgramPage'));
-const DiscussModeModal = lazy(() => import('./components/DiscussModeModal'));
+const QualityAssessmentPage = lazy(() => import('./components/QualityAssessmentPage'));
+const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
+const DistributionReportPage = lazy(() => import('./components/DistributionReportPage'));
+const SustainabilityDashboard = lazy(() => import('./components/SustainabilityDashboard'));
 
 
-type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management'| 'financial-dashboard' | 'agri-store' | 'equipment-access';
+type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard';
 
 // FIX: Define initialFilters constant to resolve reference error.
 const initialFilters: Filters = {
@@ -105,7 +105,6 @@ const App: React.FC = () => {
     const [showBulkImportModal, setShowBulkImportModal] = useState(false);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-    const [showDiscussMode, setShowDiscussMode] = useState(false);
     // Sync state
     const [isSyncing, setIsSyncing] = useState(false);
     const [lastSync, setLastSync] = useState<Date | null>(null);
@@ -220,7 +219,7 @@ const App: React.FC = () => {
             const lowercasedQuery = debouncedSearchQuery.toLowerCase();
             farmersToProcess = farmersToProcess.filter(f => 
                 f.fullName.toLowerCase().includes(lowercasedQuery) ||
-                f.farmerId.toLowerCase().includes(lowercasedQuery) ||
+                f.hap_id?.toLowerCase().includes(lowercasedQuery) ||
                 f.mobileNumber.includes(lowercasedQuery)
             );
         }
@@ -315,7 +314,7 @@ const App: React.FC = () => {
 
         await database.write(async () => {
             await farmerToEdit.update(farmer => {
-                const { id, createdAt, createdBy, farmerId, applicationId, asoId, ...updatableData } = updatedFarmerData;
+                const { id, createdAt, createdBy, hap_id, asoId, ...updatableData } = updatedFarmerData;
                 Object.assign(farmer, {
                     ...updatableData,
                     photo: photoBase64,
@@ -420,7 +419,8 @@ const App: React.FC = () => {
                     const pdfWidth = pdf.internal.pageSize.getWidth();
                     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                    pdf.save(`${farmer.farmerId}_${farmer.fullName}.pdf`);
+                    // FIX: Property 'hap_id' does not exist on type 'FarmerModel'. Use 'farmerId' instead.
+                    pdf.save(`${farmer.farmerId || 'un-synced-farmer'}_${farmer.fullName}.pdf`);
                     setPdfExportData(null);
                 }
             }, 500);
@@ -511,9 +511,10 @@ const App: React.FC = () => {
             case 'assistance-schemes': return <AssistanceSchemesPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
             case 'processing-transparency': return <ProcessingPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
             case 'equipment-management': return <EquipmentManagementPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
-            case 'financial-dashboard': return <FinancialDashboardPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
-            case 'agri-store': return <AgriStorePage onBack={() => handleNavigation('dashboard')} />;
-            case 'equipment-access': return <EquipmentAccessProgramPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            case 'quality-assessment': return <QualityAssessmentPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} allFarmers={plainFarmers} setNotification={setNotification} />;
+            case 'resource-management': return <ResourceManagementPage onBack={() => handleNavigation('admin')} />;
+            case 'distribution-log': return <DistributionReportPage onBack={() => handleNavigation('dashboard')} />;
+            case 'sustainability-dashboard': return <SustainabilityDashboard onBack={() => handleNavigation('dashboard')} />;
             default: return <NotFoundPage onBack={() => handleNavigation('dashboard')} />;
         }
     }
@@ -568,20 +569,6 @@ const App: React.FC = () => {
                 {/* FIX: Correctly pass 'plots' and 'users' props to PrintView for PDF export. */}
                 {pdfExportData && <div id="pdf-print-view"><PrintView farmer={pdfExportData.farmer} plots={pdfExportData.plots} users={allUsers} isForPdf={true} /></div>}
             </div>
-
-            {showDiscussMode && (
-                <Suspense fallback={<div/>}>
-                    <DiscussModeModal onClose={() => setShowDiscussMode(false)} />
-                </Suspense>
-            )}
-            <button
-                onClick={() => setShowDiscussMode(true)}
-                className="fixed bottom-6 right-6 bg-green-600 text-white rounded-full p-4 shadow-lg hover:bg-green-700 transition-transform transform hover:scale-110 z-30"
-                title="Open Discuss Mode"
-                aria-label="Open Discuss Mode"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.08-3.242A8.904 8.904 0 012 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM4.72 14.48A7 7 0 0010 16a7 7 0 007-7c0-2.828-2.682-5-6-5S4 7.172 4 10c0 .736.223 1.424.609 2.023l.28.432-.923 2.77 2.79-.93.42-.28z" clipRule="evenodd" /></svg>
-            </button>
         </div>
     );
 };

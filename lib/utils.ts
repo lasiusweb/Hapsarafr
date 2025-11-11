@@ -1,12 +1,23 @@
 import { GEO_DATA } from '../data/geoData';
-import { Farmer, Plot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, FinancialTransaction, FarmerWallet, EquipmentLease, PlantingRecord } from '../types';
-import { FarmerModel, PlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, FinancialTransactionModel, FarmerWalletModel, EquipmentLeaseModel, PlantingRecordModel } from '../db';
+// FIX: Removed obsolete FinancialTransaction and FarmerWallet types.
+import { Farmer, Plot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, EquipmentLease, PlantingRecord } from '../types';
+// FIX: Removed obsolete FinancialTransactionModel and FarmerWalletModel and added missing model imports.
+import { FarmerModel, PlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, EquipmentLeaseModel, PlantingRecordModel } from '../db';
 import DOMPurify from 'dompurify';
 
 
 export const sanitizeHTML = (html: string) => {
     return DOMPurify.sanitize(html, {
         ALLOWED_TAGS: ['p', 'strong', 'em', 'ul', 'ol', 'li', 'h3', 'b', 'i', 'br'],
+    });
+};
+
+export const formatCurrency = (value: number) => {
+    return value.toLocaleString('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
     });
 };
 
@@ -43,8 +54,7 @@ export const processingBatchModelToPlain = (model: ProcessingBatchModel | null):
 export const processingStepModelToPlain = (model: ProcessingStepModel | null): ProcessingStep | null => model ? modelToPlain<ProcessingStep>(model) : null;
 export const equipmentModelToPlain = (model: EquipmentModel | null): Equipment | null => model ? modelToPlain<Equipment>(model) : null;
 export const manualLedgerEntryModelToPlain = (model: ManualLedgerEntryModel | null): ManualLedgerEntry | null => model ? modelToPlain<ManualLedgerEntry>(model) : null;
-export const financialTransactionModelToPlain = (model: FinancialTransactionModel | null): FinancialTransaction | null => model ? modelToPlain<FinancialTransaction>(model) : null;
-export const farmerWalletModelToPlain = (model: FarmerWalletModel | null): FarmerWallet | null => model ? modelToPlain<FarmerWallet>(model) : null;
+// FIX: Removed obsolete financialTransactionModelToPlain and farmerWalletModelToPlain functions.
 export const equipmentLeaseModelToPlain = (model: EquipmentLeaseModel | null): EquipmentLease | null => model ? modelToPlain<EquipmentLease>(model) : null;
 
 

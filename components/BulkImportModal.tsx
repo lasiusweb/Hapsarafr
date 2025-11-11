@@ -123,8 +123,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     const now = registrationDate.toISOString();
                     const regYear = registrationDate.getFullYear().toString().slice(-2);
                     
-                    const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
-                    const applicationId = `A${regYear}${districtCode}${mandalCode}${villageCode}${randomAppIdSuffix}`;
                     const asoId = `SO${regYear}${districtCode}${mandalCode}${Math.floor(100 + Math.random() * 900)}`;
 
                     // FIX: Add missing properties from the 'Farmer' interface to ensure type compatibility with 'NewRecord'.
@@ -132,7 +130,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         tempIndex: i,
                         rowNum,
                         rawData: row,
-                        id: '', farmerId: '', applicationId, asoId,
+                        id: '', 
                         fullName: String(row.fullName).trim(),
                         fatherHusbandName: String(row.fatherHusbandName || '').trim(),
                         aadhaarNumber: String(row.aadhaarNumber).trim(),
@@ -153,6 +151,10 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         fullCostPlants: Number(row.fullCostPlants) || 0,
                         latitude: row.latitude ? parseFloat(row.latitude) : undefined,
                         longitude: row.longitude ? parseFloat(row.longitude) : undefined,
+                        // FIX: Changed property names from gov_... to match the Farmer type definition.
+                        applicationId: String(row.gov_application_id || '').trim(),
+                        farmerId: String(row.gov_farmer_id || '').trim(),
+                        asoId,
                         proposedYear: '2024-25', registrationDate: now.split('T')[0],
                         paymentUtrDd: '', status: FarmerStatus.Registered,
                         district: districtCode, mandal: mandalCode, village: villageCode,
@@ -162,35 +164,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     };
                 }).filter((r): r is NewRecord => r !== null);
                 
-                // --- Step 2: Generate unique IDs ---
-                // Create a map of existing farmers grouped by village key for efficient lookup
-                // FIX: Altered reduce syntax to use type assertion on the initial value, resolving a TSX parsing ambiguity.
-                const existingFarmersByVillage = existingFarmers.reduce((acc, f) => {
-                    const key = `${f.district}-${f.mandal}-${f.village}`;
-                    if (!acc[key]) acc[key] = [];
-                    acc[key].push(f);
-                    return acc;
-                }, {} as Record<string, Farmer[]>);
-
-                // Keep a running count of newly added farmers per village within this batch to ensure sequential IDs
-                const newFarmerCountsInBatch: Record<string, number> = {};
-
-                parsedRecords.forEach(rec => {
-                    const villageKey = `${rec.district}-${rec.mandal}-${rec.village}`;
-                    
-                    const existingCount = existingFarmersByVillage[villageKey]?.length || 0;
-                    const newCount = newFarmerCountsInBatch[villageKey] || 0;
-                    
-                    // The sequence is the number of existing farmers + the number of new farmers already processed for this village + 1
-                    const seq = (existingCount + newCount + 1).toString().padStart(3, '0');
-                    const farmerId = `${rec.district}${rec.mandal}${rec.village}${seq}`;
-                    
-                    rec.id = farmerId;
-                    rec.farmerId = farmerId;
-
-                    // Increment the count for the next farmer in the same village in this batch
-                    newFarmerCountsInBatch[villageKey] = newCount + 1;
-                });
                 setAllNewRecords(parsedRecords);
 
                 // --- Step 3: Check for duplicates using AI ---
@@ -229,10 +202,10 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     const existingRecs = farmersByVillage[villageKey] || [];
                     if (existingRecs.length === 0) continue;
 
-                    const prompt = `You are a data auditing expert. You will receive two lists of farmers for the same village: "newRecords" and "existingRecords". Your task is to identify potential duplicates where a record from "newRecords" matches a record from "existingRecords". A duplicate is likely if names are very similar, father's names are similar, etc. Return a JSON object matching the schema, containing a list of pairs. Each pair should contain one record from "newRecords" (identified by its temporary index) and one from "existingRecords" (identified by its farmerId).
+                    const prompt = `You are a data auditing expert. You will receive two lists of farmers for the same village: "newRecords" and "existingRecords". Your task is to identify potential duplicates where a record from "newRecords" matches a record from "existingRecords". A duplicate is likely if names are very similar, father's names are similar, etc. Return a JSON object matching the schema, containing a list of pairs. Each pair should contain one record from "newRecords" (identified by its temporary index) and one from "existingRecords" (identified by its hap_id).
 
                         newRecords: ${JSON.stringify(newRecs.map(f => ({ tempIndex: f.tempIndex, fullName: f.fullName, fatherHusbandName: f.fatherHusbandName, aadhaarLast4: f.aadhaarNumber.slice(-4) })))}
-                        existingRecords: ${JSON.stringify(existingRecs.map(f => ({ farmerId: f.farmerId, fullName: f.fullName, fatherHusbandName: f.fatherHusbandName, aadhaarLast4: f.aadhaarNumber.slice(-4) })))}
+                        existingRecords: ${JSON.stringify(existingRecs.map(f => ({ hap_id: f.hap_id, fullName: f.fullName, fatherHusbandName: f.fatherHusbandName, aadhaarLast4: f.aadhaarNumber.slice(-4) })))}
                     `;
                     
                     const response = await ai.models.generateContent({
@@ -244,7 +217,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     if (result.duplicatePairs) {
                         for (const pair of result.duplicatePairs) {
                             const newRecord = parsedRecords.find(r => r.tempIndex === pair.newRecordIndex);
-                            const existingRecord = existingFarmers.find(f => f.farmerId === pair.existingFarmerId);
+                            const existingRecord = existingFarmers.find(f => f.hap_id === pair.existingFarmerId);
                             if (newRecord && existingRecord) {
                                 foundDuplicatePairs.push({ newRecord, existingRecord, reason: pair.reason, decision: 'skip' });
                             }
@@ -343,7 +316,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         <div className="p-2 bg-yellow-900/50 text-yellow-300 text-sm rounded-md mb-3 border border-yellow-700/50"><strong>AI Reason:</strong> {pair.reason}</div>
                         <div className="grid grid-cols-2 gap-4">
                             <div><h4 className="font-semibold text-gray-300 border-b border-gray-600 pb-1 mb-2">New Record (from file)</h4><div className="text-sm space-y-1">{Object.entries(pair.newRecord.rawData).map(([key, val]) => <div key={key}><strong className="text-gray-400">{key}:</strong> {String(val)}</div>)}</div></div>
-                            <div><h4 className="font-semibold text-green-300 border-b border-gray-600 pb-1 mb-2">Existing Farmer</h4><div className="text-sm space-y-1"><div><strong className="text-gray-400">fullName:</strong> {pair.existingRecord.fullName}</div><div><strong className="text-gray-400">fatherHusbandName:</strong> {pair.existingRecord.fatherHusbandName}</div><div><strong className="text-gray-400">mobileNumber:</strong> {pair.existingRecord.mobileNumber}</div><div><strong className="text-gray-400">farmerId:</strong> {pair.existingRecord.farmerId}</div></div></div>
+                            <div><h4 className="font-semibold text-green-300 border-b border-gray-600 pb-1 mb-2">Existing Farmer</h4><div className="text-sm space-y-1"><div><strong className="text-gray-400">fullName:</strong> {pair.existingRecord.fullName}</div><div><strong className="text-gray-400">fatherHusbandName:</strong> {pair.existingRecord.fatherHusbandName}</div><div><strong className="text-gray-400">mobileNumber:</strong> {pair.existingRecord.mobileNumber}</div><div><strong className="text-gray-400">hap_id:</strong> {pair.existingRecord.hap_id}</div></div></div>
                         </div>
                         <div className="mt-4 flex justify-end items-center gap-4">
                             <span className="text-sm font-semibold text-gray-300">Action:</span>

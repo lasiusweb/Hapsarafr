@@ -259,7 +259,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
                         <thead className="bg-gray-50 hidden md:table-header-group">
                             <tr>
                                 <th className="px-6 py-3"><!-- Empty for spacing --></th>
-                                <SortableHeader sortKey="farmerId">Hap ID</SortableHeader>
+                                <SortableHeader sortKey="hap_id">Hap ID</SortableHeader>
                                 <SortableHeader sortKey="fullName">Name</SortableHeader>
                                 {isSuperAdmin && <SortableHeader sortKey="tenantId">Tenant</SortableHeader>}
                                 <SortableHeader sortKey="village">Location</SortableHeader>
@@ -288,7 +288,7 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                             aria-label={`Select farmer ${farmer.fullName}`}
                                         />
                                     </td>
-                                    <td data-label="Hap ID" className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.farmerId}</td>
+                                    <td data-label="Hap ID" className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800">{farmer.hap_id || 'N/A'}</td>
                                     <td data-label="Name" className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                         <div className="flex items-center gap-2">
                                             {farmer.syncStatus === 'synced' ? (

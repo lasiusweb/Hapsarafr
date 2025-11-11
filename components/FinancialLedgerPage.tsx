@@ -5,17 +5,7 @@ import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { FarmerModel, SubsidyPaymentModel, ResourceDistributionModel, ResourceModel, ManualLedgerEntryModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
-
-// Helper to parse cost from resource description (fragile but necessary for now)
-const parseResourceCost = (description: string): number => {
-    const match = description.match(/₹([\d,]+)/);
-    if (match && match[1]) {
-        return parseInt(match[1].replace(/,/g, ''), 10);
-    }
-    return 0; // Default to 0 if no cost found
-};
-
-const formatCurrency = (value: number) => value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+import { formatCurrency } from '../lib/utils';
 
 interface LedgerItem {
     date: Date;
@@ -97,6 +87,67 @@ const AddEntryModal: React.FC<{
     );
 };
 
+const CashFlowChart: React.FC<{ items: LedgerItem[] }> = ({ items }) => {
+    const monthlyData = useMemo(() => {
+        if (!items.length) return [];
+        const dataByMonth: Record<string, { income: number, expense: number }> = {};
+        
+        items.forEach(item => {
+            const monthKey = `${item.date.getFullYear()}-${String(item.date.getMonth() + 1).padStart(2, '0')}`;
+            if (!dataByMonth[monthKey]) {
+                dataByMonth[monthKey] = { income: 0, expense: 0 };
+            }
+            dataByMonth[monthKey].income += item.income;
+            dataByMonth[monthKey].expense += item.expense;
+        });
+        
+        return Object.entries(dataByMonth)
+            .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+            .map(([key, value]) => {
+                const [year, month] = key.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1);
+                const monthLabel = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+                return { label: monthLabel, ...value };
+            });
+    }, [items]);
+
+    const maxAmount = useMemo(() => Math.max(...monthlyData.map(d => Math.max(d.income, d.expense)), 1), [monthlyData]);
+    
+    if (monthlyData.length === 0) return null;
+
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-md">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Monthly Cash Flow</h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {monthlyData.map((month) => (
+                    <div key={month.label}>
+                        <p className="text-sm font-semibold text-gray-600 mb-2">{month.label}</p>
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <div className="w-20 text-right text-sm font-semibold text-green-600">{formatCurrency(month.income)}</div>
+                                <div className="flex-1 bg-gray-200 rounded-full h-5">
+                                    <div className="bg-green-400 h-5 rounded-full" style={{ width: `${(month.income / maxAmount) * 100}%` }}></div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-20 text-right text-sm font-semibold text-red-600">{formatCurrency(month.expense)}</div>
+                                 <div className="flex-1 bg-gray-200 rounded-full h-5">
+                                    <div className="bg-red-400 h-5 rounded-full" style={{ width: `${(month.expense / maxAmount) * 100}%` }}></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+             <div className="flex justify-end gap-4 mt-4 text-xs">
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-400 rounded-sm"></div> Income</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-400 rounded-sm"></div> Expense</div>
+            </div>
+        </div>
+    );
+};
+
+
 const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, onBack, currentUser }) => {
     const database = useDatabase();
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
@@ -126,7 +177,7 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
         
         const resourceItems = resourceDistributions.map(d => {
             const resource = resourceMap.get(d.resourceId);
-            const cost = resource ? parseResourceCost(resource.description || '') * d.quantity : 0;
+            const cost = resource?.cost ? resource.cost * d.quantity : 0;
             return {
                 date: new Date(d.distributionDate),
                 description: `Expense: ${resource?.name || 'Unknown Resource'} (x${d.quantity})`,
@@ -192,7 +243,7 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
                         <p className="text-gray-500">Track income and expenses for individual farmers.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back
                     </button>
                 </div>
@@ -208,35 +259,43 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
                             <StatCard title="Total Expenses" value={formatCurrency(ledgerData.totalExpense)} className="border-l-4 border-red-500" />
                             <StatCard title="Net Profit / Loss" value={formatCurrency(ledgerData.net)} className={`border-l-4 ${ledgerData.net >= 0 ? 'border-green-500' : 'border-red-500'}`} />
                         </div>
-                        <div className="bg-white rounded-lg shadow-md">
-                            <div className="p-4 border-b flex justify-between items-center">
-                                <h3 className="text-xl font-bold text-gray-800">Ledger Details</h3>
-                                <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">+ Add Manual Entry</button>
-                            </div>
-                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Income (+)</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Expense (-)</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {ledgerData.items.map((item, index) => (
-                                            <tr key={index}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.date.toLocaleDateString()}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.description}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right">{item.income > 0 ? formatCurrency(item.income) : ''}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 text-right">{item.expense > 0 ? formatCurrency(item.expense) : ''}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 text-right">{formatCurrency(item.balance)}</td>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                            <div className="lg:col-span-3 bg-white rounded-lg shadow-md">
+                                <div className="p-4 border-b flex justify-between items-center">
+                                    <h3 className="text-xl font-bold text-gray-800">Ledger Details</h3>
+                                    <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">+ Add Manual Entry</button>
+                                </div>
+                                <div className="overflow-y-auto max-h-[60vh]">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Income (+)</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Expense (-)</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                                {ledgerData.items.length === 0 && <div className="text-center py-10 text-gray-500">No financial activity recorded for this farmer yet.</div>}
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {ledgerData.items.map((item, index) => (
+                                                <tr key={index}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.date.toLocaleDateString()}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.description}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right">{item.income > 0 ? formatCurrency(item.income) : ''}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 text-right">{item.expense > 0 ? formatCurrency(item.expense) : ''}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 text-right">{formatCurrency(item.balance)}</td>
+                                                </tr>
+                                            ))}
+                                            {ledgerData.items.length === 0 && (
+                                                <tr><td colSpan={5} className="text-center py-10 text-gray-500">No financial activity recorded.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div className="lg:col-span-2">
+                                <CashFlowChart items={ledgerData.items} />
                             </div>
                         </div>
                     </div>

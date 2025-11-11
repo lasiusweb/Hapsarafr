@@ -73,7 +73,7 @@ const FarmerCard: React.FC<FarmerCardProps> = ({ farmer, isSelected, onSelection
                         )}
                         <div>
                             <h3 className="font-bold text-lg text-gray-800">{farmer.fullName}</h3>
-                            <p className="text-sm font-mono text-gray-500">{farmer.farmerId}</p>
+                            <p className="text-sm font-mono text-gray-500">{farmer.hap_id || 'N/A'}</p>
                         </div>
                     </div>
 

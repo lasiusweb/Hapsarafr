@@ -16,10 +16,10 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, plots, users, isForPdf = 
   const qrCodeRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (farmer) {
+    if (farmer && farmer.hap_id) {
       if (barcodeRef.current) {
         try {
-          JsBarcode(barcodeRef.current, farmer.farmerId, {
+          JsBarcode(barcodeRef.current, farmer.hap_id, {
             format: 'CODE128',
             displayValue: true,
             fontSize: 20,
@@ -31,7 +31,7 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, plots, users, isForPdf = 
       }
       if (qrCodeRef.current) {
         try {
-          QRCode.toCanvas(qrCodeRef.current, farmer.farmerId, { width: 128 }, (error: any) => {
+          QRCode.toCanvas(qrCodeRef.current, farmer.hap_id, { width: 128 }, (error: any) => {
             if (error) console.error('QR Code generation failed:', error);
           });
         } catch (e) {
@@ -68,14 +68,17 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, plots, users, isForPdf = 
           <h3 className="text-xl font-bold mb-3 border-b border-gray-400 pb-1">Farmer Details</h3>
           <table className="w-full text-left">
             <tbody>
+              <DetailRow label="HAP ID" value={farmer.hap_id || 'Pending Sync'} />
+              {/* FIX: Use `applicationId` and `farmerId` instead of the non-existent `gov_...` properties. Updated labels for clarity. */}
               <DetailRow label="Application ID" value={farmer.applicationId} />
-              <DetailRow label="Hap ID" value={farmer.farmerId} />
+              <DetailRow label="Farmer ID" value={farmer.farmerId} />
               <DetailRow label="Full Name" value={farmer.fullName} />
               <DetailRow label="Father/Husband Name" value={farmer.fatherHusbandName} />
               <DetailRow label="Gender" value={farmer.gender} />
               <DetailRow label="Mobile Number" value={farmer.mobileNumber} />
               <DetailRow label="Aadhaar Number" value={`**** **** ${farmer.aadhaarNumber.slice(-4)}`} />
               <DetailRow label="Address" value={farmer.address} />
+              <DetailRow label="NE Region Farmer" value={farmer.is_in_ne_region ? 'Yes' : 'No'} />
               <DetailRow label="PPB/ROFR ID" value={farmer.ppbRofrId} />
               <DetailRow label="Registration Date" value={new Date(farmer.registrationDate).toLocaleDateString()} />
               <DetailRow label="Registered By" value={registeredByName} />
@@ -89,14 +92,18 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, plots, users, isForPdf = 
             ) : (
                 <div className="w-32 h-40 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-500 mb-4">No Photo</div>
             )}
-            <div className="mt-4 text-center">
-                 <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">HAP ID</p>
-                 <svg ref={barcodeRef}></svg>
-            </div>
-            <div className="mt-6 text-center">
-              <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">SCAN QR CODE</p>
-              <canvas ref={qrCodeRef}></canvas>
-            </div>
+            {farmer.hap_id && (
+                <>
+                    <div className="mt-4 text-center">
+                         <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">HAP ID</p>
+                         <svg ref={barcodeRef}></svg>
+                    </div>
+                    <div className="mt-6 text-center">
+                      <p className="text-sm font-semibold tracking-wider text-gray-700 mb-1">SCAN QR CODE</p>
+                      <canvas ref={qrCodeRef}></canvas>
+                    </div>
+                </>
+            )}
         </div>
       </div>
 
