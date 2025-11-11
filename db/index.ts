@@ -7,13 +7,13 @@ import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { Database } from '@nozbe/watermelondb';
 import { setGenerator } from '@nozbe/watermelondb/utils/common/randomId';
 // @FIX: Imported 'PaymentStage' to resolve 'Cannot find name' error.
-import { FarmerStatus, PlantType, PlantationMethod, OverallGrade, AppealStatus, TaskStatus, TaskPriority, ProcessingStatus, AssistanceApplicationStatus, PaymentStage, ActivityType, SustainabilityTier } from '../types';
+import { FarmerStatus, PlantType, PlantationMethod, OverallGrade, AppealStatus, TaskStatus, TaskPriority, ProcessingStatus, AssistanceApplicationStatus, PaymentStage, ActivityType, SustainabilityTier, VendorStatus, OrderStatus } from '../types';
 
 // Use a simple, non-secure random ID generator for this offline-first app
 setGenerator(() => Math.random().toString(36).substring(2));
 
 const schema = appSchema({
-  version: 22,
+  version: 25,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -395,6 +395,114 @@ const schema = appSchema({
         { name: 'unit', type: 'string' },
       ],
     }),
+    // --- MARKETPLACE TABLES ---
+    tableSchema({
+      name: 'vendors',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'contact_person', type: 'string' },
+        { name: 'mobile_number', type: 'string' },
+        { name: 'address', type: 'string' },
+        { name: 'status', type: 'string', isIndexed: true },
+        { name: 'rating', type: 'number' },
+        { name: 'created_at', type: 'number' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+      ],
+    }),
+    tableSchema({
+        name: 'product_categories',
+        columns: [
+            { name: 'name', type: 'string' },
+            { name: 'icon_svg', type: 'string', isOptional: true },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+        ],
+    }),
+    tableSchema({
+        name: 'products',
+        columns: [
+            { name: 'name', type: 'string' },
+            { name: 'description', type: 'string' },
+            { name: 'image_url', type: 'string', isOptional: true },
+            { name: 'category_id', type: 'string', isIndexed: true },
+            { name: 'is_quality_verified', type: 'boolean' },
+            { name: 'created_at', type: 'number' },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+        ],
+    }),
+    tableSchema({
+        name: 'vendor_products',
+        columns: [
+            { name: 'vendor_id', type: 'string', isIndexed: true },
+            { name: 'product_id', type: 'string', isIndexed: true },
+            { name: 'price', type: 'number' },
+            { name: 'stock_quantity', type: 'number' },
+            { name: 'unit', type: 'string' },
+            { name: 'updated_at', type: 'number' },
+        ],
+    }),
+    tableSchema({
+        name: 'orders',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'order_date', type: 'string' },
+            { name: 'status', type: 'string', isIndexed: true },
+            { name: 'total_amount', type: 'number' },
+            { name: 'payment_method', type: 'string' },
+            { name: 'payment_transaction_id', type: 'string', isOptional: true },
+            { name: 'delivery_address', type: 'string' },
+            { name: 'delivery_instructions', type: 'string', isOptional: true },
+            { name: 'logistics_partner_id', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+        ],
+    }),
+    tableSchema({
+        name: 'order_items',
+        columns: [
+            { name: 'order_id', type: 'string', isIndexed: true },
+            { name: 'vendor_product_id', type: 'string', isIndexed: true },
+            { name: 'quantity', type: 'number' },
+            { name: 'price_per_unit', type: 'number' },
+        ],
+    }),
+    tableSchema({
+        name: 'dispute_tickets',
+        columns: [
+            { name: 'order_id', type: 'string', isIndexed: true },
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'reason', type: 'string' },
+            { name: 'status', type: 'string', isIndexed: true },
+            { name: 'resolution_notes', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'resolved_at', type: 'number', isOptional: true },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+        ]
+    }),
+    // --- TRAINING TABLES ---
+    tableSchema({
+      name: 'training_modules',
+      columns: [
+        { name: 'title', type: 'string' },
+        { name: 'description', type: 'string' },
+        { name: 'module_type', type: 'string' }, // 'video' | 'article'
+        { name: 'content', type: 'string' }, // URL or markdown
+        { name: 'duration_minutes', type: 'number', isOptional: true },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'training_completions',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'module_id', type: 'string', isIndexed: true },
+        { name: 'completed_at', type: 'number' },
+        { name: 'completed_by_user_id', type: 'string', isOptional: true },
+        { name: 'syncStatus', type: 'string' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+      ],
+    }),
   ],
 });
 
@@ -402,7 +510,7 @@ const schema = appSchema({
 const migrations = schemaMigrations({
   migrations: [
      {
-      toVersion: 21,
+      toVersion: 22,
       steps: [
         addColumns({
           table: 'farmers',
@@ -410,21 +518,145 @@ const migrations = schemaMigrations({
             { name: 'hap_id', type: 'string', isOptional: true, isIndexed: true },
             { name: 'gov_application_id', type: 'string', isOptional: true },
             { name: 'gov_farmer_id', type: 'string', isOptional: true },
-          ],
-        }),
-      ],
-    },
-    {
-      toVersion: 22,
-      steps: [
-        addColumns({
-          table: 'farmers',
-          columns: [
             { name: 'primary_crop', type: 'string', isOptional: true },
           ],
         }),
       ],
     },
+    {
+      toVersion: 23,
+      steps: [
+        createTable({
+            name: 'vendors',
+            columns: [
+                { name: 'name', type: 'string' },
+                { name: 'contact_person', type: 'string' },
+                { name: 'mobile_number', type: 'string' },
+                { name: 'address', type: 'string' },
+                { name: 'status', type: 'string', isIndexed: true },
+                { name: 'rating', type: 'number' },
+                { name: 'created_at', type: 'number' },
+                { name: 'tenant_id', type: 'string', isIndexed: true },
+            ],
+        }),
+        createTable({
+            name: 'products',
+            columns: [
+                { name: 'name', type: 'string' },
+                { name: 'description', type: 'string' },
+                { name: 'image_url', type: 'string', isOptional: true },
+                { name: 'category', type: 'string' },
+                { name: 'is_quality_verified', type: 'boolean' },
+                { name: 'created_at', type: 'number' },
+                { name: 'tenant_id', type: 'string', isIndexed: true },
+            ],
+        }),
+        createTable({
+            name: 'vendor_products',
+            columns: [
+                { name: 'vendor_id', type: 'string', isIndexed: true },
+                { name: 'product_id', type: 'string', isIndexed: true },
+                { name: 'price', type: 'number' },
+                { name: 'stock_quantity', type: 'number' },
+                { name: 'unit', type: 'string' },
+                { name: 'updated_at', type: 'number' },
+            ],
+        }),
+        createTable({
+            name: 'orders',
+            columns: [
+                { name: 'farmer_id', type: 'string', isIndexed: true },
+                { name: 'order_date', type: 'string' },
+                { name: 'status', type: 'string', isIndexed: true },
+                { name: 'total_amount', type: 'number' },
+                { name: 'payment_method', type: 'string' },
+                { name: 'delivery_address', type: 'string' },
+                { name: 'logistics_partner_id', type: 'string', isOptional: true },
+                { name: 'created_at', type: 'number' },
+                { name: 'tenant_id', type: 'string', isIndexed: true },
+            ],
+        }),
+        createTable({
+            name: 'order_items',
+            columns: [
+                { name: 'order_id', type: 'string', isIndexed: true },
+                { name: 'vendor_product_id', type: 'string', isIndexed: true },
+                { name: 'quantity', type: 'number' },
+                { name: 'price_per_unit', type: 'number' },
+            ],
+        }),
+        createTable({
+            name: 'dispute_tickets',
+            columns: [
+                { name: 'order_id', type: 'string', isIndexed: true },
+                { name: 'farmer_id', type: 'string', isIndexed: true },
+                { name: 'reason', type: 'string' },
+                { name: 'status', type: 'string', isIndexed: true },
+                { name: 'resolution_notes', type: 'string', isOptional: true },
+                { name: 'created_at', type: 'number' },
+                { name: 'resolved_at', type: 'number', isOptional: true },
+                { name: 'tenant_id', type: 'string', isIndexed: true },
+            ]
+        }),
+      ],
+    },
+    {
+      toVersion: 24,
+      steps: [
+        createTable({
+            name: 'product_categories',
+            columns: [
+                { name: 'name', type: 'string' },
+                { name: 'icon_svg', type: 'string', isOptional: true },
+                { name: 'tenant_id', type: 'string', isIndexed: true },
+            ],
+        }),
+        addColumns({
+            table: 'products',
+            columns: [
+                { name: 'category_id', type: 'string', isIndexed: true },
+            ],
+        }),
+        // Note: In a real migration, you'd handle renaming/dropping the old 'category' column.
+        // For LokiJSAdapter, simply not defining it in the new schema effectively removes it.
+        addColumns({
+            table: 'orders',
+            columns: [
+                { name: 'payment_transaction_id', type: 'string', isOptional: true },
+                { name: 'delivery_instructions', type: 'string', isOptional: true },
+            ]
+        })
+      ],
+    },
+    {
+        toVersion: 25,
+        steps: [
+            createTable({
+                name: 'training_modules',
+                columns: [
+                    { name: 'title', type: 'string' },
+                    { name: 'description', type: 'string' },
+                    { name: 'module_type', type: 'string' },
+                    { name: 'content', type: 'string' },
+                    { name: 'duration_minutes', type: 'number', isOptional: true },
+                    { name: 'tenant_id', type: 'string', isIndexed: true },
+                    { name: 'created_at', type: 'number' },
+                    { name: 'updated_at', type: 'number' },
+                ],
+            }),
+            createTable({
+                name: 'training_completions',
+                columns: [
+                    { name: 'farmer_id', type: 'string', isIndexed: true },
+                    { name: 'module_id', type: 'string', isIndexed: true },
+                    { name: 'completed_at', type: 'number' },
+                    { name: 'completed_by_user_id', type: 'string', isOptional: true },
+                    { name: 'syncStatus', type: 'string' },
+                    { name: 'tenant_id', type: 'string', isIndexed: true },
+                ],
+            }),
+        ],
+    }
   ],
 });
 
@@ -491,6 +723,8 @@ export class FarmerModel extends Model {
   @children('equipment_leases') equipmentLeases!: Query<EquipmentLeaseModel>;
   @children('sustainability_verifications') sustainabilityVerifications!: Query<SustainabilityVerificationModel>;
   @children('farm_inputs') farmInputs!: Query<FarmInputModel>;
+  @children('orders') orders!: Query<OrderModel>;
+  @children('training_completions') trainingCompletions!: Query<TrainingCompletionModel>;
 }
 
 export class PlotModel extends Model {
@@ -866,6 +1100,116 @@ export class FarmInputModel extends Model {
     @text('unit') unit!: string;
 }
 
+// --- MARKETPLACE MODELS ---
+
+export class VendorModel extends Model {
+  static table = 'vendors';
+  @text('name') name!: string;
+  @text('contact_person') contactPerson!: string;
+  @text('mobile_number') mobileNumber!: string;
+  @text('address') address!: string;
+  @text('status') status!: VendorStatus;
+  @field('rating') rating!: number;
+  @readonly @date('created_at') createdAt!: Date;
+  @text('tenant_id') tenantId!: string;
+}
+
+export class ProductCategoryModel extends Model {
+  static table = 'product_categories';
+  @text('name') name!: string;
+  @text('icon_svg') iconSvg?: string;
+  @text('tenant_id') tenantId!: string;
+  @children('products') products!: Query<ProductModel>;
+}
+
+export class ProductModel extends Model {
+  static table = 'products';
+  static associations = {
+    product_categories: { type: 'belongs_to', key: 'category_id' },
+  } as const;
+  @text('name') name!: string;
+  @text('description') description!: string;
+  @text('image_url') imageUrl?: string;
+  @text('category_id') categoryId!: string;
+  @relation('product_categories', 'category_id') category!: any;
+  @field('is_quality_verified') isQualityVerified!: boolean;
+  @readonly @date('created_at') createdAt!: Date;
+  @text('tenant_id') tenantId!: string;
+}
+
+export class VendorProductModel extends Model {
+  static table = 'vendor_products';
+  @text('vendor_id') vendorId!: string;
+  @text('product_id') productId!: string;
+  @field('price') price!: number;
+  @field('stock_quantity') stockQuantity!: number;
+  @text('unit') unit!: string;
+  @date('updated_at') updatedAt!: Date;
+}
+
+export class OrderModel extends Model {
+  static table = 'orders';
+  static associations = {
+    farmers: { type: 'belongs_to', key: 'farmer_id' },
+  } as const;
+  @relation('farmers', 'farmer_id') farmer!: any;
+  @text('farmer_id') farmerId!: string;
+  @text('order_date') orderDate!: string;
+  @text('status') status!: OrderStatus;
+  @field('total_amount') totalAmount!: number;
+  @text('payment_method') paymentMethod!: 'Cash' | 'Digital';
+  @text('payment_transaction_id') paymentTransactionId?: string;
+  @text('delivery_address') deliveryAddress!: string;
+  @text('delivery_instructions') deliveryInstructions?: string;
+  @text('logistics_partner_id') logisticsPartnerId?: string;
+  @readonly @date('created_at') createdAt!: Date;
+  @text('tenant_id') tenantId!: string;
+  @children('order_items') items!: Query<OrderItemModel>;
+}
+
+export class OrderItemModel extends Model {
+  static table = 'order_items';
+  static associations = {
+    orders: { type: 'belongs_to', key: 'order_id' },
+  } as const;
+  @text('order_id') orderId!: string;
+  @text('vendor_product_id') vendorProductId!: string;
+  @field('quantity') quantity!: number;
+  @field('price_per_unit') pricePerUnit!: number;
+}
+
+// --- TRAINING MODELS ---
+
+export class TrainingModuleModel extends Model {
+  static table = 'training_modules';
+  @text('title') title!: string;
+  @text('description') description!: string;
+  @text('module_type') moduleType!: 'video' | 'article';
+  @text('content') content!: string;
+  @field('duration_minutes') durationMinutes?: number;
+  @text('tenant_id') tenantId!: string;
+  @readonly @date('created_at') createdAt!: Date;
+  @date('updated_at') updatedAt!: Date;
+}
+
+export class TrainingCompletionModel extends Model {
+  static table = 'training_completions';
+  static associations = {
+    farmers: { type: 'belongs_to', key: 'farmer_id' },
+    training_modules: { type: 'belongs_to', key: 'module_id' },
+  } as const;
+
+  @relation('farmers', 'farmer_id') farmer!: any;
+  @relation('training_modules', 'module_id') module!: any;
+
+  @text('farmer_id') farmerId!: string;
+  @text('module_id') moduleId!: string;
+  @date('completed_at') completedAt!: Date;
+  @text('completed_by_user_id') completedByUserId?: string;
+  @text('syncStatus') syncStatusLocal!: 'synced' | 'pending';
+  @text('tenant_id') tenantId!: string;
+}
+
 
 // --- DATABASE SETUP ---
 
@@ -909,6 +1253,16 @@ const database = new Database({
     SustainabilityPracticeModel,
     SustainabilityVerificationModel,
     FarmInputModel,
+    // Marketplace Models
+    VendorModel,
+    ProductCategoryModel,
+    ProductModel,
+    VendorProductModel,
+    OrderModel,
+    OrderItemModel,
+    // Training Models
+    TrainingModuleModel,
+    TrainingCompletionModel,
   ],
 });
 

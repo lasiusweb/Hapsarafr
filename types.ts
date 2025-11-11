@@ -57,6 +57,9 @@ export enum Permission {
   CAN_INVITE_USERS = 'CAN_INVITE_USERS',
   CAN_MANAGE_CONTENT = 'CAN_MANAGE_CONTENT',
   CAN_MANAGE_SCHEMA = 'CAN_MANAGE_SCHEMA',
+  CAN_VIEW_MARKETPLACE = 'CAN_VIEW_MARKETPLACE',
+  CAN_MANAGE_VENDORS = 'CAN_MANAGE_VENDORS',
+  CAN_MANAGE_ORDERS = 'CAN_MANAGE_ORDERS',
 }
 
 export enum ActivityType {
@@ -75,6 +78,7 @@ export enum ActivityType {
   EQUIPMENT_ADDED = 'EQUIPMENT_ADDED',
   HARVEST_RECORDED = 'HARVEST_RECORDED',
   IDS_UPDATED = 'IDS_UPDATED',
+  TRAINING_COMPLETED = 'TRAINING_COMPLETED',
 }
 
 export enum OverallGrade {
@@ -512,6 +516,30 @@ export interface FarmInput {
     unit: string;
 }
 
+// --- TRAINING ---
+
+export interface TrainingModule {
+  id: string;
+  title: string;
+  description: string;
+  moduleType: 'video' | 'article';
+  content: string; // URL for video, markdown for article
+  durationMinutes?: number;
+  tenantId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrainingCompletion {
+  id: string;
+  farmerId: string;
+  moduleId: string;
+  completedAt: string;
+  completedByUserId?: string;
+  syncStatus: 'synced' | 'pending';
+  tenantId: string;
+}
+
 // --- COMMUNITY ---
 
 export type ExpertiseTag = 'Pest Control' | 'Irrigation' | 'Soil Health' | 'Harvesting Techniques' | 'Financial Planning' | 'Nursery Management';
@@ -573,4 +601,102 @@ export interface Filters {
   status: string;
   registrationDateFrom: string;
   registrationDateTo: string;
+}
+
+// --- MARKETPLACE ---
+
+export enum VendorStatus {
+  Pending = 'Pending',
+  Verified = 'Verified',
+  Suspended = 'Suspended',
+}
+
+export enum OrderStatus {
+    Pending = 'Pending',
+    Confirmed = 'Confirmed',
+    Shipped = 'Shipped',
+    Delivered = 'Delivered',
+    Cancelled = 'Cancelled',
+}
+
+export enum DisputeStatus {
+    Open = 'Open',
+    InProgress = 'In Progress',
+    Resolved = 'Resolved',
+    Closed = 'Closed',
+}
+
+export interface Vendor {
+    id: string;
+    name: string;
+    contactPerson: string;
+    mobileNumber: string;
+    address: string;
+    status: VendorStatus;
+    rating: number; // 0-5
+    createdAt: string;
+    tenantId: string;
+}
+
+export interface ProductCategory {
+    id: string;
+    name: string;
+    iconSvg: string;
+    tenantId: string;
+}
+
+export interface Product {
+    id: string;
+    name: string;
+    description: string;
+    imageUrl: string;
+    categoryId: string;
+    isQualityVerified: boolean;
+    createdAt: string;
+    tenantId: string;
+}
+
+export interface VendorProduct {
+    id: string;
+    vendorId: string;
+    productId: string;
+    price: number;
+    stockQuantity: number;
+    unit: string; // e.g., '50kg bag', 'litre'
+    updatedAt: string;
+}
+
+export interface Order {
+    id: string;
+    farmerId: string;
+    orderDate: string;
+    status: OrderStatus;
+    totalAmount: number;
+    paymentMethod: 'Cash' | 'Digital';
+    paymentTransactionId?: string; // For Juspay integration
+    deliveryAddress: string;
+    deliveryInstructions?: string;
+    logisticsPartnerId?: string; // e.g., Blowhorn order ID
+    createdAt: string;
+    tenantId: string;
+}
+
+export interface OrderItem {
+    id: string;
+    orderId: string;
+    vendorProductId: string;
+    quantity: number;
+    pricePerUnit: number;
+}
+
+export interface DisputeTicket {
+    id: string;
+    orderId: string;
+    farmerId: string;
+    reason: string;
+    status: DisputeStatus;
+    resolutionNotes?: string;
+    createdAt: string;
+    resolvedAt?: string;
+    tenantId: string;
 }

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { User, Permission } from '../types';
+import { useCart } from '../CartContext';
 
-type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard' | 'community-forum';
+// FIX: Added 'product-list' and 'order-confirmation' to match the more complete ViewType in App.tsx, resolving type conflicts.
+type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard' | 'community-forum' | 'marketplace' | 'vendor-management' | 'product-list' | 'checkout' | 'order-confirmation' | 'training-hub';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -21,7 +23,8 @@ const NavItem: React.FC<{
   text: string;
   requiredPermission?: Permission;
   userPermissions: Set<Permission>;
-}> = ({ view, currentView, onNavigate, isCollapsed, icon, text, requiredPermission, userPermissions }) => {
+  badgeCount?: number;
+}> = ({ view, currentView, onNavigate, isCollapsed, icon, text, requiredPermission, userPermissions, badgeCount }) => {
   if (requiredPermission && !userPermissions.has(requiredPermission)) {
     return null;
   }
@@ -36,6 +39,11 @@ const NavItem: React.FC<{
       <button onClick={() => onNavigate(view)} className={itemClasses} style={{ width: '100%' }} title={text}>
         <div className="flex-shrink-0 w-6 h-6">{icon}</div>
         {!isCollapsed && <span className="ml-3 sidebar-item-text">{text}</span>}
+        {!isCollapsed && badgeCount !== undefined && badgeCount > 0 && (
+            <span className="ml-auto inline-block py-0.5 px-2 text-xs font-bold text-white bg-green-600 rounded-full">
+                {badgeCount}
+            </span>
+        )}
         {isCollapsed && (
           <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
             {text}
@@ -57,6 +65,7 @@ const SidebarCategory: React.FC<{ text: string; isCollapsed: boolean }> = ({ tex
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isCollapsed, onToggleCollapse, currentUser, userPermissions }) => {
   const isSuperAdmin = currentUser?.groupId === 'group-super-admin';
+  const { itemCount } = useCart();
   
   return (
     <>
@@ -84,9 +93,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isCollapsed,
                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="register-farmer" requiredPermission={Permission.CAN_REGISTER_FARMER} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>} text="Register Farmer" />
                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="map-view" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} text="Map View" />
                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="financial-ledger" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" /><path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" /></svg>} text="Financial Ledger" />
+
+                <SidebarCategory text="Marketplace" isCollapsed={isCollapsed} />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="marketplace" requiredPermission={Permission.CAN_VIEW_MARKETPLACE} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} text="Marketplace" />
+                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="checkout" requiredPermission={Permission.CAN_VIEW_MARKETPLACE} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" /></svg>} text="My Cart" badgeCount={itemCount} />
                 
-                <SidebarCategory text="Community" isCollapsed={isCollapsed} />
+                <SidebarCategory text="Community & Education" isCollapsed={isCollapsed} />
                 <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="community-forum" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>} text="Q&A Forum" />
+                <NavItem {...{ currentView, onNavigate, isCollapsed, userPermissions }} view="training-hub" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 14l9-5-9-5-9 5 9 5z" /><path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0v6" /></svg>} text="Training Hub" />
 
 
                 <SidebarCategory text="Sustainability" isCollapsed={isCollapsed} />

@@ -131,8 +131,8 @@ const FormField = ({ children }: FormFieldProps) => <div className="md:col-span-
 type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 
-
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null, setNotification }) => {
+// FIX: Changed from const assignment to a default exported function to fix module resolution issues.
+export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null, setNotification }: RegistrationFormProps) {
     const database = useDatabase();
     const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -572,4 +572,76 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <FormRow><FormLabel required>Gender</FormLabel><FormField><div className="relative"><select name="gender" value={formData.gender} onChange={handleChange} className={getSelectClass('gender')}><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
                                 <FormRow><FormLabel required>Address</FormLabel><FormField><textarea name="address" value={formData.address} onChange={handleChange} className={getInputClass('address')} rows={3}></textarea><InputError message={errors.address} onDismiss={() => handleDismissError('address')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Registration Date</FormLabel><FormField><input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={getInputClass('registrationDate')} max={new Date().toISOString().split('T')[0]} /><InputError message={errors.registrationDate} onDismiss={() => handleDismissError('registrationDate')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Photo</FormLabel><FormField>{photoPreview ? (<div className="flex items-center gap-4"><img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/><div className="flex flex-col gap-1"><div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div><button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-
+                                <FormRow><FormLabel>Photo</FormLabel><FormField>{photoPreview ? (<div className="flex items-center gap-4"><img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/><div className="flex flex-col gap-1"><div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div><button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-xs font-semibold hover:bg-red-200">Remove</button></div></div>) : (<div className="flex items-center gap-4"><input ref={fileInputRef} type="file" name="photo" accept="image/jpeg, image/png" onChange={handlePhotoChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" /><InputError message={errors.photo} onDismiss={() => handleDismissError('photo')} /></div>)}</FormField></FormRow>
+                            </section>}
+
+                            {currentStep === 2 && <section>
+                                <h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3>
+                                <FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')}><option value="">-- Select a District --</option>{districts.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')} /></FormField></FormRow>
+                                <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district}><option value="">-- Select a Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')} /></FormField></FormRow>
+                                <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleGeoChange} className={getSelectClass('village')} disabled={!formData.mandal}><option value="">-- Select a Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Is in NE Region?</FormLabel><FormField><div className="flex items-center h-full"><label className="inline-flex items-center"><input type="checkbox" name="is_in_ne_region" checked={formData.is_in_ne_region} onChange={handleChange} className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500" /><span className="ml-2 text-gray-800">Yes</span></label></div></FormField></FormRow>
+                                <FormRow><FormLabel>Farmer Location</FormLabel><FormField>
+                                    <div className="flex flex-col md:flex-row gap-4 items-start">
+                                        <button type="button" onClick={handleCaptureLocation} disabled={isCapturingLocation} className="px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-semibold flex items-center gap-2 disabled:bg-gray-400">
+                                            {isCapturingLocation ? <><svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Capturing...</> : <><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>Capture GPS</>}
+                                        </button>
+                                        <div className="flex-1 w-full"><input type="text" readOnly value={formData.latitude !== undefined && formData.longitude !== undefined ? `${formData.latitude.toFixed(6)}, ${formData.longitude.toFixed(6)}` : 'No location captured'} className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm" /></div>
+                                    </div>
+                                    {locationError && <p className="text-red-600 text-sm mt-2">{locationError}</p>}
+                                </FormField></FormRow>
+                            </section>}
+
+                             {currentStep === 3 && <section>
+                                <h3 className="text-lg font-semibold text-green-700 mb-4">3. Bank Details</h3>
+                                <FormRow><FormLabel required>Bank Account No.</FormLabel><FormField><input type="text" name="bankAccountNumber" value={formData.bankAccountNumber} onChange={handleChange} className={getInputClass('bankAccountNumber')} /><InputError message={errors.bankAccountNumber} onDismiss={() => handleDismissError('bankAccountNumber')} /></FormField></FormRow>
+                                <FormRow><FormLabel required>IFSC Code</FormLabel><FormField><input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={`${getInputClass('ifscCode')} uppercase`} /><InputError message={errors.ifscCode} onDismiss={() => handleDismissError('ifscCode')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Account Verified</FormLabel><FormField><div className="flex items-center h-full"><label className="inline-flex items-center"><input type="checkbox" name="accountVerified" checked={formData.accountVerified} onChange={handleChange} className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500" /><span className="ml-2 text-gray-800">Yes, account has been verified</span></label></div></FormField></FormRow>
+                            </section>}
+
+                             {currentStep === 4 && <section>
+                                <h3 className="text-lg font-semibold text-green-700 mb-4">4. Land & Plantation Details</h3>
+                                <FormRow><FormLabel>Primary Crop</FormLabel><FormField><input type="text" name="primary_crop" value={formData.primary_crop} onChange={handleChange} className={getInputClass('primary_crop')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Applied Extent (Acres)</FormLabel><FormField><input type="number" step="0.01" name="appliedExtent" value={formData.appliedExtent} onChange={handleChange} className={getInputClass('appliedExtent')} /><InputError message={errors.appliedExtent} onDismiss={() => handleDismissError('appliedExtent')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Approved Extent (Acres)</FormLabel><FormField><input type="number" step="0.01" name="approvedExtent" value={formData.approvedExtent} onChange={handleChange} className={getInputClass('approvedExtent')} /><InputError message={errors.approvedExtent} onDismiss={() => handleDismissError('approvedExtent')} /></FormField></FormRow>
+                                <FormRow><FormLabel>No. of Plants</FormLabel><FormField><input type="number" name="numberOfPlants" value={formData.numberOfPlants} onChange={handleChange} className={getInputClass('numberOfPlants')} /><InputError message={errors.numberOfPlants} onDismiss={() => handleDismissError('numberOfPlants')} /></FormField></FormRow>
+                                <FormRow><FormLabel>MLRD Plants</FormLabel><FormField><input type="number" name="mlrdPlants" value={formData.mlrdPlants} onChange={handleChange} className={getInputClass('mlrdPlants')} /><InputError message={errors.mlrdPlants} onDismiss={() => handleDismissError('mlrdPlants')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Full Cost Plants</FormLabel><FormField><input type="number" name="fullCostPlants" value={formData.fullCostPlants} onChange={handleChange} className={getInputClass('fullCostPlants')} /></FormField></FormRow>
+                                <FormRow><FormLabel>Plantation Date</FormLabel><FormField><input type="date" name="plantationDate" value={formData.plantationDate} onChange={handleChange} className={getInputClass('plantationDate')} max={new Date().toISOString().split('T')[0]} /></FormField></FormRow>
+                            </section>}
+                            
+                            {currentStep === 5 && <section>
+                                <h3 className="text-lg font-semibold text-green-700 mb-4">5. Review & Submit</h3>
+                                {preparedFarmerData ? <ReviewStep /> : <p className="text-center text-gray-600 py-10">Please fill out all required fields in the previous steps.</p>}
+                            </section>}
+                        </div>
+                        
+                        <div className="p-6 bg-gray-100 flex justify-between items-center mt-auto rounded-b-lg">
+                            <button type="button" onClick={handleCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Cancel</button>
+                            <div className="flex items-center gap-4">
+                                {currentStep > 1 && <button type="button" onClick={handlePrevious} className="px-6 py-2 bg-white border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 transition">Previous</button>}
+                                {currentStep < STEPS.length -1 && <button type="button" onClick={handleNext} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Next</button>}
+                                {currentStep === STEPS.length - 1 && <button type="button" onClick={handleSubmit} disabled={!!preparedFarmerData} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold disabled:bg-gray-400">{preparedFarmerData ? 'Ready' : 'Review'}</button>}
+                                {currentStep === STEPS.length && <button type="button" onClick={handleConfirmSubmit} disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold disabled:bg-gray-400">{isSubmitting ? 'Saving...' : 'Save Farmer'}</button>}
+                            </div>
+                        </div>
+                    </form>
+                    {showCancelConfirmation && <ConfirmationModal isOpen={showCancelConfirmation} title="Discard Changes?" message="Are you sure you want to cancel? Any unsaved changes will be lost." onConfirm={handleConfirmCancel} onCancel={handleAbortCancel} confirmText="Discard" confirmButtonClass="bg-red-600 hover:bg-red-700" />}
+                    {showAiReview && preparedFarmerData && <AiReviewModal farmerData={preparedFarmerData} plotsData={[]} onClose={() => setShowAiReview(false)} />}
+                </div>
+            )}
+            
+            {showSuccess && (
+                <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg text-center p-8">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-green-500 mx-auto mb-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                     <h2 className="text-2xl font-bold text-gray-800 mb-2">{mode === 'create' ? 'Registration Successful' : 'Update Successful'}</h2>
+                     <p className="text-gray-600 mb-6">{preparedFarmerData?.fullName} has been saved.</p>
+                     <div className="flex justify-center gap-4">
+                         <button onClick={onCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Close</button>
+                         {mode === 'create' && <button onClick={handleRegisterAnother} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold">Register Another</button>}
+                     </div>
+                </div>
+            )}
+        </div>
+    );
+}

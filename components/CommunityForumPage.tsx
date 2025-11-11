@@ -41,6 +41,29 @@ const CommunityForumPage: React.FC<CommunityForumPageProps> = ({ currentUser, on
     const [newAnswer, setNewAnswer] = useState('');
     const answerInputRef = useRef<HTMLTextAreaElement>(null);
 
+    const fetchProfiles = useCallback(async (authorIds: string[]): Promise<Map<string, Profile>> => {
+        if (!supabase || authorIds.length === 0) {
+            // FIX: Explicitly type the empty Map to match the function's return type.
+            return new Map<string, Profile>();
+        }
+        const { data: profiles, error } = await supabase
+            .from('profiles')
+            .select('id, name:full_name, avatar:avatar_url')
+            .in('id', authorIds);
+
+        if (error) {
+            console.error("Error fetching profiles:", error);
+            // Don't throw, just return an empty map so the app doesn't crash
+            // FIX: Explicitly type the empty Map to match the function's return type.
+            return new Map<string, Profile>();
+        }
+
+        // FIX: Explicitly type `profileMap` to guide TypeScript's inference, resolving the `Map<unknown, unknown>` error.
+        const profileMap: Map<string, Profile> = new Map((profiles || []).filter(p => p && p.id).map(p => [p.id as string, p as Profile]));
+        return profileMap;
+    }, [supabase]);
+
+
     const fetchPosts = useCallback(async () => {
         setIsLoading(true);
         setError(null);
@@ -68,16 +91,12 @@ const CommunityForumPage: React.FC<CommunityForumPageProps> = ({ currentUser, on
             
             // Fetch authors for posts
             const authorIds = [...new Set(postsWithCounts.map(p => p.author_id))];
-            if (authorIds.length > 0) {
-                const { data: profiles, error: profileError } = await supabase.from('users').select('id, name, avatar').in('id', authorIds);
-                if (profileError) throw profileError;
+            const profileMap = await fetchProfiles(authorIds);
 
-                // FIX: Guard against null 'profiles' data from Supabase query to prevent runtime errors and fix type inference.
-                const profileMap = new Map((profiles || []).map((p: Profile) => [p.id, p]));
-                postsWithCounts.forEach(post => {
-                    post.author = profileMap.get(post.author_id);
-                });
-            }
+            postsWithCounts.forEach(post => {
+                const author = profileMap.get(post.author_id);
+                post.author = author || { id: post.author_id, name: 'Unknown User', avatar: '' };
+            });
             
             setPosts(postsWithCounts);
         } catch (err: any) {
@@ -86,7 +105,7 @@ const CommunityForumPage: React.FC<CommunityForumPageProps> = ({ currentUser, on
         } finally {
             setIsLoading(false);
         }
-    }, [supabase]);
+    }, [supabase, fetchProfiles]);
 
     useEffect(() => {
         if (isOnline) {
@@ -94,32 +113,40 @@ const CommunityForumPage: React.FC<CommunityForumPageProps> = ({ currentUser, on
         }
     }, [isOnline, fetchPosts]);
 
-    const handleSelectPost = async (post: ForumPost) => {
+    const handleSelectPost = useCallback(async (post: ForumPost) => {
         setSelectedPost(post);
         setView('details');
         setIsLoading(true);
+        setAnswers([]);
+        setError(null);
+
+        if (!supabase) {
+            setError("Not connected to the cloud.");
+            setIsLoading(false);
+            return;
+        }
+
         try {
             const { data, error } = await supabase.from('forum_answers').select('*').eq('post_id', post.id).order('created_at', { ascending: true });
             if (error) throw error;
             
-            const authorIds = [...new Set(data.map((a: any) => a.author_id))];
-            if (authorIds.length > 0) {
-                 const { data: profiles, error: profileError } = await supabase.from('users').select('id, name, avatar').in('id', authorIds);
-                if (profileError) throw profileError;
-                // FIX: Guard against null 'profiles' data from Supabase query to prevent runtime errors and fix type inference.
-                const profileMap = new Map((profiles || []).map((p: Profile) => [p.id, p]));
-                data.forEach((answer: any) => {
-                    answer.author = profileMap.get(answer.author_id);
-                });
-            }
+            const answersData = (data as ForumAnswer[]) || [];
+            const authorIds = [...new Set(answersData.map(a => a.author_id))];
+            const profileMap = await fetchProfiles(authorIds);
             
-            setAnswers(data);
+            answersData.forEach(answer => {
+                const author = profileMap.get(answer.author_id);
+                answer.author = author || { id: answer.author_id, name: 'Unknown User', avatar: '' };
+            });
+            
+            setAnswers(answersData);
         } catch (err: any) {
+             console.error("Error fetching answers:", err);
              setError("Failed to load answers for this post.");
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [supabase, fetchProfiles]);
     
     const handleAskQuestion = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -164,7 +191,7 @@ const CommunityForumPage: React.FC<CommunityForumPageProps> = ({ currentUser, on
     }
 
     if (!isOnline) {
-        return <div className="p-6 text-center text-gray-600 bg-white rounded-lg shadow-md">This feature requires an internet connection. Please connect to a network to access the community forum.</div>;
+        return <div className="p-6 text-center text-gray-600 bg-white rounded-lg shadow-md">This feature requires an internet connection. Please connect to the community forum.</div>;
     }
 
     return (

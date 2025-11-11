@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 // FIX: Import Q from watermelondb to fix query builder errors.
 import { Database, Q } from '@nozbe/watermelondb';
-import { FarmerModel, UserModel, GroupModel, TenantModel, PlotModel } from './db';
+import { FarmerModel, UserModel, GroupModel, TenantModel, PlotModel, ProductCategoryModel, VendorModel, ProductModel, VendorProductModel, TrainingModuleModel } from './db';
 import { useDatabase } from './DatabaseContext';
 import { useQuery } from './hooks/useQuery';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -26,6 +26,8 @@ import { MOCK_USERS } from './data/userData';
 import { DEFAULT_GROUPS } from './data/permissionsData';
 import { farmerModelToPlain, plotModelToPlain } from './lib/utils';
 import { useDebounce } from './hooks/useDebounce';
+import { SAMPLE_CATEGORIES, SAMPLE_VENDORS, SAMPLE_PRODUCTS, SAMPLE_VENDOR_PRODUCTS } from './data/marketplaceData';
+import { SAMPLE_TRAINING_MODULES } from './data/trainingData';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const ProfilePage = lazy(() => import('./components/ProfilePage'));
@@ -58,9 +60,15 @@ const ResourceManagementPage = lazy(() => import('./components/ResourceManagemen
 const DistributionReportPage = lazy(() => import('./components/DistributionReportPage'));
 const SustainabilityDashboard = lazy(() => import('./components/SustainabilityDashboard'));
 const CommunityForumPage = lazy(() => import('./components/CommunityForumPage'));
+const MarketplacePage = lazy(() => import('./components/MarketplacePage'));
+const VendorManagementPage = lazy(() => import('./components/VendorManagementPage'));
+const ProductListPage = lazy(() => import('./components/ProductListPage'));
+const CheckoutPage = lazy(() => import('./components/CheckoutPage'));
+const OrderConfirmationPage = lazy(() => import('./components/OrderConfirmationPage'));
+const TrainingHubPage = lazy(() => import('./components/TrainingHubPage'));
 
 
-type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard' | 'community-forum';
+type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard' | 'community-forum' | 'marketplace' | 'vendor-management' | 'product-list' | 'checkout' | 'order-confirmation' | 'training-hub';
 
 // FIX: Define initialFilters constant to resolve reference error.
 const initialFilters: Filters = {
@@ -134,6 +142,45 @@ const App: React.FC = () => {
     const [sortConfig, setSortConfig] = useState<{ key: keyof Farmer | 'id' | 'tenantId'; direction: 'ascending' | 'descending' } | null>({ key: 'createdAt', direction: 'descending'});
     
     const supabase = useMemo(() => initializeSupabase(), []);
+    
+    // --- Seed Data ---
+    useEffect(() => {
+        const seedData = async () => {
+            if (!currentUser) return;
+            try {
+                await database.write(async () => {
+                    const marketplaceCategoryCount = await database.get<ProductCategoryModel>('product_categories').query().fetchCount();
+                    if (marketplaceCategoryCount === 0) {
+                        console.log("Seeding marketplace data...");
+                        const actions = [
+                            ...SAMPLE_CATEGORIES.map(cat => database.get<ProductCategoryModel>('product_categories').prepareCreate(c => { c._raw.id = cat.id; c.name = cat.name; c.iconSvg = cat.iconSvg; c.tenantId = currentUser.tenantId; })),
+                            ...SAMPLE_VENDORS.map(ven => database.get<VendorModel>('vendors').prepareCreate(v => { v._raw.id = ven.id; Object.assign(v, { ...ven, tenantId: currentUser.tenantId }); })),
+                            ...SAMPLE_PRODUCTS.map(prod => database.get<ProductModel>('products').prepareCreate(p => { p._raw.id = prod.id; Object.assign(p, { ...prod, categoryId: prod.categoryId, tenantId: currentUser.tenantId }); })),
+                            ...SAMPLE_VENDOR_PRODUCTS.map(vp => database.get<VendorProductModel>('vendor_products').prepareCreate(v => { v._raw.id = vp.id; Object.assign(v, vp); })),
+                        ];
+                        await database.batch(...actions);
+                        console.log("Marketplace data seeded.");
+                    }
+
+                    const trainingModuleCount = await database.get<TrainingModuleModel>('training_modules').query().fetchCount();
+                    if (trainingModuleCount === 0) {
+                        console.log("Seeding training data...");
+                        const actions = SAMPLE_TRAINING_MODULES.map(mod => database.get<TrainingModuleModel>('training_modules').prepareCreate(m => {
+                            m._raw.id = mod.id;
+                            Object.assign(m, { ...mod, tenantId: currentUser.tenantId });
+                        }));
+                        await database.batch(...actions);
+                        console.log("Training data seeded.");
+                    }
+                });
+            } catch (error) {
+                console.error("Failed to seed data:", error);
+            }
+        };
+
+        seedData();
+    }, [database, currentUser]);
+
 
     // --- Auth Effects ---
     useEffect(() => {
@@ -168,7 +215,7 @@ const App: React.FC = () => {
 
     // --- Routing ---
     const handleNavigation = useCallback((view: ViewType, param: string | null = null) => {
-        if (view === 'farmer-details' && param) {
+        if ((view === 'farmer-details' || view === 'product-list' || view === 'order-confirmation') && param) {
             window.location.hash = `/${view}/${param}`;
         } else if (view === 'register-farmer') {
             setFarmerToEdit(null);
@@ -517,6 +564,12 @@ const App: React.FC = () => {
             case 'distribution-log': return <DistributionReportPage onBack={() => handleNavigation('dashboard')} />;
             case 'sustainability-dashboard': return <SustainabilityDashboard onBack={() => handleNavigation('dashboard')} />;
             case 'community-forum': return <CommunityForumPage currentUser={currentUser} onBack={() => handleNavigation('dashboard')} setNotification={setNotification} />;
+            case 'marketplace': return <MarketplacePage onBack={() => handleNavigation('dashboard')} onNavigate={(view, param) => handleNavigation(view, param)} />;
+            case 'vendor-management': return <VendorManagementPage onBack={() => handleNavigation('admin')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'product-list': return viewParam ? <ProductListPage categoryId={viewParam} onBack={() => handleNavigation('marketplace')} /> : <NotFoundPage onBack={() => handleNavigation('marketplace')} />;
+            case 'checkout': return <CheckoutPage onBack={() => handleNavigation('marketplace')} onOrderPlaced={(orderId) => handleNavigation('order-confirmation', orderId)} />;
+            case 'order-confirmation': return viewParam ? <OrderConfirmationPage orderId={viewParam} onNavigate={handleNavigation} /> : <NotFoundPage onBack={() => handleNavigation('dashboard')} />;
+            case 'training-hub': return <TrainingHubPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
             default: return <NotFoundPage onBack={() => handleNavigation('dashboard')} />;
         }
     }

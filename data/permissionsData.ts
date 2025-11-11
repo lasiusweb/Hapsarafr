@@ -11,6 +11,9 @@ export const PERMISSIONS_LIST: { id: Permission, description: string; category: 
     { id: Permission.CAN_MANAGE_GROUPS, description: 'Manage groups and permissions', category: 'Administration' },
     { id: Permission.CAN_INVITE_USERS, description: 'Invite new users via generating codes', category: 'Administration' },
     { id: Permission.CAN_MANAGE_CONTENT, description: 'Edit site content (Landing Page, FAQs)', category: 'Administration' },
+    { id: Permission.CAN_VIEW_MARKETPLACE, description: 'Access and view the marketplace', category: 'Marketplace' },
+    { id: Permission.CAN_MANAGE_VENDORS, description: 'Add, verify, and manage marketplace vendors', category: 'Marketplace' },
+    { id: Permission.CAN_MANAGE_ORDERS, description: 'View and manage all farmer orders', category: 'Marketplace' },
     { id: Permission.CAN_MANAGE_SCHEMA, description: 'Manage data schemas and dynamic forms', category: 'Super Administration' },
 ];
 
@@ -34,6 +37,9 @@ export const DEFAULT_GROUPS: Group[] = [
             Permission.CAN_MANAGE_USERS,
             Permission.CAN_MANAGE_GROUPS,
             Permission.CAN_INVITE_USERS,
+            Permission.CAN_VIEW_MARKETPLACE,
+            Permission.CAN_MANAGE_VENDORS,
+            Permission.CAN_MANAGE_ORDERS,
             // CAN_MANAGE_CONTENT is intentionally omitted for regular admins
         ],
         tenantId: 'default-tenant',
@@ -47,6 +53,7 @@ export const DEFAULT_GROUPS: Group[] = [
             Permission.CAN_IMPORT_DATA,
             Permission.CAN_EXPORT_DATA,
             Permission.CAN_SYNC_DATA,
+            Permission.CAN_VIEW_MARKETPLACE,
         ],
         tenantId: 'default-tenant',
     },
@@ -55,6 +62,7 @@ export const DEFAULT_GROUPS: Group[] = [
         name: 'Viewer',
         permissions: [
             Permission.CAN_EXPORT_DATA, // Viewers can only view and export data
+            Permission.CAN_VIEW_MARKETPLACE,
         ],
         tenantId: 'default-tenant',
     },
