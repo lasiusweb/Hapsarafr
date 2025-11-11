@@ -13,7 +13,7 @@ import { FarmerStatus, PlantType, PlantationMethod, OverallGrade, AppealStatus, 
 setGenerator(() => Math.random().toString(36).substring(2));
 
 const schema = appSchema({
-  version: 20,
+  version: 22,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -39,8 +39,9 @@ const schema = appSchema({
         { name: 'full_cost_plants', type: 'number' },
         { name: 'latitude', type: 'number', isOptional: true },
         { name: 'longitude', type: 'number', isOptional: true },
-        { name: 'application_id', type: 'string', isIndexed: true },
-        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'hap_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'gov_application_id', type: 'string', isOptional: true },
+        { name: 'gov_farmer_id', type: 'string', isOptional: true },
         { name: 'proposed_year', type: 'string' },
         { name: 'registration_date', type: 'string' },
         { name: 'aso_id', type: 'string' },
@@ -56,6 +57,7 @@ const schema = appSchema({
         { name: 'updated_by', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isIndexed: true },
         { name: 'is_in_ne_region', type: 'boolean', isOptional: true },
+        { name: 'primary_crop', type: 'string', isOptional: true },
       ],
     }),
      tableSchema({
@@ -400,51 +402,25 @@ const schema = appSchema({
 const migrations = schemaMigrations({
   migrations: [
      {
-      toVersion: 19,
+      toVersion: 21,
       steps: [
-        // Migrations up to 19 were part of the previous state
         addColumns({
-          table: 'resources',
+          table: 'farmers',
           columns: [
-            { name: 'cost', type: 'number', isOptional: true },
+            { name: 'hap_id', type: 'string', isOptional: true, isIndexed: true },
+            { name: 'gov_application_id', type: 'string', isOptional: true },
+            { name: 'gov_farmer_id', type: 'string', isOptional: true },
           ],
         }),
       ],
     },
     {
-      toVersion: 20,
+      toVersion: 22,
       steps: [
-        createTable({
-          name: 'sustainability_practices',
+        addColumns({
+          table: 'farmers',
           columns: [
-            { name: 'name', type: 'string' },
-            { name: 'description', type: 'string' },
-            { name: 'category', type: 'string' },
-            { name: 'tier', type: 'string' },
-          ],
-        }),
-        createTable({
-          name: 'sustainability_verifications',
-          columns: [
-            { name: 'farmer_id', type: 'string', isIndexed: true },
-            { name: 'practice_id', type: 'string', isIndexed: true },
-            { name: 'officer_id', type: 'string', isIndexed: true },
-            { name: 'verification_date', type: 'string' },
-            { name: 'status', type: 'string' },
-            { name: 'notes', type: 'string', isOptional: true },
-            { name: 'evidence_url', type: 'string', isOptional: true },
-            { name: 'created_at', type: 'number' },
-          ],
-        }),
-        createTable({
-          name: 'farm_inputs',
-          columns: [
-            { name: 'farmer_id', type: 'string', isIndexed: true },
-            { name: 'input_type', type: 'string' },
-            { name: 'date', type: 'string' },
-            { name: 'cost', type: 'number' },
-            { name: 'quantity', type: 'number' },
-            { name: 'unit', type: 'string' },
+            { name: 'primary_crop', type: 'string', isOptional: true },
           ],
         }),
       ],
@@ -484,8 +460,9 @@ export class FarmerModel extends Model {
   @field('full_cost_plants') fullCostPlants!: number;
   @field('latitude') latitude?: number;
   @field('longitude') longitude?: number;
-  @text('application_id') applicationId!: string;
-  @text('farmer_id') farmerId!: string;
+  @text('hap_id') hapId?: string;
+  @text('gov_application_id') govApplicationId?: string;
+  @text('gov_farmer_id') govFarmerId?: string;
   @text('proposed_year') proposedYear!: string;
   @text('registration_date') registrationDate!: string;
   @text('aso_id') asoId!: string;
@@ -501,6 +478,7 @@ export class FarmerModel extends Model {
   @text('updated_by') updatedBy?: string;
   @text('tenant_id') tenantId!: string;
   @field('is_in_ne_region') isInNeRegion?: boolean;
+  @text('primary_crop') primaryCrop?: string;
 
   @children('plots') plots!: Query<PlotModel>;
   @children('subsidy_payments') subsidyPayments!: Query<SubsidyPaymentModel>;

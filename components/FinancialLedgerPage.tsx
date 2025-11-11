@@ -153,7 +153,7 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     
-    const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.farmerId})` })), [allFarmers]);
+    const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hap_id || 'N/A'})` })), [allFarmers]);
     
     // Fetch all resources once
     const allResources = useQuery(useMemo(() => database.get<ResourceModel>('resources').query(), [database]));
@@ -243,7 +243,7 @@ const FinancialLedgerPage: React.FC<FinancialLedgerPageProps> = ({ allFarmers, o
                         <p className="text-gray-500">Track income and expenses for individual farmers.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back
                     </button>
                 </div>

@@ -22,10 +22,10 @@ const RawDataView: React.FC<{ farmers: FarmerModel[]; onClose: () => void; }> = 
 
     // Define table headers
     const headers: { key: keyof Farmer | 'id', label: string }[] = [
-        // FIX: Changed label to match the key 'farmerId'. 'hap_id' is a separate field.
-        { key: 'farmerId', label: 'Farmer ID' },
+        { key: 'hap_id', label: 'HAP ID' },
         { key: 'fullName', label: 'Full Name' },
-        { key: 'applicationId', label: 'Application ID' },
+        { key: 'gov_application_id', label: 'Gov Application ID' },
+        { key: 'gov_farmer_id', label: 'Gov Farmer ID' },
         { key: 'status', label: 'Status' },
         { key: 'registrationDate', label: 'Reg. Date' },
         { key: 'mobileNumber', label: 'Mobile' },
@@ -34,7 +34,6 @@ const RawDataView: React.FC<{ farmers: FarmerModel[]; onClose: () => void; }> = 
         { key: 'mandal', label: 'Mandal Code' },
         { key: 'village', label: 'Village Code' },
         { key: 'syncStatus', label: 'Sync Status' },
-        { key: 'approvedExtent', label: 'Approved Extent' },
         { key: 'id', label: 'DB ID' },
     ];
 
@@ -55,8 +54,8 @@ const RawDataView: React.FC<{ farmers: FarmerModel[]; onClose: () => void; }> = 
         // 2. Sorting logic
         if (sortConfig !== null) {
             filteredData.sort((a, b) => {
-                const aValue = a[sortConfig.key];
-                const bValue = b[sortConfig.key];
+                const aValue = a[sortConfig.key as keyof FarmerModel];
+                const bValue = b[sortConfig.key as keyof FarmerModel];
                 
                 if (aValue < bValue) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -145,7 +144,7 @@ const RawDataView: React.FC<{ farmers: FarmerModel[]; onClose: () => void; }> = 
                                 <tr key={farmer.id} className="hover:bg-gray-50">
                                     {headers.map(header => (
                                         <td key={header.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                            {String(farmer[header.key as keyof FarmerModel] ?? '')}
+                                            {String((farmer as any)[header.key as keyof FarmerModel] ?? '')}
                                         </td>
                                     ))}
                                 </tr>

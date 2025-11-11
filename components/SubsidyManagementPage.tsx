@@ -261,7 +261,8 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
                                     <tr key={farmer.id}>
                                         <td className="px-2 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10 w-48">
                                             <div className="truncate" title={farmer.fullName}>{farmer.fullName}</div>
-                                            <div className="text-xs font-mono text-gray-500">{farmer.farmerId}</div>
+                                            {/* FIX: Replaced non-existent 'farmerId' with 'hap_id' to display the correct identifier. */}
+                                            <div className="text-xs font-mono text-gray-500">{farmer.hap_id}</div>
                                         </td>
                                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-500 w-28">{farmer.plantationDate ? new Date(farmer.plantationDate).toLocaleDateString() : 'N/A'}</td>
                                         {TABLE_STAGES.map(stage => (

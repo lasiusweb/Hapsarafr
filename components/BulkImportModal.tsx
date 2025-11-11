@@ -151,9 +151,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         fullCostPlants: Number(row.fullCostPlants) || 0,
                         latitude: row.latitude ? parseFloat(row.latitude) : undefined,
                         longitude: row.longitude ? parseFloat(row.longitude) : undefined,
-                        // FIX: Changed property names from gov_... to match the Farmer type definition.
-                        applicationId: String(row.gov_application_id || '').trim(),
-                        farmerId: String(row.gov_farmer_id || '').trim(),
+                        gov_application_id: String(row.gov_application_id || '').trim(),
+                        gov_farmer_id: String(row.gov_farmer_id || '').trim(),
                         asoId,
                         proposedYear: '2024-25', registrationDate: now.split('T')[0],
                         paymentUtrDd: '', status: FarmerStatus.Registered,

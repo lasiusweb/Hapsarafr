@@ -7,9 +7,9 @@ declare const XLSX: any;
 // Function to convert an array of Farmer objects to a format suitable for export
 const prepareDataForExport = (farmers: Farmer[]) => {
     return farmers.map(f => ({
-        // FIX: Changed label to match the key 'farmerId'. 'hap_id' is a separate field.
-        'Farmer ID': f.farmerId,
-        'Application ID': f.applicationId,
+        'HAP ID': f.hap_id,
+        'Gov Application ID': f.gov_application_id,
+        'Gov Farmer ID': f.gov_farmer_id,
         'Full Name': f.fullName,
         'Father/Husband Name': f.fatherHusbandName,
         'Aadhaar Number': `'${f.aadhaarNumber}`, // Prepend with ' to treat as text in Excel

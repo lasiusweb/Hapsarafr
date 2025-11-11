@@ -115,7 +115,7 @@ const TaskModal: React.FC<{
     if (!isOpen) return null;
     
     const userOptions = users.map(u => ({ value: u.id, label: u.name }));
-    const farmerOptions = farmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.farmerId})` }));
+    const farmerOptions = farmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hapId || 'N/A'})` }));
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -249,7 +249,7 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
                     <div className="flex items-center gap-4">
                         <button onClick={() => setModalState({ isOpen: true })} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm">+ Add Task</button>
                         <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                             Back
                         </button>
                     </div>

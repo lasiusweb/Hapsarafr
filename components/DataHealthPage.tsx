@@ -52,7 +52,8 @@ const AccordionCard: React.FC<{ result: HealthCheckResult; onNavigate: (path: st
                             <li key={farmer.id} className="py-2 flex justify-between items-center">
                                 <div>
                                     <p className="font-semibold text-gray-800">{farmer.fullName}</p>
-                                    <p className="text-sm font-mono text-gray-500">{farmer.farmerId}</p>
+                                    {/* FIX: Replaced non-existent 'farmerId' with 'hap_id' to display the correct identifier. */}
+                                    <p className="text-sm font-mono text-gray-500">{farmer.hap_id}</p>
                                 </div>
                                 <button onClick={() => onNavigate(`farmer-details/${farmer.id}`)} className="text-sm font-semibold text-green-600 hover:underline">
                                     View &rarr;

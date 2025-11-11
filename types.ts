@@ -163,15 +163,14 @@ export interface Farmer {
   fullCostPlants: number;
   latitude?: number;
   longitude?: number;
-  hap_id?: string; // App-generated, human-readable ID, assigned on sync
-  // FIX: Replaced gov_... IDs with applicationId and farmerId to match what is actually used in the app and DB schema.
-  applicationId: string; // App-generated Application ID
-  farmerId: string; // App-generated Farmer ID
+  hap_id?: string;
+  gov_application_id?: string;
+  gov_farmer_id?: string;
   proposedYear: string;
   registrationDate: string;
   asoId: string;
   paymentUtrDd: string;
-  status: FarmerStatus | string; // Allow string for flexibility with filters
+  status: FarmerStatus | string;
   district: string;
   mandal: string;
   village: string;
@@ -182,6 +181,7 @@ export interface Farmer {
   updatedBy?: string;
   tenantId: string;
   is_in_ne_region: boolean;
+  primary_crop?: string;
 }
 
 export interface Plot {
@@ -510,6 +510,56 @@ export interface FarmInput {
     cost: number;
     quantity: number;
     unit: string;
+}
+
+// --- COMMUNITY ---
+
+export type ExpertiseTag = 'Pest Control' | 'Irrigation' | 'Soil Health' | 'Harvesting Techniques' | 'Financial Planning' | 'Nursery Management';
+
+export interface Profile {
+  id: string;
+  name: string;
+  avatar: string;
+  expertise_tags?: ExpertiseTag[];
+}
+
+export interface UserProfile {
+  user_id: string;
+  is_mentor: boolean;
+  expertise_tags: ExpertiseTag[];
+  needs_tags: ExpertiseTag[];
+}
+
+export interface Mentorship {
+  id: string;
+  mentor_id: string;
+  mentee_id: string;
+  status: 'requested' | 'active' | 'ended';
+  created_at: string;
+  mentor?: Profile;
+  mentee?: Profile;
+}
+
+
+export interface ForumPost {
+  id: string;
+  created_at: string;
+  author_id: string;
+  title: string;
+  content: string;
+  tenant_id: string;
+  author?: Profile;
+  answer_count?: number;
+}
+
+export interface ForumAnswer {
+  id: string;
+  created_at: string;
+  post_id: string;
+  author_id: string;
+  content: string;
+  tenant_id: string;
+  author?: Profile;
 }
 
 

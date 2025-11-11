@@ -57,9 +57,10 @@ const QualityAssessmentPage = lazy(() => import('./components/QualityAssessmentP
 const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
 const DistributionReportPage = lazy(() => import('./components/DistributionReportPage'));
 const SustainabilityDashboard = lazy(() => import('./components/SustainabilityDashboard'));
+const CommunityForumPage = lazy(() => import('./components/CommunityForumPage'));
 
 
-type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard';
+type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard' | 'community-forum';
 
 // FIX: Define initialFilters constant to resolve reference error.
 const initialFilters: Filters = {
@@ -409,7 +410,8 @@ const App: React.FC = () => {
         const farmer = allFarmers.find(f => f.id === farmerId);
         if(farmer) {
             const plots = await farmer.plots.fetch();
-            setPdfExportData({ farmer: farmerModelToPlain(farmer)!, plots: plots.map(p => plotModelToPlain(p)!) });
+            const plainFarmer = farmerModelToPlain(farmer)!;
+            setPdfExportData({ farmer: plainFarmer, plots: plots.map(p => plotModelToPlain(p)!) });
             setTimeout(async () => {
                 const element = document.getElementById('pdf-print-view');
                 if(element) {
@@ -419,8 +421,7 @@ const App: React.FC = () => {
                     const pdfWidth = pdf.internal.pageSize.getWidth();
                     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                    // FIX: Property 'hap_id' does not exist on type 'FarmerModel'. Use 'farmerId' instead.
-                    pdf.save(`${farmer.farmerId || 'un-synced-farmer'}_${farmer.fullName}.pdf`);
+                    pdf.save(`${plainFarmer.hap_id || 'un-synced-farmer'}_${plainFarmer.fullName}.pdf`);
                     setPdfExportData(null);
                 }
             }, 500);
@@ -515,6 +516,7 @@ const App: React.FC = () => {
             case 'resource-management': return <ResourceManagementPage onBack={() => handleNavigation('admin')} />;
             case 'distribution-log': return <DistributionReportPage onBack={() => handleNavigation('dashboard')} />;
             case 'sustainability-dashboard': return <SustainabilityDashboard onBack={() => handleNavigation('dashboard')} />;
+            case 'community-forum': return <CommunityForumPage currentUser={currentUser} onBack={() => handleNavigation('dashboard')} setNotification={setNotification} />;
             default: return <NotFoundPage onBack={() => handleNavigation('dashboard')} />;
         }
     }

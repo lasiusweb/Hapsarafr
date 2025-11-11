@@ -751,7 +751,8 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
 
         await database.write(async () => {
             await farmer.update(record => {
-                const { id, createdAt, createdBy, farmerId, applicationId, asoId, ...updatableData } = updatedFarmerData;
+                // FIX: Removed non-existent 'farmerId' and 'applicationId' from destructuring.
+                const { id, createdAt, createdBy, asoId, ...updatableData } = updatedFarmerData;
                 Object.assign(record, {
                     ...updatableData,
                     photo: photoBase64,
@@ -1182,7 +1183,8 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 
                 <div className="bg-white rounded-lg shadow-xl p-8">
                      <h1 className="text-3xl font-bold text-gray-800">{farmer.fullName}</h1>
-                     <p className="text-gray-500 font-mono">{farmer.farmerId}</p>
+                     {/* FIX: Replaced non-existent 'farmerId' with 'hapId' to display the correct identifier. */}
+                     <p className="text-gray-500 font-mono">{farmer.hapId}</p>
                 </div>
 
                 <div className="mt-6">

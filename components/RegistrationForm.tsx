@@ -40,8 +40,6 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
     fullCostPlants: 0,
     latitude: undefined,
     longitude: undefined,
-    applicationId: '',
-    farmerId: '',
     proposedYear: '2024-25',
     registrationDate: new Date().toISOString().split('T')[0],
     asoId: '',
@@ -53,6 +51,7 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
     syncStatus: 'pending',
     tenantId: '', // Added for multi-tenancy
     is_in_ne_region: false,
+    primary_crop: 'Oil Palm',
 };
 
 const DRAFT_STORAGE_KEY = 'hapsara-farmer-registration-draft';
@@ -358,15 +357,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
         if (Object.keys(allErrors).length === 0) {
             const now = new Date().toISOString();
             let farmerData: Farmer;
+            const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
+            const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
+
             if (mode === 'create') {
-                const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
-                const farmersInVillage = existingFarmers.filter(f => f.village === formData.village && f.mandal === formData.mandal && f.district === formData.district);
-                const seq = (farmersInVillage.length + 1).toString().padStart(3, '0');
-                const farmerId = `${formData.district}${formData.mandal}${formData.village}${seq}`;
-                const randomAppIdSuffix = Math.floor(1000 + Math.random() * 9000);
-                const applicationId = `A${regYear}${formData.district}${formData.mandal}${formData.village}${randomAppIdSuffix}`;
-                const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
-                farmerData = { ...formData, id: farmerId, farmerId, applicationId, asoId, createdAt: now, updatedAt: now };
+                farmerData = { ...formData, id: '', asoId, createdAt: now, updatedAt: now };
             } else {
                 farmerData = { ...existingFarmer!, ...formData, updatedAt: now };
             }
@@ -491,13 +486,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                 <p className="text-gray-600 mb-6">Please review all the information below before saving.</p>
                 <div className="space-y-6 max-h-[50vh] overflow-y-auto pr-4">
                     
-                    {/* Generated IDs */}
-                    <div className="mb-4">
-                        <h4 className="font-bold text-gray-800 mb-2">Generated IDs</h4>
-                        <DetailItem label="Hap ID" value={preparedFarmerData.farmerId} />
-                        <DetailItem label="Application ID" value={preparedFarmerData.applicationId} />
-                    </div>
-    
                     {/* Personal Details */}
                     <div className="mb-4">
                         <h4 className="font-bold text-gray-800 mb-2">Personal Details</h4>
@@ -507,7 +495,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                         <DetailItem label="Mobile Number" value={preparedFarmerData.mobileNumber} />
                         <DetailItem label="Aadhaar Number" value={preparedFarmerData.aadhaarNumber ? `**** **** ${preparedFarmerData.aadhaarNumber.slice(-4)}` : 'N/A'} />
                         <DetailItem label="Address" value={preparedFarmerData.address} />
-                        <DetailItem label="PPB/ROFR ID" value={preparedFarmerData.ppbRofrId} />
                         <DetailItem label="Registration Date" value={new Date(preparedFarmerData.registrationDate).toLocaleDateString()} />
                     </div>
                     
@@ -531,6 +518,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                     {/* Land & Plantation */}
                     <div>
                         <h4 className="font-bold text-gray-800 mb-2">Land & Plantation Details</h4>
+                        <DetailItem label="Primary Crop" value={preparedFarmerData.primary_crop} />
                         <DetailItem label="Applied Extent (Acres)" value={preparedFarmerData.appliedExtent} />
                         <DetailItem label="Approved Extent (Acres)" value={preparedFarmerData.approvedExtent} />
                         <DetailItem label="No. of Plants" value={preparedFarmerData.numberOfPlants} />
@@ -583,98 +571,5 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSubmit, onCancel,
                                 <FormRow><FormLabel required>Mobile Number</FormLabel><FormField><input type="text" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} className={getInputClass('mobileNumber')} maxLength={10} /><InputError message={errors.mobileNumber} onDismiss={() => handleDismissError('mobileNumber')} /></FormField></FormRow>
                                 <FormRow><FormLabel required>Gender</FormLabel><FormField><div className="relative"><select name="gender" value={formData.gender} onChange={handleChange} className={getSelectClass('gender')}><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
                                 <FormRow><FormLabel required>Address</FormLabel><FormField><textarea name="address" value={formData.address} onChange={handleChange} className={getInputClass('address')} rows={3}></textarea><InputError message={errors.address} onDismiss={() => handleDismissError('address')} /></FormField></FormRow>
-                                <FormRow><FormLabel>PPB/ROFR ID</FormLabel><FormField><input type="text" name="ppbRofrId" value={formData.ppbRofrId} onChange={handleChange} className={getInputClass('ppbRofrId')} /><InputError message={errors.ppbRofrId} onDismiss={() => handleDismissError('ppbRofrId')} /></FormField></FormRow>
                                 <FormRow><FormLabel>Registration Date</FormLabel><FormField><input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={getInputClass('registrationDate')} max={new Date().toISOString().split('T')[0]} /><InputError message={errors.registrationDate} onDismiss={() => handleDismissError('registrationDate')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Photo</FormLabel><FormField>{photoPreview ? (<div className="flex items-center gap-4"><img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/><div className="flex flex-col gap-1"><div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div><button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-md hover:bg-red-200 transition">Remove</button></div></div>) : (<input ref={fileInputRef} type="file" accept="image/jpeg, image/png" onChange={handlePhotoChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />)}<InputError message={errors.photo} onDismiss={() => handleDismissError('photo')} /></FormField></FormRow>
-                            </section>}
-                            {currentStep === 2 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">2. Geographic Details</h3><FormRow><FormLabel required>District</FormLabel><FormField><div className="relative"><select name="district" value={formData.district} onChange={handleGeoChange} className={getSelectClass('district')} disabled={mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select District --</option>{districts.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.district} onDismiss={() => handleDismissError('district')}/></FormField></FormRow>
-                                <FormRow><FormLabel required>Mandal</FormLabel><FormField><div className="relative"><select name="mandal" value={formData.mandal} onChange={handleGeoChange} className={getSelectClass('mandal')} disabled={!formData.district || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Mandal --</option>{mandals.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.mandal} onDismiss={() => handleDismissError('mandal')}/></FormField></FormRow>
-                                <FormRow><FormLabel required>Village</FormLabel><FormField><div className="relative"><select name="village" value={formData.village} onChange={handleChange} className={getSelectClass('village')} disabled={!formData.mandal || mode === 'edit'} title={mode === 'edit' ? 'Location cannot be changed after registration.' : ''}><option value="">-- Select Village --</option>{villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div><InputError message={errors.village} onDismiss={() => handleDismissError('village')}/></FormField></FormRow>
-                                <FormRow><FormLabel><div className="relative flex items-center gap-1.5 group cursor-help"><span>NE Region Farmer</span><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">Check this box if the farmer belongs to a North Eastern State or the Andaman & Nicobar Islands to apply for special assistance packages.</div></div></FormLabel><FormField><label className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-green-50 transition w-max"><input type="checkbox" name="is_in_ne_region" checked={formData.is_in_ne_region} onChange={handleChange} className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500" /><span className="ml-3 text-gray-700 font-medium">Is North Eastern / A&N Islands Farmer</span></label></FormField></FormRow>
-                            </section>}
-                            {currentStep === 3 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">3. Bank Details</h3><FormRow><FormLabel required>Bank Account Number</FormLabel><FormField><input type="text" name="bankAccountNumber" value={formData.bankAccountNumber} onChange={handleChange} className={getInputClass('bankAccountNumber')} /><InputError message={errors.bankAccountNumber} onDismiss={() => handleDismissError('bankAccountNumber')} /></FormField></FormRow>
-                                <FormRow><FormLabel required>IFSC Code</FormLabel><FormField><input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={getInputClass('ifscCode')} /><InputError message={errors.ifscCode} onDismiss={() => handleDismissError('ifscCode')} /></FormField></FormRow>
-                                <FormRow><FormLabel><div className="relative flex items-center gap-1.5 group cursor-help"><span>Account Verified</span><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">Indicates if the farmer's bank account details have been manually confirmed for accuracy before subsidy payments.</div></div></FormLabel><FormField><label className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-green-50 transition w-max"><input type="checkbox" name="accountVerified" checked={formData.accountVerified} onChange={handleChange} className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500" /><span className="ml-3 text-gray-700 font-medium">Mark as Verified</span></label></FormField></FormRow>
-                            </section>}
-                             {currentStep === 4 && <section><h3 className="text-lg font-semibold text-green-700 mb-4">4. Land & Plantation Details</h3><FormRow><FormLabel>Applied Extent (Acres)</FormLabel><FormField><input type="number" step="0.01" name="appliedExtent" value={formData.appliedExtent} onChange={handleChange} className={getInputClass('appliedExtent')} /><InputError message={errors.appliedExtent} onDismiss={() => handleDismissError('appliedExtent')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Approved Extent (Acres)</FormLabel><FormField><input type="number" step="0.01" name="approvedExtent" value={formData.approvedExtent} onChange={handleChange} className={getInputClass('approvedExtent')} /><InputError message={errors.approvedExtent} onDismiss={() => handleDismissError('approvedExtent')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Number of Plants</FormLabel><FormField><input type="number" name="numberOfPlants" value={formData.numberOfPlants} onChange={handleChange} className={getInputClass('numberOfPlants')} /><InputError message={errors.numberOfPlants} onDismiss={() => handleDismissError('numberOfPlants')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Method of Plantation</FormLabel><FormField><div className="relative"><select name="methodOfPlantation" value={formData.methodOfPlantation} onChange={handleChange} className={getSelectClass('methodOfPlantation')}>{Object.values(PlantationMethod).map(s => <option key={s} value={s}>{s}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
-                                <FormRow><FormLabel>Plant Type</FormLabel><FormField><div className="relative"><select name="plantType" value={formData.plantType} onChange={handleChange} className={getSelectClass('plantType')}>{Object.values(PlantType).map(s => <option key={s} value={s}>{s}</option>)}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div></div></FormField></FormRow>
-                                <FormRow><FormLabel>MLRD Plants</FormLabel><FormField><input type="number" name="mlrdPlants" value={formData.mlrdPlants} onChange={handleChange} className={getInputClass('mlrdPlants')} /><InputError message={errors.mlrdPlants} onDismiss={() => handleDismissError('mlrdPlants')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Full Cost Plants</FormLabel><FormField><input type="number" name="fullCostPlants" value={formData.fullCostPlants} onChange={handleChange} className={getInputClass('fullCostPlants')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Plantation Date</FormLabel><FormField><input type="date" name="plantationDate" value={formData.plantationDate} onChange={handleChange} className={`${getInputClass('plantationDate')} disabled:bg-gray-100 disabled:cursor-not-allowed`} min={formData.registrationDate} disabled={!formData.registrationDate} title={!formData.registrationDate ? "Please select a registration date first" : ""} /><InputError message={errors.plantationDate} onDismiss={() => handleDismissError('plantationDate')} /></FormField></FormRow>
-                                <FormRow><FormLabel>Geolocation</FormLabel><FormField><div className="flex flex-col sm:flex-row gap-4"><input type="number" step="any" name="latitude" placeholder="Latitude" value={formData.latitude ?? ''} onChange={handleChange} className={`${getInputClass('latitude')} flex-1`} /><input type="number" step="any" name="longitude" placeholder="Longitude" value={formData.longitude ?? ''} onChange={handleChange} className={`${getInputClass('longitude')} flex-1`} /><button type="button" onClick={handleCaptureLocation} disabled={isCapturingLocation} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2 disabled:bg-blue-300">{isCapturingLocation ? (<svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>)}<span>{isCapturingLocation ? 'Capturing...' : 'Capture'}</span></button></div>{locationError && <p className="mt-2 text-sm text-red-600">{locationError}</p>}</FormField></FormRow>
-                            </section>}
-                            {currentStep === 5 && <ReviewStep />}
-                        </div>
-                        
-                        <div className="bg-gray-100 p-4 flex justify-between items-center gap-4 rounded-b-lg">
-                            <button type="button" onClick={handleCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Cancel</button>
-                            
-                            <div className="flex items-center gap-4">
-                                {currentStep > 1 && (
-                                    <button type="button" onClick={handlePrevious} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Previous</button>
-                                )}
-                                
-                                {currentStep < STEPS.length ? (
-                                    <button type="button" onClick={handleNext} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Next</button>
-                                ) : (
-                                    <button type="button" onClick={handleSubmit} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">
-                                        {mode === 'create' ? 'Register Farmer' : 'Save Changes'}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            )}
-            
-            {showAiReview && <AiReviewModal farmerData={formData} plotsData={ (formData.approvedExtent || formData.numberOfPlants) ? [{
-                acreage: formData.approvedExtent,
-                numberOfPlants: formData.numberOfPlants,
-                methodOfPlantation: formData.methodOfPlantation,
-                plantType: formData.plantType,
-                plantationDate: formData.plantationDate,
-                mlrdPlants: formData.mlrdPlants,
-                fullCostPlants: formData.fullCostPlants
-            }] : []} onClose={() => setShowAiReview(false)} />}
-
-            {preparedFarmerData && currentStep === 5 && (
-                <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
-                        <div className="p-6">
-                            <h3 className="text-2xl font-bold text-gray-800 mb-4">{mode === 'create' ? 'Confirm Details' : 'Confirm Changes'}</h3>
-                            <p className="text-gray-600 mb-6">Are you sure you want to submit this information?</p>
-                        </div>
-                        <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
-                            <button type="button" onClick={() => setPreparedFarmerData(null)} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition" disabled={isSubmitting}>Go Back & Edit</button>
-                            <button type="button" onClick={handleConfirmSubmit} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold disabled:bg-green-400 disabled:cursor-wait" disabled={isSubmitting}>
-                                {isSubmitting ? (mode === 'create' ? 'Saving...' : 'Updating...') : (mode === 'create' ? 'Confirm & Save' : 'Confirm & Update')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showSuccess && preparedFarmerData && (
-                 <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8 text-center animate-fade-in">
-                    <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg></div>
-                    <h3 className="text-2xl font-bold text-gray-800 mt-4">{mode === 'create' ? 'Registration Successful!' : 'Update Successful!'}</h3>
-                    <p className="text-gray-600 mt-2">Farmer <span className="font-semibold">{preparedFarmerData.fullName}</span> has been successfully {mode === 'create' ? 'registered' : 'updated'}.</p>
-                    <p className="text-gray-600 mt-1">Hap ID: <span className="font-mono bg-gray-100 p-1 rounded">{preparedFarmerData.farmerId}</span></p>
-                    <div className="mt-8 flex gap-4 justify-center">
-                        {mode === 'create' && (<button type="button" onClick={handleRegisterAnother} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold">Register Another Farmer</button>)}
-                        <button type="button" onClick={onCancel} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition">Close</button>
-                    </div>
-                </div>
-            )}
-            
-            {showCancelConfirmation && (
-                <ConfirmationModal isOpen={showCancelConfirmation} title="Discard Changes?" message={<><p>Are you sure you want to discard your unsaved changes?</p>{mode === 'create' && <p className="mt-2 text-sm text-yellow-700 bg-yellow-50 p-2 rounded-md font-semibold">This action will also clear your saved draft.</p>}</>} onConfirm={handleConfirmCancel} onCancel={handleAbortCancel} confirmText="Discard" confirmButtonClass="bg-red-600 hover:bg-red-700"/>
-            )}
-        </div>
-    );
-};
-
-export default RegistrationForm;
+                                <FormRow><FormLabel>Photo</FormLabel><FormField>{photoPreview ? (<div className="flex items-center gap-4"><img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/><div className="flex flex-col gap-1"><div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div><button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-

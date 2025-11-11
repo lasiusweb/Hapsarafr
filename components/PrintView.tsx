@@ -69,9 +69,8 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, plots, users, isForPdf = 
           <table className="w-full text-left">
             <tbody>
               <DetailRow label="HAP ID" value={farmer.hap_id || 'Pending Sync'} />
-              {/* FIX: Use `applicationId` and `farmerId` instead of the non-existent `gov_...` properties. Updated labels for clarity. */}
-              <DetailRow label="Application ID" value={farmer.applicationId} />
-              <DetailRow label="Farmer ID" value={farmer.farmerId} />
+              <DetailRow label="Govt. Application ID" value={farmer.gov_application_id} />
+              <DetailRow label="Govt. Farmer ID" value={farmer.gov_farmer_id} />
               <DetailRow label="Full Name" value={farmer.fullName} />
               <DetailRow label="Father/Husband Name" value={farmer.fatherHusbandName} />
               <DetailRow label="Gender" value={farmer.gender} />

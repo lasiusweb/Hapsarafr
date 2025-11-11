@@ -29,7 +29,8 @@ const HarvestForm: React.FC<HarvestFormProps> = ({ allFarmers, currentUser, onCl
     // Data Loading
     const qualityStandards = useQuery(useMemo(() => database.get<QualityStandardModel>('quality_standards').query(Q.where('tenant_id', currentUser.tenantId)), [database, currentUser.tenantId]));
 
-    const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.farmerId})` })), [allFarmers]);
+    // FIX: Replaced non-existent 'farmerId' with 'hap_id' to display the correct identifier.
+    const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hap_id || 'N/A'})` })), [allFarmers]);
     const netWeight = useMemo(() => {
         const gross = parseFloat(grossWeight);
         const tare = parseFloat(tareWeight);
