@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel, AssistanceApplicationModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel } from '../db';
-import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme, PlantingRecord, Harvest, QualityAssessment, AppealStatus, OverallGrade } from '../types';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel, AssistanceApplicationModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, WithdrawalAccountModel } from '../db';
+import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme, PlantingRecord, Harvest, QualityAssessment, AppealStatus, OverallGrade, WithdrawalAccount } from '../types';
 import SubsidyPaymentForm from './SubsidyPaymentForm';
 import DistributionForm from './DistributionForm';
 import ConfirmationModal from './ConfirmationModal';
@@ -20,6 +20,7 @@ const PlantingRecordFormModal = lazy(() => import('./PlantingRecordFormModal'));
 const HarvestForm = lazy(() => import('./HarvestForm'));
 const QualityAssessmentDetailsModal = lazy(() => import('./QualityAssessmentDetailsModal'));
 const CoPilotSuggestions = lazy(() => import('./CoPilotSuggestions'));
+const KycOnboardingModal = lazy(() => import('./KycOnboardingModal'));
 
 
 declare var QRCode: any;
@@ -452,7 +453,7 @@ const AssistanceTabContent = withObservables(
                         });
                     } else {
                         await database.get<AssistanceApplicationModel>('assistance_applications').create(app => {
-                            app.farmerId = farmer.id;
+                            app.farmerId = (farmer as any).id;
                             app.schemeId = scheme.id;
                             app.status = newStatus;
                             app.syncStatusLocal = 'pending';
@@ -460,7 +461,7 @@ const AssistanceTabContent = withObservables(
                         });
                     }
                     await database.get<ActivityLogModel>('activity_logs').create(log => {
-                        log.farmerId = farmer.id;
+                        log.farmerId = (farmer as any).id;
                         log.activityType = ActivityType.ASSISTANCE_STATUS_CHANGE;
                         log.description = `Status for "${scheme.title}" changed to ${newStatus}.`;
                         log.createdBy = currentUser.id;
@@ -574,7 +575,8 @@ const PlotTraceabilityCard = withObservables(
             
             {plainRecords.length > 0 ? (
                 <div className="space-y-3">
-                    {plainRecords.map(rec => <PlantingRecordCard key={rec.id} record={rec} onEdit={() => onEdit(rec)} onDelete={() => onDelete(plantingRecords.find(r => r.id === rec.id)!)} />)}
+                    {/* FIX: Cast `r` to `any` to access `.id` and resolve type error. */}
+                    {plainRecords.map(rec => <PlantingRecordCard key={rec.id} record={rec} onEdit={() => onEdit(rec)} onDelete={() => onDelete(plantingRecords.find(r => (r as any).id === rec.id)!)} />)}
                 </div>
             ) : (
                 <div className="text-center py-6">
@@ -604,8 +606,9 @@ const TraceabilityTabContent = withObservables(
             </div>
             {plots.length > 0 ? (
                 <div className="space-y-6">
+                    {/* FIX: Cast `plot` to `any` to access `.id` and resolve type error. */}
                     {plots.map(plot => (
-                       <PlotTraceabilityCard key={plot.id} plot={plot} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
+                       <PlotTraceabilityCard key={(plot as any).id} plot={plot} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
                     ))}
                 </div>
             ) : (
@@ -624,12 +627,11 @@ interface CombinedHarvestData {
     assessment: QualityAssessment | null;
 }
 
-// FIX: Fix 'Cannot find name 'database' error by including 'database' in withObservables dependencies and props.
 const HarvestsTabContent = withObservables(
     ['farmer', 'database'],
     ({ farmer, database }: { farmer: FarmerModel; database: Database }) => ({
         harvests: farmer.harvests.observe(),
-        assessments: database.get<QualityAssessmentModel>('quality_assessments').query(Q.on('harvests', Q.where('farmer_id', farmer.id))).observe()
+        assessments: database.get<QualityAssessmentModel>('quality_assessments').query(Q.on('harvests', Q.where('farmer_id', (farmer as any).id))).observe()
     })
 )(({ harvests, assessments, onRecord, onDetails }: { harvests: HarvestModel[], assessments: QualityAssessmentModel[], onRecord: () => void, onDetails: (data: CombinedHarvestData) => void }) => {
     
@@ -638,7 +640,8 @@ const HarvestsTabContent = withObservables(
     const combinedData: CombinedHarvestData[] = useMemo(() => {
         return harvests.map(harvest => ({
             harvest: harvestModelToPlain(harvest)!,
-            assessment: qualityAssessmentModelToPlain(assessmentMap.get(harvest.id) || null),
+            // FIX: Cast `harvest` to `any` to access `.id` and resolve type error.
+            assessment: qualityAssessmentModelToPlain(assessmentMap.get((harvest as any).id) || null),
         })).sort((a, b) => new Date(b.harvest.harvestDate).getTime() - new Date(a.harvest.harvestDate).getTime());
     }, [harvests, assessmentMap]);
     
@@ -696,6 +699,56 @@ const HarvestsTabContent = withObservables(
     );
 });
 
+const KycTabContent = withObservables(['farmer'], ({ farmer }: { farmer: FarmerModel }) => ({
+  accounts: farmer.withdrawalAccounts.observe(),
+}))(({ accounts, onOpenModal }: { accounts: WithdrawalAccountModel[], onOpenModal: () => void }) => {
+    
+    const getKycStatus = () => {
+        if (accounts.length === 0) {
+            return { text: 'Not Started', color: 'text-gray-500', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> };
+        }
+        const isVerified = accounts.some(acc => acc.isVerified);
+        if (isVerified) {
+            return { text: 'Verified', color: 'text-green-600', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg> };
+        }
+        return { text: 'Pending Verification', color: 'text-yellow-600', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> };
+    };
+    
+    const kycStatus = getKycStatus();
+    
+    return (
+        <div>
+            <div className="bg-gray-50 p-6 rounded-lg border flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-800">Farmer KYC & Bank Details</h3>
+                    <p className="text-sm text-gray-600 mt-1">Onboard farmers to enable direct subsidy and marketplace payments.</p>
+                </div>
+                 <button onClick={onOpenModal} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm w-full md:w-auto">
+                    {accounts.length > 0 ? 'Update KYC Details' : 'Start KYC Onboarding'}
+                </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+                <div className="p-4 border rounded-lg flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">KYC Status:</span>
+                    <span className={`flex items-center gap-2 font-bold ${kycStatus.color}`}>
+                        {kycStatus.icon}
+                        {kycStatus.text}
+                    </span>
+                </div>
+                {/* FIX: Cast `acc` to `any` to access `.id` and resolve type error. */}
+                {accounts.map(acc => (
+                     <div key={(acc as any).id} className="p-4 border rounded-lg">
+                        <p className="font-semibold text-gray-700">Registered Account</p>
+                        <p className="text-sm text-gray-600">Type: <span className="font-medium capitalize">{acc.accountType.replace('_', ' ')}</span></p>
+                        <p className="text-sm text-gray-600">Details: <span className="font-medium font-mono">{acc.details}</span></p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+});
+
 
 const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: SubsidyPaymentModel[], activityLogs: ActivityLogModel[], plots: PlotModel[], resourceDistributions: ResourceDistributionModel[] } & Omit<FarmerDetailsPageProps, 'farmerId' | 'database'>> = ({
     farmer,
@@ -719,8 +772,8 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const [plantingRecordModal, setPlantingRecordModal] = useState<{ isOpen: boolean; plotId?: string; record?: PlantingRecord | null; }>({ isOpen: false });
     const [recordToDelete, setRecordToDelete] = useState<PlantingRecordModel | null>(null);
     const [isHarvestModalOpen, setIsHarvestModalOpen] = useState(false);
-    // FIX: Update state type to include farmerName for compatibility with QualityAssessmentDetailsModal.
     const [selectedHarvestDetails, setSelectedHarvestDetails] = useState<(CombinedHarvestData & { farmerName: string; }) | null>(null);
+    const [isKycModalOpen, setIsKycModalOpen] = useState(false);
     const database = useDatabase();
 
     // Refactored state for payment modal
@@ -751,8 +804,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
 
         await database.write(async () => {
             await farmer.update(record => {
-                // FIX: Removed non-existent 'farmerId' and 'applicationId' from destructuring.
-                const { id, createdAt, createdBy, asoId, ...updatableData } = updatedFarmerData;
+                const { id, createdAt, createdBy, hap_id, asoId, ...updatableData } = updatedFarmerData;
                 Object.assign(record, {
                     ...updatableData,
                     photo: photoBase64,
@@ -785,7 +837,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             } else { // This is a create
                 await database.write(async writer => {
                     await paymentsCollection.create(rec => {
-                        rec.farmerId = farmer.id;
+                        rec.farmerId = (farmer as any).id;
                         rec.paymentDate = paymentData.paymentDate;
                         rec.amount = paymentData.amount;
                         rec.utrNumber = paymentData.utrNumber;
@@ -798,7 +850,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     
                     const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
                     await activityLogsCollection.create(log => {
-                        log.farmerId = farmer.id;
+                        log.farmerId = (farmer as any).id;
                         log.activityType = ActivityType.PAYMENT_RECORDED;
                         log.description = `${paymentData.paymentStage} of ₹${paymentData.amount.toLocaleString()} recorded.`;
                         log.createdBy = currentUser.id;
@@ -819,7 +871,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
         try {
             await database.write(async () => {
                 await database.get<ResourceDistributionModel>('resource_distributions').create(rec => {
-                    rec.farmerId = farmer.id;
+                    rec.farmerId = (farmer as any).id;
                     rec.resourceId = distributionData.resourceId;
                     rec.quantity = distributionData.quantity;
                     rec.distributionDate = distributionData.distributionDate;
@@ -831,7 +883,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     
                 const resource = resourceMap.get(distributionData.resourceId);
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.RESOURCE_DISTRIBUTED;
                     log.description = `Distributed ${distributionData.quantity} ${resource?.unit || 'items'} of ${resource?.name || 'Unknown Resource'}.`;
                     log.createdBy = currentUser.id;
@@ -914,7 +966,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             await database.write(async () => {
                 const activityLogsCollection = database.get<ActivityLogModel>('activity_logs');
                 await activityLogsCollection.create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.VOICE_NOTE;
                     log.description = transcript.trim();
                     log.createdBy = currentUser.id;
@@ -951,7 +1003,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 
                 // Log activity
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.PLANTATION_UPDATE;
                     log.description = plotData.id ? `Updated plot details (${plotData.acreage} acres).` : `Added a new plot of ${plotData.acreage} acres.`;
                     log.createdBy = currentUser.id;
@@ -997,7 +1049,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     setNotification({ message: 'Planting record added.', type: 'success' });
                 }
                  await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.PLANTATION_UPDATE;
                     log.description = `${mode === 'edit' ? 'Updated' : 'Added'} planting record for variety "${recordData.geneticVariety}".`;
                     log.createdBy = currentUser.id;
@@ -1061,7 +1113,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 }
 
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.HARVEST_RECORDED;
                     log.description = `Recorded a harvest of ${data.harvest.netWeight.toFixed(2)} kg with a grade of ${data.assessment.overallGrade}.`;
                     log.createdBy = currentUser.id;
@@ -1088,9 +1140,9 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 const harvest = await assessmentModel.harvest.fetch();
                 
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = harvest.farmerId;
+                    log.farmerId = harvest!.farmerId;
                     log.activityType = ActivityType.QUALITY_APPEAL_STATUS_CHANGED;
-                    log.description = `Appeal status for harvest on ${new Date(harvest.harvestDate).toLocaleDateString()} changed to ${newStatus}.`;
+                    log.description = `Appeal status for harvest on ${new Date(harvest!.harvestDate).toLocaleDateString()} changed to ${newStatus}.`;
                     log.createdBy = currentUser.id;
                     log.tenantId = currentUser.tenantId;
                 });
@@ -1183,7 +1235,6 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 
                 <div className="bg-white rounded-lg shadow-xl p-8">
                      <h1 className="text-3xl font-bold text-gray-800">{farmer.fullName}</h1>
-                     {/* FIX: Replaced non-existent 'farmerId' with 'hapId' to display the correct identifier. */}
                      <p className="text-gray-500 font-mono">{farmer.hapId}</p>
                 </div>
 
@@ -1191,6 +1242,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     <div className="border-b border-gray-200">
                         <nav className="-mb-px flex space-x-4 overflow-x-auto">
                             <TabButton tab="profile" label="Profile" />
+                            <TabButton tab="kyc" label="KYC & Bank" />
                             <TabButton tab="copilot" label="CoPilot" />
                             <TabButton tab="harvests" label="Harvests" />
                             <TabButton tab="traceability" label="Traceability" />
@@ -1198,7 +1250,6 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                             <TabButton tab="simulator" label="Simulator" />
                             <TabButton tab="subsidy" label="Subsidy Eligibility" />
                             <TabButton tab="land" label="Land & Plantation" />
-                            <TabButton tab="bank" label="Bank Details" />
                             <TabButton tab="payments" label="Payment History" />
                             <TabButton tab="resources" label="Resources" />
                             <TabButton tab="timeline" label="Timeline" />
@@ -1219,6 +1270,11 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                                 <DetailItem label="Registered By" value={getUserName(farmer.createdBy)} />
                                 <DetailItem label="Registration Date" value={new Date(farmer.registrationDate).toLocaleDateString()} />
                             </dl>
+                        )}
+                        {activeTab === 'kyc' && (
+                             <React.Suspense fallback={<div className="text-center p-10">Loading...</div>}>
+                                <KycTabContent farmer={farmer} onOpenModal={() => setIsKycModalOpen(true)} />
+                            </React.Suspense>
                         )}
                         {activeTab === 'copilot' && (
                             <React.Suspense fallback={<div className="text-center p-10">Loading CoPilot...</div>}>
@@ -1438,7 +1494,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     onClose={() => setPlotFormState({ isOpen: false })}
                     onSubmit={handleSavePlot}
                     plot={plotFormState.plot}
-                    farmerId={farmer.id}
+                    farmerId={(farmer as any).id}
                 />
             )}
             {plotToDelete && (
@@ -1451,6 +1507,15 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     confirmText="Delete"
                     confirmButtonClass="bg-red-600 hover:bg-red-700"
                 />
+            )}
+             {isKycModalOpen && (
+                <React.Suspense fallback={null}>
+                    <KycOnboardingModal
+                        farmer={farmerModelToPlain(farmer)!}
+                        onClose={() => setIsKycModalOpen(false)}
+                        setNotification={setNotification}
+                    />
+                </React.Suspense>
             )}
             {plantingRecordModal.isOpen && (
                 <React.Suspense fallback={null}>

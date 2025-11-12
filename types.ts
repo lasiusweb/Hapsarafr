@@ -142,6 +142,39 @@ export enum SustainabilityTier {
     Platinum = 'Platinum',
 }
 
+// --- NEW FINANCIAL ENUMS ---
+
+export enum TransactionStatus {
+    Pending = 'Pending',
+    Processed = 'Processed',
+    Failed = 'Failed',
+    Reversed = 'Reversed',
+}
+
+export enum TransactionType {
+    Credit = 'Credit',
+    Debit = 'Debit',
+}
+
+export enum TransactionSource {
+    Subsidy = 'Subsidy',
+    MarketplaceSale = 'Marketplace Sale',
+    Withdrawal = 'Withdrawal',
+    ManualAdjustment = 'Manual Adjustment',
+}
+
+export enum WithdrawalAccountType {
+    BankAccount = 'bank_account',
+    UPI = 'vpa',
+}
+
+export enum FinancialDisputeStatus {
+    Open = 'Open',
+    PendingPartnerResponse = 'Pending Partner Response',
+    Resolved = 'Resolved',
+    Closed = 'Closed',
+}
+
 // --- INTERFACES ---
 
 export interface Farmer {
@@ -619,7 +652,7 @@ export enum OrderStatus {
     Cancelled = 'Cancelled',
 }
 
-export enum DisputeStatus {
+export enum MarketplaceDisputeStatus {
     Open = 'Open',
     InProgress = 'In Progress',
     Resolved = 'Resolved',
@@ -689,14 +722,58 @@ export interface OrderItem {
     pricePerUnit: number;
 }
 
-export interface DisputeTicket {
+export interface MarketplaceDispute {
     id: string;
     orderId: string;
     farmerId: string;
     reason: string;
-    status: DisputeStatus;
+    status: MarketplaceDisputeStatus;
     resolutionNotes?: string;
     createdAt: string;
     resolvedAt?: string;
     tenantId: string;
+}
+
+// --- NEW FINANCIAL INTERFACES ---
+
+export interface Wallet {
+    id: string; // Corresponds to farmerId
+    balance: number;
+    razorpayContactId?: string;
+    updatedAt: string;
+}
+
+export interface WithdrawalAccount {
+    id: string;
+    farmerId: string;
+    accountType: WithdrawalAccountType;
+    details: string; // e.g., "A/C: ****1234" or "upi: farmer@okhdfc"
+    isVerified: boolean;
+    razorpayFundAccountId?: string;
+    createdAt: string;
+}
+
+export interface FinancialTransaction {
+    id: string;
+    walletId: string;
+    type: TransactionType;
+    status: TransactionStatus;
+    source: TransactionSource;
+    amount: number;
+    fee: number;
+    netAmount: number;
+    description: string;
+    razorpayPayoutId?: string;
+    createdAt: string;
+}
+
+export interface FinancialDispute {
+    id: string;
+    transactionId: string;
+    farmerId: string;
+    reason: string;
+    status: FinancialDisputeStatus;
+    comments?: string; // JSON string for threaded comments
+    createdAt: string;
+    updatedAt: string;
 }

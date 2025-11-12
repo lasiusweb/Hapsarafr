@@ -66,9 +66,10 @@ const ProductListPage = lazy(() => import('./components/ProductListPage'));
 const CheckoutPage = lazy(() => import('./components/CheckoutPage'));
 const OrderConfirmationPage = lazy(() => import('./components/OrderConfirmationPage'));
 const TrainingHubPage = lazy(() => import('./components/TrainingHubPage'));
+const FinancialsPage = lazy(() => import('./components/FinancialsPage'));
 
 
-type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard' | 'community-forum' | 'marketplace' | 'vendor-management' | 'product-list' | 'checkout' | 'order-confirmation' | 'training-hub';
+type ViewType = 'dashboard' | 'farmer-directory' | 'register-farmer' | 'profile' | 'admin' | 'farmer-details' | 'print-queue' | 'reports' | 'id-verification' | 'data-health' | 'help' | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'crop-health' | 'satellite-analysis' | 'yield-prediction' | 'performance-analytics' | 'task-management' | 'financial-ledger' | 'map-view' | 'subsidy-management' | 'assistance-schemes' | 'quality-assessment' | 'processing-transparency' | 'equipment-management' | 'resource-management' | 'distribution-log' | 'sustainability-dashboard' | 'community-forum' | 'marketplace' | 'vendor-management' | 'product-list' | 'checkout' | 'order-confirmation' | 'training-hub' | 'financials';
 
 // FIX: Define initialFilters constant to resolve reference error.
 const initialFilters: Filters = {
@@ -553,6 +554,7 @@ const App: React.FC = () => {
             case 'performance-analytics': return <PerformanceAnalyticsPage onBack={() => handleNavigation('dashboard')} />;
             case 'task-management': return <TaskManagementPage onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
             case 'financial-ledger': return <FinancialLedgerPage allFarmers={plainFarmers} onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
+            case 'financials': return <FinancialsPage allFarmers={plainFarmers} onBack={() => handleNavigation('dashboard')} currentUser={currentUser} />;
             case 'map-view': return <MapView farmers={allFarmers} onNavigate={(path) => handleNavigation('farmer-details', path.split('/')[1])} />;
             // FIX: Pass plainFarmers to SubsidyManagementPage and use the correct prop name 'farmers'
             case 'subsidy-management': return <SubsidyManagementPage farmers={plainFarmers} payments={[]} currentUser={currentUser} onBack={() => handleNavigation('dashboard')} database={database} setNotification={setNotification} />;

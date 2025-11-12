@@ -13,7 +13,7 @@ import { FarmerStatus, PlantType, PlantationMethod, OverallGrade, AppealStatus, 
 setGenerator(() => Math.random().toString(36).substring(2));
 
 const schema = appSchema({
-  version: 25,
+  version: 26,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -466,7 +466,7 @@ const schema = appSchema({
         ],
     }),
     tableSchema({
-        name: 'dispute_tickets',
+        name: 'marketplace_disputes',
         columns: [
             { name: 'order_id', type: 'string', isIndexed: true },
             { name: 'farmer_id', type: 'string', isIndexed: true },
@@ -502,6 +502,54 @@ const schema = appSchema({
         { name: 'syncStatus', type: 'string' },
         { name: 'tenant_id', type: 'string', isIndexed: true },
       ],
+    }),
+    // --- NEW FINANCIAL TABLES ---
+    tableSchema({
+        name: 'wallets',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'balance', type: 'number' },
+            { name: 'razorpay_contact_id', type: 'string', isOptional: true },
+            { name: 'updated_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'withdrawal_accounts',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'account_type', type: 'string' },
+            { name: 'details', type: 'string' }, // Masked details
+            { name: 'is_verified', type: 'boolean' },
+            { name: 'razorpay_fund_account_id', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'financial_transactions',
+        columns: [
+            { name: 'wallet_id', type: 'string', isIndexed: true },
+            { name: 'type', type: 'string' },
+            { name: 'status', type: 'string' },
+            { name: 'source', type: 'string' },
+            { name: 'amount', type: 'number' },
+            { name: 'fee', type: 'number' },
+            { name: 'net_amount', type: 'number' },
+            { name: 'description', type: 'string' },
+            { name: 'razorpay_payout_id', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'financial_disputes',
+        columns: [
+            { name: 'transaction_id', type: 'string', isIndexed: true },
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'reason', type: 'string' },
+            { name: 'status', type: 'string' },
+            { name: 'comments', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+        ]
     }),
   ],
 });
@@ -656,6 +704,65 @@ const migrations = schemaMigrations({
                 ],
             }),
         ],
+    },
+    {
+        toVersion: 26,
+        steps: [
+            // Rename old dispute table for clarity
+            {
+                type: 'rename_table',
+                from: 'dispute_tickets',
+                to: 'marketplace_disputes',
+            },
+            // Create new financial tables
+            createTable({
+                name: 'wallets',
+                columns: [
+                    { name: 'farmer_id', type: 'string', isIndexed: true },
+                    { name: 'balance', type: 'number' },
+                    { name: 'razorpay_contact_id', type: 'string', isOptional: true },
+                    { name: 'updated_at', type: 'number' },
+                ]
+            }),
+            createTable({
+                name: 'withdrawal_accounts',
+                columns: [
+                    { name: 'farmer_id', type: 'string', isIndexed: true },
+                    { name: 'account_type', type: 'string' },
+                    { name: 'details', type: 'string' },
+                    { name: 'is_verified', type: 'boolean' },
+                    { name: 'razorpay_fund_account_id', type: 'string', isOptional: true },
+                    { name: 'created_at', type: 'number' },
+                ]
+            }),
+            createTable({
+                name: 'financial_transactions',
+                columns: [
+                    { name: 'wallet_id', type: 'string', isIndexed: true },
+                    { name: 'type', type: 'string' },
+                    { name: 'status', type: 'string' },
+                    { name: 'source', type: 'string' },
+                    { name: 'amount', type: 'number' },
+                    { name: 'fee', type: 'number' },
+                    { name: 'net_amount', type: 'number' },
+                    { name: 'description', type: 'string' },
+                    { name: 'razorpay_payout_id', type: 'string', isOptional: true },
+                    { name: 'created_at', type: 'number' },
+                ]
+            }),
+            createTable({
+                name: 'financial_disputes',
+                columns: [
+                    { name: 'transaction_id', type: 'string', isIndexed: true },
+                    { name: 'farmer_id', type: 'string', isIndexed: true },
+                    { name: 'reason', type: 'string' },
+                    { name: 'status', type: 'string' },
+                    { name: 'comments', type: 'string', isOptional: true },
+                    { name: 'created_at', type: 'number' },
+                    { name: 'updated_at', type: 'number' },
+                ]
+            }),
+        ],
     }
   ],
 });
@@ -725,6 +832,10 @@ export class FarmerModel extends Model {
   @children('farm_inputs') farmInputs!: Query<FarmInputModel>;
   @children('orders') orders!: Query<OrderModel>;
   @children('training_completions') trainingCompletions!: Query<TrainingCompletionModel>;
+  // Financial Relations
+  // FIX: Cast `this` to `any` to bypass TypeScript errors where it fails to find `collections` and `id` on the model instance.
+  @lazy wallet = (this as any).collections.get('wallets').query(Q.where('farmer_id', (this as any).id));
+  @children('withdrawal_accounts') withdrawalAccounts!: Query<WithdrawalAccountModel>;
 }
 
 export class PlotModel extends Model {
@@ -819,8 +930,9 @@ export class TenantModel extends Model {
     @readonly @date('created_at') createdAt!: Date;
 
     // FIX: Renamed lambda parameter from 'record' to 'rec' to avoid potential naming conflicts that could confuse TypeScript's type inference.
+    // Also casting `this` to `any` to resolve type error for `update`.
     @writer async updateSubscriptionStatus(newStatus: 'active' | 'trial' | 'inactive') {
-        await this.update(rec => {
+        await (this as any).update((rec: any) => {
             rec.subscriptionStatus = newStatus;
         });
     }
@@ -1210,6 +1322,51 @@ export class TrainingCompletionModel extends Model {
   @text('tenant_id') tenantId!: string;
 }
 
+// --- FINANCIAL MODELS ---
+
+export class WalletModel extends Model {
+    static table = 'wallets';
+    @text('farmer_id') farmerId!: string;
+    @field('balance') balance!: number;
+    @text('razorpay_contact_id') razorpayContactId?: string;
+    @date('updated_at') updatedAt!: Date;
+}
+
+export class WithdrawalAccountModel extends Model {
+    static table = 'withdrawal_accounts';
+    @text('farmer_id') farmerId!: string;
+    @text('account_type') accountType!: string;
+    @text('details') details!: string;
+    @field('is_verified') isVerified!: boolean;
+    @text('razorpay_fund_account_id') razorpayFundAccountId?: string;
+    @readonly @date('created_at') createdAt!: Date;
+}
+
+export class FinancialTransactionModel extends Model {
+    static table = 'financial_transactions';
+    @text('wallet_id') walletId!: string;
+    @text('type') type!: string;
+    @text('status') status!: string;
+    @text('source') source!: string;
+    @field('amount') amount!: number;
+    @field('fee') fee!: number;
+    @field('net_amount') netAmount!: number;
+    @text('description') description!: string;
+    @text('razorpay_payout_id') razorpayPayoutId?: string;
+    @readonly @date('created_at') createdAt!: Date;
+}
+
+export class FinancialDisputeModel extends Model {
+    static table = 'financial_disputes';
+    @text('transaction_id') transactionId!: string;
+    @text('farmer_id') farmerId!: string;
+    @text('reason') reason!: string;
+    @text('status') status!: string;
+    @text('comments') comments?: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @date('updated_at') updatedAt!: Date;
+}
+
 
 // --- DATABASE SETUP ---
 
@@ -1263,6 +1420,11 @@ const database = new Database({
     // Training Models
     TrainingModuleModel,
     TrainingCompletionModel,
+    // Financial Models
+    WalletModel,
+    WithdrawalAccountModel,
+    FinancialTransactionModel,
+    FinancialDisputeModel,
   ],
 });
 
