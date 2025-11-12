@@ -22,7 +22,6 @@ const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({ orderId, 
     const allVendors = useQuery(useMemo(() => database.get<VendorModel>('vendors').query(), [database]));
     
     // Create maps for efficient lookup
-    // FIX: Cast _raw to unknown first, then to the target type to resolve the type error.
     const vendorProductMap = useMemo(() => new Map(allVendorProducts.map(vp => [vp.id, vp._raw as unknown as VendorProduct])), [allVendorProducts]);
     const productMap = useMemo(() => new Map(allProducts.map(p => [p.id, p._raw as unknown as Product])), [allProducts]);
     const vendorMap = useMemo(() => new Map(allVendors.map(v => [v.id, v._raw as unknown as Vendor])), [allVendors]);
@@ -34,7 +33,6 @@ const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({ orderId, 
             const product = vp ? productMap.get(vp.productId) : undefined;
             const vendor = vp ? vendorMap.get(vp.vendorId) : undefined;
             return {
-                // FIX: Cast _raw to unknown first, then to the target type to resolve the type error.
                 orderItem: item._raw as unknown as OrderItem,
                 productName: product?.name || 'Unknown Product',
                 vendorName: vendor?.name || 'Unknown Vendor',

@@ -25,7 +25,6 @@ export const SAMPLE_VENDORS: Omit<Vendor, 'tenantId' | 'createdAt'>[] = [
         contactPerson: 'Ramesh Kumar',
         mobileNumber: '9876543210',
         address: '123 Agri St, Hanmakonda',
-        // FIX: Changed string literal to use enum value to fix type error.
         status: VendorStatus.Verified,
         rating: 4.5
     },
@@ -35,7 +34,6 @@ export const SAMPLE_VENDORS: Omit<Vendor, 'tenantId' | 'createdAt'>[] = [
         contactPerson: 'Sita Devi',
         mobileNumber: '9876543211',
         address: '456 Farmer Rd, Mulugu',
-        // FIX: Changed string literal to use enum value to fix type error.
         status: VendorStatus.Verified,
         rating: 4.2
     }

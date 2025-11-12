@@ -17,7 +17,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
     const database = useDatabase();
 
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
-    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Digital'>('Cash');
+    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Digital'>('Digital');
     const [deliveryAddress, setDeliveryAddress] = useState('');
     const [deliveryInstructions, setDeliveryInstructions] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -105,8 +105,15 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
                             <div className="bg-white p-6 rounded-lg shadow-md">
                                 <h2 className="text-xl font-bold text-gray-800 mb-4">2. Payment Method</h2>
                                 <div className="space-y-3">
-                                    <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="radio" name="paymentMethod" value="Cash" checked={paymentMethod === 'Cash'} onChange={() => setPaymentMethod('Cash')} className="h-4 w-4 text-green-600" /> <span className="ml-3 font-semibold">Cash on Delivery</span></label>
-                                    <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="radio" name="paymentMethod" value="Digital" checked={paymentMethod === 'Digital'} onChange={() => setPaymentMethod('Digital')} className="h-4 w-4 text-green-600" /> <span className="ml-3 font-semibold">Digital Payment</span><span className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded-full">Coming Soon</span></label>
+                                    <label className={`flex items-center p-3 border rounded-lg cursor-pointer ${paymentMethod === 'Digital' ? 'bg-green-50 border-green-200' : ''}`}>
+                                        <input type="radio" name="paymentMethod" value="Digital" checked={paymentMethod === 'Digital'} onChange={() => setPaymentMethod('Digital')} className="h-4 w-4 text-green-600" />
+                                        <span className="ml-3 font-semibold">Digital Payment</span>
+                                        <span className="ml-auto text-xs bg-gray-200 px-2 py-0.5 rounded-full">Coming Soon</span>
+                                    </label>
+                                    <label className={`flex items-center p-3 border rounded-lg cursor-pointer ${paymentMethod === 'Cash' ? 'bg-green-50 border-green-200' : ''}`}>
+                                        <input type="radio" name="paymentMethod" value="Cash" checked={paymentMethod === 'Cash'} onChange={() => setPaymentMethod('Cash')} className="h-4 w-4 text-green-600" />
+                                        <span className="ml-3 font-semibold">Cash on Delivery</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>

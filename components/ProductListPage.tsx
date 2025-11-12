@@ -61,7 +61,6 @@ const ProductListPage: React.FC<ProductListPageProps> = ({ categoryId, onBack })
 
     // Data enrichment
     const enrichedProducts = useMemo(() => {
-        // FIX: Cast _raw to unknown first, then to the target type to resolve the type error.
         const productMap = new Map(products.map(p => [p.id, p._raw as unknown as Product]));
         const vendorMap = new Map(vendors.map(v => [v.id, v._raw as unknown as Vendor]));
         
@@ -71,7 +70,6 @@ const ProductListPage: React.FC<ProductListPageProps> = ({ categoryId, onBack })
                 const vendor = vendorMap.get(vp.vendorId);
                 if (product && vendor) {
                     return {
-                        // FIX: Cast _raw to unknown first, then to the target type to resolve the type error.
                         vendorProduct: vp._raw as unknown as VendorProduct,
                         product,
                         vendor,
