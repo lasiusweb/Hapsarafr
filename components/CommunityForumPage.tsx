@@ -77,7 +77,7 @@ const CommunityForumPage: React.FC<CommunityForumPageProps> = ({ currentUser, on
         }
         
         const profileMap: Map<string, Profile> = new Map();
-        (profilesData || []).forEach(p => {
+        (profilesData || []).forEach((p: any) => {
             if (p && p.id) {
                 profileMap.set(p.id, { id: p.id, name: p.full_name, avatar: p.avatar_url });
             }

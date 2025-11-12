@@ -9,12 +9,12 @@ import { initializeSupabase, getSupabase } from './lib/supabase';
 import { synchronize } from './lib/sync';
 import { exportToExcel, exportToCsv } from './lib/export';
 import { FarmerModel, UserModel, GroupModel, TenantModel, PlotModel } from './db';
-import { Farmer, User, Group, Permission, Filters, Tenant } from './types';
+// FIX: Import 'Plot' type to resolve 'Cannot find name' error.
+import { Farmer, User, Group, Permission, Filters, Tenant, Plot } from './types';
 import { farmerModelToPlain } from './lib/utils';
 
 // Components
 import Sidebar from './components/Sidebar';
-import FarmerList from './components/FarmerList';
 import FilterBar from './components/FilterBar';
 import Dashboard from './components/Dashboard';
 import Notification from './components/Notification';
@@ -24,7 +24,6 @@ import SupabaseSettingsModal from './components/SupabaseSettingsModal';
 import BulkImportModal from './components/BulkImportModal';
 import BatchUpdateStatusModal from './components/BatchUpdateStatusModal';
 import ConfirmationModal from './components/ConfirmationModal';
-import DataMenu from './components/DataMenu';
 import PrintView from './components/PrintView';
 import RawDataView from './components/RawDataView';
 import PrintQueuePage from './components/PrintQueuePage';
@@ -46,6 +45,7 @@ const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'))
 const GeoManagementPage = lazy(() => import('./components/GeoManagementPage'));
 const SchemaManagerPage = lazy(() => import('./components/SchemaManagerPage'));
 const TenantManagementPage = lazy(() => import('./components/TenantManagementPage'));
+const TerritoryManagementPage = lazy(() => import('./components/TerritoryManagementPage'));
 const BillingPage = lazy(() => import('./components/BillingPage'));
 const SubscriptionManagementPage = lazy(() => import('./components/SubscriptionManagementPage'));
 const UsageAnalyticsPage = lazy(() => import('./components/UsageAnalyticsPage'));
@@ -55,7 +55,8 @@ const DistributionReportPage = lazy(() => import('./components/DistributionRepor
 const PerformanceAnalyticsPage = lazy(() => import('./components/PerformanceAnalyticsPage'));
 const MentorshipPage = lazy(() => import('./components/MentorshipPage'));
 const CommunityForumPage = lazy(() => import('./components/CommunityForumPage'));
-const TrainingHubPage = lazy(() => import('./components/TrainingHubPage'));
+const ResourceLibraryPage = lazy(() => import('./components/ResourceLibraryPage'));
+const EventsPage = lazy(() => import('./components/EventsPage'));
 const FinancialsPage = lazy(() => import('./components/FinancialsPage'));
 const MarketplacePage = lazy(() => import('./components/MarketplacePage'));
 const ProductListPage = lazy(() => import('./components/ProductListPage'));
@@ -67,9 +68,9 @@ type View =
     | 'landing' | 'dashboard' | 'farmer-directory' | 'register-farmer' | 'reports' | 'data-health'
     | 'id-verification' | 'yield-prediction' | 'satellite-analysis' | 'crop-health'
     | 'admin' | 'profile' | 'help' | 'print-queue' | 'farmer-details'
-    | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management'
+    | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'territory-management'
     | 'billing' | 'subscription-management' | 'usage-analytics' | 'tasks' | 'resource-management'
-    | 'distribution-report' | 'performance-analytics' | 'mentorship' | 'community' | 'training'
+    | 'distribution-report' | 'performance-analytics' | 'mentorship' | 'community' | 'resource-library' | 'events'
     | 'financials' | 'marketplace' | 'product-list' | 'checkout' | 'order-confirmation' | 'vendor-management';
 
 const App: React.FC = () => {
@@ -201,10 +202,11 @@ const EnhancedApp = withObservables([], ({ view, viewParam, navigate, isSyncing,
         switch (view) {
             case 'dashboard': return <Dashboard farmers={farmers} onNavigateWithFilter={() => {}} />;
             case 'farmer-directory': return <p>Farmer Directory (Not implemented)</p>;
-            case 'reports': return <ReportsPage allFarmers={farmers.map(f => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} />;
-            case 'data-health': return <DataHealthPage allFarmers={farmers.map(f => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} onNavigate={navigate} />;
-            case 'id-verification': return <IdVerificationPage allFarmers={farmers.map(f => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} />;
-            case 'yield-prediction': return <YieldPredictionPage allFarmers={farmers.map(f => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} />;
+            case 'register-farmer': return <RegistrationForm onSubmit={async () => {}} onCancel={() => navigate('farmer-directory')} existingFarmers={farmers} setNotification={setNotification} />;
+            case 'reports': return <ReportsPage allFarmers={farmers.map((f: FarmerModel) => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} />;
+            case 'data-health': return <DataHealthPage allFarmers={farmers.map((f: FarmerModel) => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} onNavigate={navigate} />;
+            case 'id-verification': return <IdVerificationPage allFarmers={farmers.map((f: FarmerModel) => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} />;
+            case 'yield-prediction': return <YieldPredictionPage allFarmers={farmers.map((f: FarmerModel) => farmerModelToPlain(f)!)} onBack={() => navigate('dashboard')} />;
             case 'satellite-analysis': return <SatelliteAnalysisPage onBack={() => navigate('dashboard')} />;
             case 'crop-health': return <CropHealthScannerPage onBack={() => navigate('dashboard')} />;
             case 'admin': return <AdminPage users={users} groups={groups} currentUser={currentUser?.[0]} onBack={() => navigate('dashboard')} onSaveUsers={async() => {}} onSaveGroups={async() => {}} onNavigate={navigate} setNotification={setNotification} />;
@@ -216,6 +218,7 @@ const EnhancedApp = withObservables([], ({ view, viewParam, navigate, isSyncing,
             case 'geo-management': return <GeoManagementPage onBack={() => navigate('admin')} />;
             case 'schema-manager': return <SchemaManagerPage onBack={() => navigate('admin')} />;
             case 'tenant-management': return <TenantManagementPage onBack={() => navigate('admin')} />;
+            case 'territory-management': return <TerritoryManagementPage onBack={() => navigate('admin')} currentUser={currentUser?.[0]} />;
             case 'billing': return <BillingPage currentUser={currentUser?.[0]} userCount={users.length} recordCount={farmers.length} onBack={() => navigate('dashboard')} onNavigate={navigate} />;
             case 'subscription-management': return <SubscriptionManagementPage currentUser={currentUser?.[0]} onBack={() => navigate('billing')} />;
             case 'usage-analytics': return <UsageAnalyticsPage currentUser={currentUser?.[0]} supabase={getSupabase()} onBack={() => navigate('dashboard')} />;
@@ -225,7 +228,8 @@ const EnhancedApp = withObservables([], ({ view, viewParam, navigate, isSyncing,
             case 'performance-analytics': return <PerformanceAnalyticsPage onBack={() => navigate('dashboard')} />;
             case 'mentorship': return <MentorshipPage currentUser={currentUser?.[0]} setNotification={setNotification} onBack={() => navigate('dashboard')} />;
             case 'community': return <CommunityForumPage currentUser={currentUser?.[0]} setNotification={setNotification} onBack={() => navigate('dashboard')} />;
-            case 'training': return <TrainingHubPage onBack={() => navigate('dashboard')} currentUser={currentUser?.[0]} />;
+            case 'resource-library': return <ResourceLibraryPage onBack={() => navigate('dashboard')} currentUser={currentUser?.[0]} />;
+            case 'events': return <EventsPage onBack={() => navigate('dashboard')} currentUser={currentUser?.[0]} setNotification={setNotification} />;
             case 'financials': return <FinancialsPage allFarmers={farmers} currentUser={currentUser?.[0]} onBack={() => navigate('dashboard')} />;
             case 'marketplace': return <MarketplacePage onBack={() => navigate('dashboard')} onNavigate={(v,p) => navigate(v,p)} />;
             case 'product-list': return <ProductListPage categoryId={viewParam!} onBack={() => navigate('marketplace')} />;

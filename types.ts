@@ -202,6 +202,15 @@ export interface Farmer {
     updatedAt: string;
     createdBy?: string;
     updatedBy?: string;
+    // Phase 1 Additions
+    preferredName?: string;
+    dateOfBirth?: string;
+    primaryLanguage?: string;
+    canShareWithGovernment?: boolean;
+    canShareWithInputVendors?: boolean;
+    preferredCommunicationMethods?: string; // JSON array
+    lastConsentUpdate?: string;
+    territoryId?: string;
 }
 
 export interface Plot {
@@ -566,6 +575,24 @@ export interface TrainingCompletion {
     completedAt: string;
 }
 
+export interface Event {
+    id: string;
+    title: string;
+    description: string;
+    eventDate: string; // ISO String
+    location: string;
+    createdBy: string;
+    createdAt: string;
+    tenantId: string;
+}
+
+export interface EventRsvp {
+    id: string;
+    eventId: string;
+    userId: string;
+    createdAt: string;
+}
+
 export interface AuditLogEntry {
     id: number;
     user_id: string;
@@ -576,4 +603,42 @@ export interface AuditLogEntry {
     old_record_json?: any;
     new_record_json?: any;
     created_at: string;
+}
+
+export interface Territory {
+    id: string;
+    tenantId: string;
+    administrativeLevel: 'DISTRICT' | 'MANDAL' | 'VILLAGE';
+    administrativeCode: string; // e.g., 'H', 'H-01', 'H-01-01'
+    createdAt: string;
+}
+
+// --- Community Forum Interfaces ---
+export interface ForumPost {
+    id: string;
+    created_at: string;
+    title: string;
+    content: string;
+    author_id: string;
+    tenant_id: string;
+    author?: Profile;
+    answer_count?: number;
+}
+  
+export interface ForumAnswer {
+    id: string;
+    created_at: string;
+    post_id: string;
+    content: string;
+    author_id: string;
+    tenant_id: string;
+    author?: Profile;
+}
+
+export interface QualityStandard {
+    id: string;
+    metricName: string;
+    description: string;
+    measurementUnit: 'Yes/No' | '%' | 'count';
+    tenantId: string;
 }

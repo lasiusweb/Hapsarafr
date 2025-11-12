@@ -158,7 +158,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
 
     const statusDistribution = useMemo(() => {
         const counts = Object.values(FarmerStatus).reduce((acc, status) => ({ ...acc, [status]: 0 }), {} as Record<FarmerStatus, number>);
-        filteredFarmers.forEach(f => { counts[f.status]++; });
+        filteredFarmers.forEach(f => { counts[f.status as FarmerStatus]++; });
         const colors = {
             [FarmerStatus.Registered]: '#3b82f6', [FarmerStatus.Sanctioned]: '#f97316',
             [FarmerStatus.Planted]: '#22c55e', [FarmerStatus.PaymentDone]: '#a855f7',
@@ -285,6 +285,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .split('\n')
             .map(line => line.trim())
+            .filter(line => line.length > 0)
             .map(line => {
                 if (line.startsWith('* ') || line.startsWith('- ')) {
                     return `<li class="list-disc list-inside">${line.substring(2)}</li>`;
@@ -306,7 +307,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                         <p className="text-gray-500">Visualize farmer data and gain insights.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back to Dashboard
                     </button>
                 </div>

@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 1,
+  version: 29,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -53,6 +53,14 @@ export const mySchema = appSchema({
         { name: 'updated_at', type: 'number' },
         { name: 'created_by', type: 'string', isOptional: true },
         { name: 'updated_by', type: 'string', isOptional: true },
+        { name: 'preferred_name', type: 'string', isOptional: true },
+        { name: 'date_of_birth', type: 'string', isOptional: true },
+        { name: 'primary_language', type: 'string', isOptional: true },
+        { name: 'can_share_with_government', type: 'boolean', isOptional: true },
+        { name: 'can_share_with_input_vendors', type: 'boolean', isOptional: true },
+        { name: 'preferred_communication_methods', type: 'string', isOptional: true },
+        { name: 'last_consent_update', type: 'string', isOptional: true },
+        { name: 'territory_id', type: 'string', isOptional: true, isIndexed: true },
       ]
     }),
     tableSchema({
@@ -125,6 +133,15 @@ export const mySchema = appSchema({
             { name: 'subscription_status', type: 'string' },
             { name: 'created_at', type: 'number' },
         ]
+    }),
+    tableSchema({
+      name: 'territories',
+      columns: [
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'administrative_level', type: 'string' },
+        { name: 'administrative_code', type: 'string', isIndexed: true },
+        { name: 'created_at', type: 'number' },
+      ]
     }),
     tableSchema({
         name: 'districts',
@@ -280,12 +297,62 @@ export const mySchema = appSchema({
             { name: 'is_verified', type: 'boolean' },
             { name: 'razorpay_fund_account_id', type: 'string', isOptional: true },
         ]
-    })
-    // Other tables...
+    }),
+    tableSchema({
+        name: 'training_modules',
+        columns: [
+            { name: 'title', type: 'string' },
+            { name: 'category', type: 'string' },
+            { name: 'description', type: 'string' },
+            { name: 'duration_minutes', type: 'number' },
+            { name: 'module_type', type: 'string' },
+            { name: 'content', type: 'string' },
+            { name: 'difficulty', type: 'string' },
+            { name: 'sort_order', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'training_completions',
+        columns: [
+            { name: 'user_id', type: 'string', isIndexed: true },
+            { name: 'module_id', type: 'string', isIndexed: true },
+            { name: 'completed_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'events',
+        columns: [
+            { name: 'title', type: 'string' },
+            { name: 'description', type: 'string' },
+            { name: 'event_date', type: 'string' },
+            { name: 'location', type: 'string' },
+            { name: 'created_by', type: 'string', isIndexed: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'sync_status', type: 'string' },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+        ]
+    }),
+    tableSchema({
+        name: 'event_rsvps',
+        columns: [
+            { name: 'event_id', type: 'string', isIndexed: true },
+            { name: 'user_id', type: 'string', isIndexed: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'sync_status', type: 'string' },
+        ]
+    }),
   ]
 }));
 
 // --- Model Definitions ---
+
+export class TerritoryModel extends Model {
+    static table = 'territories';
+    @text('tenant_id') tenantId!: string;
+    @text('administrative_level') administrativeLevel!: 'DISTRICT' | 'MANDAL' | 'VILLAGE';
+    @text('administrative_code') administrativeCode!: string;
+    @readonly @date('created_at') createdAt!: Date;
+}
 
 export class FarmerModel extends Model {
     static table = 'farmers';
@@ -334,6 +401,14 @@ export class FarmerModel extends Model {
     @readonly @date('updated_at') updatedAt!: Date;
     @text('created_by') createdBy?: string;
     @text('updated_by') updatedBy?: string;
+    @text('preferred_name') preferredName?: string;
+    @text('date_of_birth') dateOfBirth?: string;
+    @text('primary_language') primaryLanguage?: string;
+    @field('can_share_with_government') canShareWithGovernment?: boolean;
+    @field('can_share_with_input_vendors') canShareWithInputVendors?: boolean;
+    @text('preferred_communication_methods') preferredCommunicationMethods?: string;
+    @text('last_consent_update') lastConsentUpdate?: string;
+    @text('territory_id') territoryId?: string;
 
     @children('plots') plots!: any;
     @children('subsidy_payments') subsidyPayments!: any;
@@ -475,6 +550,44 @@ export class AssistanceApplicationModel extends Model { static table = 'assistan
 export class EquipmentModel extends Model { static table = 'equipment'; @text('name') name!: string; @text('type') type!: string; @text('location') location!: string; @text('status') status!: any; @text('last_maintenance_date') lastMaintenanceDate?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class EquipmentMaintenanceLogModel extends Model { static table = 'equipment_maintenance_logs'; @text('equipment_id') equipmentId!: string; @text('maintenance_date') maintenanceDate!: string; @text('description') description!: string; @field('cost') cost!: number; @text('performed_by_id') performedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class WithdrawalAccountModel extends Model { static table = 'withdrawal_accounts'; @text('farmer_id') farmerId!: string; @text('account_type') accountType!: any; @text('details') details!: string; @field('is_verified') isVerified!: boolean; @text('razorpay_fund_account_id') razorpayFundAccountId?: string; }
+export class TrainingModuleModel extends Model { static table = 'training_modules'; @text('title') title!: string; @text('category') category!: string; @text('description') description!: string; @field('duration_minutes') durationMinutes!: number; @text('module_type') moduleType!: 'video' | 'article'; @text('content') content!: string; @text('difficulty') difficulty!: 'Beginner' | 'Intermediate' | 'Advanced'; @field('sort_order') sortOrder!: number; }
+export class TrainingCompletionModel extends Model { static table = 'training_completions'; }
+export class EventModel extends Model {
+    static table = 'events';
+    static associations = {
+        event_rsvps: { type: 'has_many', foreignKey: 'event_id' },
+        users: { type: 'belongs_to', key: 'created_by' },
+    } as const;
+
+    @text('title') title!: string;
+    @text('description') description!: string;
+    @text('event_date') eventDate!: string;
+    @text('location') location!: string;
+    @text('created_by') createdBy!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @text('sync_status') syncStatusLocal!: string;
+    @text('tenant_id') tenantId!: string;
+
+    @children('event_rsvps') rsvps!: any;
+    @relation('users', 'created_by') author!: any;
+}
+
+export class EventRsvpModel extends Model {
+    static table = 'event_rsvps';
+    static associations = {
+        events: { type: 'belongs_to', key: 'event_id' },
+        users: { type: 'belongs_to', key: 'user_id' },
+    } as const;
+
+    @text('event_id') eventId!: string;
+    @text('user_id') userId!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @text('sync_status') syncStatusLocal!: string;
+
+    @relation('events', 'event_id') event!: any;
+    @relation('users', 'user_id') user!: any;
+}
+
 
 // --- Database Setup ---
 const adapter = new SQLiteAdapter({
@@ -489,7 +602,8 @@ const adapter = new SQLiteAdapter({
 const database = new Database({
   adapter,
   modelClasses: [
-    FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel
+    FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
+    TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel
   ],
 });
 
@@ -508,5 +622,3 @@ export class VendorModel extends Model { static table = 'vendors'; @text('name')
 export class VendorProductModel extends Model { static table = 'vendor_products'; @text('vendor_id') vendorId!: string; @text('product_id') productId!: string; @field('price') price!: number; }
 export class OrderModel extends Model { static table = 'orders'; @text('farmer_id') farmerId!: string; @text('order_date') orderDate!: string; @text('status') status!: any; @field('total_amount') totalAmount!: number; @text('payment_method') paymentMethod!: any; @text('delivery_address') deliveryAddress!: string; @text('delivery_instructions') deliveryInstructions?: string; }
 export class OrderItemModel extends Model { static table = 'order_items'; @text('order_id') orderId!: string; @text('vendor_product_id') vendorProductId!: string; @field('quantity') quantity!: number; @field('price_per_unit') pricePerUnit!: number; }
-export class TrainingModuleModel extends Model { static table = 'training_modules'; @text('title') title!: string; @text('category') category!: string; @text('description') description!: string; @field('duration_minutes') durationMinutes!: number; @text('module_type') moduleType!: 'video' | 'article'; @text('content') content!: string; @text('difficulty') difficulty!: 'Beginner' | 'Intermediate' | 'Advanced'; @field('sort_order') sortOrder!: number; }
-export class TrainingCompletionModel extends Model { static table = 'training_completions'; }

@@ -21,7 +21,7 @@ export const formatCurrency = (value: number) => {
     });
 };
 
-const modelToPlain = <T>(model: any): T | null => {
+const modelToPlain = <T,>(model: any): T | null => {
     if (!model) return null;
     const plain = { ...model._raw };
     delete plain._status;

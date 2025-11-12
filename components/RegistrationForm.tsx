@@ -9,6 +9,11 @@ import { useDatabase } from '../DatabaseContext';
 // FIX: Import from the newly created db/index.ts file
 import { DistrictModel, MandalModel, VillageModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
+// @ts-ignore
+import { useObservables } from '@nozbe/watermelondb/react';
+
+// FIX: Import 'useQuery' hook to resolve 'Cannot find name 'useQuery'' error.
+import { useQuery } from '../hooks/useQuery';
 
 interface RegistrationFormProps {
     onSubmit: (farmer: Farmer, photoFile?: File) => Promise<void>;
@@ -331,7 +336,7 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
         } else {
             setErrors(prev => {
                 const newErrors = { ...prev };
-                FIELDS_BY_STEP[step].forEach(field => delete newErrors[field]);
+                FIELDS_BY_STEP[step].forEach(field => delete newErrors[field as keyof Farmer]);
                 return newErrors;
             });
         }

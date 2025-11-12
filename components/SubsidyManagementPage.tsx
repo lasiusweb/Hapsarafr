@@ -267,7 +267,7 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
                                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-500 w-28">{farmer.plantationDate ? new Date(farmer.plantationDate).toLocaleDateString() : 'N/A'}</td>
                                         {TABLE_STAGES.map(stage => (
                                             <td key={stage} className="px-2 py-4 whitespace-nowrap text-sm w-28">
-                                                <StatusCell data={statuses[stage as keyof typeof statuses]!} stage={stage} farmer={farmer} />
+                                                <StatusCell data={statuses[stage]} stage={stage} farmer={farmer} />
                                             </td>
                                         ))}
                                     </tr>

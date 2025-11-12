@@ -6,6 +6,8 @@ import { useDatabase } from '../DatabaseContext';
 import { DistrictModel, MandalModel, VillageModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
+// FIX: Import 'useQuery' hook to resolve 'Cannot find name 'useQuery'' error.
+import { useQuery } from '../hooks/useQuery';
 
 interface FilterBarProps {
   filters: Filters;
