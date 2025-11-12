@@ -1,5 +1,6 @@
 import React from 'react';
 import { PRICING_MODEL } from '../data/subscriptionPlans';
+// FIX: Import from the newly created types.ts file
 import { AppContent } from '../types';
 import { sanitizeHTML } from '../lib/utils';
 

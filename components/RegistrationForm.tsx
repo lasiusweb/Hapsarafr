@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+// FIX: Import from the newly created types.ts file
 import { Farmer, FarmerStatus, PlantationMethod, PlantType, Plot } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import AiReviewModal from './AiReviewModal';
 import { getGeoName } from '../lib/utils';
 import { useDebounce } from '../hooks/useDebounce';
 import { useDatabase } from '../DatabaseContext';
-import { useQuery } from '../hooks/useQuery';
+// FIX: Import from the newly created db/index.ts file
 import { DistrictModel, MandalModel, VillageModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 
@@ -52,6 +53,9 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
     tenantId: '', // Added for multi-tenancy
     is_in_ne_region: false,
     primary_crop: 'Oil Palm',
+    hap_id: '',
+    gov_application_id: '',
+    gov_farmer_id: '',
 };
 
 const DRAFT_STORAGE_KEY = 'hapsara-farmer-registration-draft';

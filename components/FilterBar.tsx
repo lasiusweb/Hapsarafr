@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
+// FIX: Import from the newly created types.ts file
 import { FarmerStatus, Filters } from '../types';
 import { useDatabase } from '../DatabaseContext';
-import { useQuery } from '../hooks/useQuery';
+// FIX: Import from the newly created db/index.ts file
 import { DistrictModel, MandalModel, VillageModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+// FIX: Import from the newly created types.ts file
 import { Farmer, FarmerStatus, User, Tenant } from '../types';
 import { getGeoName } from '../lib/utils';
 import StatusBadge from './StatusBadge';
@@ -312,85 +313,4 @@ const FarmerList: React.FC<FarmerListProps> = ({
                                     </td>
                                     {isSuperAdmin && (
                                         <td data-label="Tenant" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
-                                            {tenantNameMap.get(farmer.tenantId) || 'Unknown'}
-                                        </td>
-                                    )}
-                                    <td data-label="Location" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <div>{`${getGeoName('village', farmer)}, ${getGeoName('mandal', farmer)}`}</div>
-                                        <div className="md:hidden font-semibold text-gray-600">{farmer.approvedExtent} Acres</div>
-                                    </td>
-                                    <td data-label="Status" className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <StatusBadge status={farmer.status as FarmerStatus} />
-                                    </td>
-                                     <td data-label="Reg. Date" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(farmer.registrationDate).toLocaleDateString()}</td>
-                                     <td data-label="Created" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <div>{getUserName(farmer.createdBy)}</div>
-                                        <div className="text-xs text-gray-400" title={new Date(farmer.createdAt).toLocaleString()}>{new Date(farmer.createdAt).toLocaleDateString()}</div>
-                                    </td>
-                                    <td data-label="Last Updated" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <div>{getUserName(farmer.updatedBy)}</div>
-                                        <div className="text-xs text-gray-400" title={new Date(farmer.updatedAt).toLocaleString()}>{new Date(farmer.updatedAt).toLocaleDateString()}</div>
-                                    </td>
-                                    <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2 td-actions" onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => onPrint(farmer.id)} className="text-green-600 hover:text-green-900">Print</button>
-                                        <button onClick={() => onExportToPdf(farmer.id)} className="text-blue-600 hover:text-blue-900">PDF</button>
-                                    </td>
-                                </tr>
-                            );
-                        }) : (
-                             <tr>
-                                <td colSpan={isSuperAdmin ? 10 : 9} className="text-center py-10 text-gray-500">
-                                    No records match your current filters on this page.
-                                </td>
-                            </tr>
-                        )}
-                        </tbody>
-                    </table>
-                </div>
-            ) : (
-                <div className="p-4 md:p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {farmers.map(farmer => (
-                            <FarmerCard
-                                key={farmer.id}
-                                farmer={farmer}
-                                isSelected={selectedFarmerIds.includes(farmer.id)}
-                                onSelectionChange={onSelectionChange}
-                                onPrint={onPrint}
-                                onExportToPdf={onExportToPdf}
-                                onNavigate={onNavigate}
-                                isNewlyAdded={newlyAddedFarmerId === farmer.id}
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
-            <div className="p-4 border-t flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex-1 text-center md:text-left">
-                    <label htmlFor="rowsPerPage" className="text-sm text-gray-600 mr-2">Rows per page:</label>
-                    <select
-                        id="rowsPerPage"
-                        value={rowsPerPage}
-                        onChange={e => onRowsPerPageChange(Number(e.target.value))}
-                        className="p-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
-                    >
-                        <option value={10}>10</option>
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                    </select>
-                </div>
-
-                <div className="flex-1 hidden md:block text-center text-sm text-gray-600">
-                    Showing {totalRecords > 0 ? startRecord : 0}-{endRecord} of {totalRecords}
-                </div>
-
-                <div className="flex-1 flex justify-center md:justify-end">
-                    <PaginationControls />
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export default FarmerList;
+                                            {

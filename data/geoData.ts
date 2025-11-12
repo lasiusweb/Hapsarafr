@@ -1,3 +1,4 @@
+// FIX: Import from the newly created types.ts file
 import { District } from '../types';
 
 export const GEO_DATA: District[] = [

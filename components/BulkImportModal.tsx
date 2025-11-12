@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+// FIX: Import from the newly created types.ts file
 import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import { GEO_DATA } from '../data/geoData';
 // FIX: Import `Type` from `@google/genai` to resolve type errors in the responseSchema.
@@ -160,6 +161,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         syncStatus: 'pending', createdAt: now, updatedAt: now,
                         tenantId: '', // Will be filled by parent
                         is_in_ne_region: false,
+                        primary_crop: 'Oil Palm',
+                        hap_id: '',
                     };
                 }).filter((r): r is NewRecord => r !== null);
                 

@@ -1,3 +1,4 @@
+// FIX: Import from the newly created types.ts file
 import { User } from '../types';
 import { AVATARS } from './avatars';
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+// FIX: Import from the newly created types.ts file
 import { Farmer, User, Plot } from '../types';
 
 declare var JsBarcode: any;

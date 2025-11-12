@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+// FIX: Import from the newly created types.ts file
 import { FarmerStatus } from '../types';
 import CustomSelect from './CustomSelect';
 

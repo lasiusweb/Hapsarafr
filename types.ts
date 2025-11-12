@@ -1,112 +1,85 @@
-import { tableSchema } from '@nozbe/watermelondb/Schema';
+// This file was regenerated to define all application types.
 
-// --- ENUMS ---
+// --- Enums ---
 
 export enum FarmerStatus {
-  Registered = 'Registered',
-  Sanctioned = 'Sanctioned',
-  Planted = 'Planted',
-  PaymentDone = 'Payment Done',
+    Registered = 'Registered',
+    Sanctioned = 'Sanctioned',
+    Planted = 'Planted',
+    PaymentDone = 'Payment - Done',
 }
 
 export enum PlantationMethod {
-  Square = 'Square',
-  Triangle = 'Triangle',
+    Square = 'Square',
+    Triangle = 'Triangle',
 }
 
 export enum PlantType {
-  Imported = 'Imported',
-  Domestic = 'Domestic',
+    Imported = 'Imported',
+    Domestic = 'Domestic',
 }
 
 export enum SoilType {
-  Alluvial = 'Alluvial',
-  Clay = 'Clay',
-  Loamy = 'Loamy',
-  Red = 'Red',
-  Sandy = 'Sandy',
-}
-
-export enum PaymentStage {
-  MaintenanceYear1 = 'Maintenance (Year 1)',
-  MaintenanceYear2 = 'Maintenance (Year 2)',
-  MaintenanceYear3 = 'Maintenance (Year 3)',
-  MaintenanceYear4 = 'Maintenance (Year 4)',
-  IntercroppingYear1 = 'Intercropping (Year 1)',
-  IntercroppingYear2 = 'Intercropping (Year 2)',
-  IntercroppingYear3 = 'Intercropping (Year 3)',
-  IntercroppingYear4 = 'Intercropping (Year 4)',
-  PlantingMaterialDomestic = 'Planting Material (Domestic)',
-  PlantingMaterialImported = 'Planting Material (Imported)',
-  BoreWell = 'Bore-Well',
-  VermiCompost = 'Vermi-Compost',
-  Replanting = 'Replanting',
-  Fertilizer = 'Fertilizer',
-  Other = 'Other',
+    Loamy = 'Loamy',
+    Sandy = 'Sandy',
+    Clay = 'Clay',
+    RedSoil = 'Red Soil',
+    BlackSoil = 'Black Soil',
 }
 
 export enum Permission {
-  CAN_REGISTER_FARMER = 'CAN_REGISTER_FARMER',
-  CAN_EDIT_FARMER = 'CAN_EDIT_FARMER',
-  CAN_DELETE_FARMER = 'CAN_DELETE_FARMER',
-  CAN_IMPORT_DATA = 'CAN_IMPORT_DATA',
-  CAN_EXPORT_DATA = 'CAN_EXPORT_DATA',
-  CAN_SYNC_DATA = 'CAN_SYNC_DATA',
-  CAN_MANAGE_USERS = 'CAN_MANAGE_USERS',
-  CAN_MANAGE_GROUPS = 'CAN_MANAGE_GROUPS',
-  CAN_INVITE_USERS = 'CAN_INVITE_USERS',
-  CAN_MANAGE_CONTENT = 'CAN_MANAGE_CONTENT',
-  CAN_MANAGE_SCHEMA = 'CAN_MANAGE_SCHEMA',
-  CAN_VIEW_MARKETPLACE = 'CAN_VIEW_MARKETPLACE',
-  CAN_MANAGE_VENDORS = 'CAN_MANAGE_VENDORS',
-  CAN_MANAGE_ORDERS = 'CAN_MANAGE_ORDERS',
+    CAN_REGISTER_FARMER = 'CAN_REGISTER_FARMER',
+    CAN_EDIT_FARMER = 'CAN_EDIT_FARMER',
+    CAN_DELETE_FARMER = 'CAN_DELETE_FARMER',
+    CAN_IMPORT_DATA = 'CAN_IMPORT_DATA',
+    CAN_EXPORT_DATA = 'CAN_EXPORT_DATA',
+    CAN_SYNC_DATA = 'CAN_SYNC_DATA',
+    CAN_MANAGE_USERS = 'CAN_MANAGE_USERS',
+    CAN_MANAGE_GROUPS = 'CAN_MANAGE_GROUPS',
+    CAN_INVITE_USERS = 'CAN_INVITE_USERS',
+    CAN_MANAGE_CONTENT = 'CAN_MANAGE_CONTENT',
+    CAN_VIEW_MARKETPLACE = 'CAN_VIEW_MARKETPLACE',
+    CAN_MANAGE_VENDORS = 'CAN_MANAGE_VENDORS',
+    CAN_MANAGE_ORDERS = 'CAN_MANAGE_ORDERS',
+    CAN_MANAGE_SCHEMA = 'CAN_MANAGE_SCHEMA',
 }
 
 export enum ActivityType {
-  REGISTRATION = 'REGISTRATION',
-  STATUS_CHANGE = 'STATUS_CHANGE',
-  PAYMENT_RECORDED = 'PAYMENT_RECORDED',
-  RESOURCE_DISTRIBUTED = 'RESOURCE_DISTRIBUTED',
-  VOICE_NOTE = 'VOICE_NOTE',
-  TRAINING_ATTENDED = 'TRAINING_ATTENDED',
-  PLANTATION_UPDATE = 'PLANTATION_UPDATE',
-  ASSISTANCE_STATUS_CHANGE = 'ASSISTANCE_STATUS_CHANGE',
-  QUALITY_APPEAL_STATUS_CHANGED = 'QUALITY_APPEAL_STATUS_CHANGED',
-  BATCH_CREATED = 'BATCH_CREATED',
-  PROCESSING_STEP_COMPLETED = 'PROCESSING_STEP_COMPLETED',
-  MAINTENANCE_LOGGED = 'MAINTENANCE_LOGGED',
-  EQUIPMENT_ADDED = 'EQUIPMENT_ADDED',
-  HARVEST_RECORDED = 'HARVEST_RECORDED',
-  IDS_UPDATED = 'IDS_UPDATED',
-  TRAINING_COMPLETED = 'TRAINING_COMPLETED',
+    REGISTRATION = 'REGISTRATION',
+    STATUS_CHANGE = 'STATUS_CHANGE',
+    PAYMENT_RECORDED = 'PAYMENT_RECORDED',
+    RESOURCE_DISTRIBUTED = 'RESOURCE_DISTRIBUTED',
+    PLANTATION_UPDATE = 'PLANTATION_UPDATE',
+    ASSISTANCE_STATUS_CHANGE = 'ASSISTANCE_STATUS_CHANGE',
+    VOICE_NOTE = 'VOICE_NOTE',
+    HARVEST_RECORDED = 'HARVEST_RECORDED',
+    QUALITY_APPEAL_STATUS_CHANGED = 'QUALITY_APPEAL_STATUS_CHANGED',
+    TRAINING_ATTENDED = 'TRAINING_ATTENDED',
 }
 
-export enum OverallGrade {
-  GradeA = 'Grade A',
-  GradeB = 'Grade B',
-  GradeC = 'Grade C',
-  Reject = 'Reject',
-}
-
-export enum AppealStatus {
-  None = 'None',
-  Pending = 'Pending',
-  Approved = 'Approved',
-  Rejected = 'Rejected',
+export enum PaymentStage {
+    MaintenanceYear1 = 'Maintenance (Year 1)',
+    MaintenanceYear2 = 'Maintenance (Year 2)',
+    MaintenanceYear3 = 'Maintenance (Year 3)',
+    MaintenanceYear4 = 'Maintenance (Year 4)',
+    IntercroppingYear1 = 'Intercropping (Year 1)',
+    IntercroppingYear2 = 'Intercropping (Year 2)',
+    IntercroppingYear3 = 'Intercropping (Year 3)',
+    IntercroppingYear4 = 'Intercropping (Year 4)',
+    PlantingMaterialDomestic = 'Planting Material (Domestic)',
+    PlantingMaterialImported = 'Planting Material (Imported)',
+    BoreWell = 'Bore Well',
+    VermiCompost = 'Vermi Compost Unit',
+    Replanting = 'Replanting Old Gardens',
+    Fertilizer = 'Fertilizer',
+    Other = 'Other',
 }
 
 export enum CustomFieldType {
-  Text = 'text',
-  Number = 'number',
-  Date = 'date',
-  Dropdown = 'dropdown',
-}
-
-export enum AssistanceApplicationStatus {
-  NotApplied = 'Not Applied',
-  Applied = 'Applied',
-  Approved = 'Approved',
-  Rejected = 'Rejected',
+    Text = 'text',
+    Number = 'number',
+    Date = 'date',
+    Dropdown = 'dropdown',
 }
 
 export enum TaskStatus {
@@ -121,208 +94,176 @@ export enum TaskPriority {
     High = 'High',
 }
 
+export enum OverallGrade {
+    GradeA = 'Grade A',
+    GradeB = 'Grade B',
+    GradeC = 'Grade C',
+    Reject = 'Reject',
+}
+
+export enum AppealStatus {
+    None = 'None',
+    Pending = 'Pending',
+    Approved = 'Approved',
+    Rejected = 'Rejected',
+}
+
 export enum ProcessingStatus {
-  Pending = 'Pending',
-  InProgress = 'In Progress',
-  Completed = 'Completed',
-  Cancelled = 'Cancelled',
+    Pending = 'Pending',
+    InProgress = 'In Progress',
+    Completed = 'Completed',
+    Cancelled = 'Cancelled',
 }
 
 export enum EntrySource {
-  ProcessorPayment = 'Processor Payment',
-  GovernmentVGP = 'Government VGP',
-  SubsidyDisbursement = 'Subsidy Disbursement',
-  ManualEntry = 'Manual Entry',
-}
-
-export enum SustainabilityTier {
-    Bronze = 'Bronze',
-    Silver = 'Silver',
-    Gold = 'Gold',
-    Platinum = 'Platinum',
-}
-
-// --- NEW FINANCIAL ENUMS ---
-
-export enum TransactionStatus {
-    Pending = 'Pending',
-    Processed = 'Processed',
-    Failed = 'Failed',
-    Reversed = 'Reversed',
-}
-
-export enum TransactionType {
-    Credit = 'Credit',
-    Debit = 'Debit',
-}
-
-export enum TransactionSource {
     Subsidy = 'Subsidy',
     MarketplaceSale = 'Marketplace Sale',
-    Withdrawal = 'Withdrawal',
-    ManualAdjustment = 'Manual Adjustment',
+    ManualCredit = 'Manual Credit',
+    ManualDebit = 'Manual Debit',
 }
 
 export enum WithdrawalAccountType {
     BankAccount = 'bank_account',
-    UPI = 'vpa',
+    UPI = 'upi',
 }
 
-export enum FinancialDisputeStatus {
-    Open = 'Open',
-    PendingPartnerResponse = 'Pending Partner Response',
-    Resolved = 'Resolved',
-    Closed = 'Closed',
+export enum ExpertiseTagEnum {
+    SoilHealth = 'Soil Health',
+    PestManagement = 'Pest Management',
+    Irrigation = 'Irrigation',
+    SubsidySchemes = 'Subsidy Schemes',
+    HarvestingTechniques = 'Harvesting Techniques',
+    MarketLinkage = 'Market Linkage',
 }
 
-// --- INTERFACES ---
+export enum AssistanceApplicationStatus {
+    NotApplied = 'Not Applied',
+    Applied = 'Applied',
+    Approved = 'Approved',
+    Rejected = 'Rejected',
+}
+
+export enum VendorStatus {
+    Pending = 'Pending',
+    Verified = 'Verified',
+    Suspended = 'Suspended',
+}
+
+export enum OrderStatus {
+    Pending = 'Pending',
+    Confirmed = 'Confirmed',
+    Shipped = 'Shipped',
+    Delivered = 'Delivered',
+    Cancelled = 'Cancelled',
+}
+
+
+// --- Interfaces ---
 
 export interface Farmer {
-  id: string;
-  fullName: string;
-  fatherHusbandName: string;
-  aadhaarNumber: string;
-  mobileNumber: string;
-  gender: string;
-  address: string;
-  ppbRofrId?: string;
-  photo?: string;
-  bankAccountNumber: string;
-  ifscCode: string;
-  accountVerified: boolean;
-  appliedExtent: number;
-  approvedExtent: number;
-  numberOfPlants: number;
-  methodOfPlantation: PlantationMethod;
-  plantType: PlantType;
-  plantationDate?: string;
-  mlrdPlants: number;
-  fullCostPlants: number;
-  latitude?: number;
-  longitude?: number;
-  hap_id?: string;
-  gov_application_id?: string;
-  gov_farmer_id?: string;
-  proposedYear: string;
-  registrationDate: string;
-  asoId: string;
-  paymentUtrDd: string;
-  status: FarmerStatus | string;
-  district: string;
-  mandal: string;
-  village: string;
-  syncStatus: 'synced' | 'pending' | 'pending_delete';
-  createdAt: string;
-  updatedAt: string;
-  createdBy?: string;
-  updatedBy?: string;
-  tenantId: string;
-  is_in_ne_region: boolean;
-  primary_crop?: string;
+    id: string;
+    hap_id?: string;
+    gov_application_id?: string;
+    gov_farmer_id?: string;
+    fullName: string;
+    fatherHusbandName: string;
+    aadhaarNumber: string;
+    mobileNumber: string;
+    gender: 'Male' | 'Female' | 'Other';
+    address: string;
+    ppbRofrId?: string;
+    photo: string;
+    bankAccountNumber: string;
+    ifscCode: string;
+    accountVerified: boolean;
+    appliedExtent: number;
+    approvedExtent: number;
+    numberOfPlants: number;
+    methodOfPlantation: PlantationMethod;
+    plantType: PlantType;
+    plantationDate: string;
+    mlrdPlants: number;
+    fullCostPlants: number;
+    latitude?: number;
+    longitude?: number;
+    proposedYear: string;
+    registrationDate: string;
+    asoId?: string;
+    paymentUtrDd?: string;
+    status: FarmerStatus | string;
+    district: string;
+    mandal: string;
+    village: string;
+    syncStatus: 'synced' | 'pending' | 'pending_delete';
+    tenantId: string;
+    is_in_ne_region: boolean;
+    primary_crop: string;
+    createdAt: string;
+    updatedAt: string;
+    createdBy?: string;
+    updatedBy?: string;
 }
 
 export interface Plot {
-  id: string;
-  farmerId: string;
-  acreage: number;
-  soilType?: SoilType;
-  plantationDate?: string;
-  numberOfPlants: number;
-  methodOfPlantation: PlantationMethod;
-  plantType: PlantType;
-  mlrdPlants: number;
-  fullCostPlants: number;
-  geojson?: string;
-  is_replanting: boolean;
-}
-
-export interface PlantingRecord {
-  id: string;
-  plotId: string;
-  seedSource: string;
-  plantingDate: string;
-  geneticVariety: string;
-  careInstructionsUrl?: string;
-  numberOfPlants: number;
-  qrCodeData?: string;
-  syncStatus: 'synced' | 'pending';
-  createdAt: string;
-  updatedAt: string;
-  tenantId: string;
+    id: string;
+    farmerId: string;
+    acreage: number;
+    soilType: SoilType | string;
+    plantationDate?: string;
+    numberOfPlants: number;
+    methodOfPlantation: PlantationMethod;
+    plantType: PlantType;
+    mlrdPlants: number;
+    fullCostPlants: number;
+    geojson?: string;
+    is_replanting: boolean;
 }
 
 export interface User {
-  id: string;
-  name: string;
-  email?: string;
-  avatar: string;
-  groupId: string;
-  is_verified?: boolean;
-  tenantId: string;
+    id: string;
+    name: string;
+    email: string;
+    groupId: string;
+    avatar: string;
+    tenantId: string;
+    is_verified: boolean;
+}
+
+export interface Profile {
+    id: string;
+    name: string;
+    avatar: string;
 }
 
 export interface Group {
-  id: string;
-  name: string;
-  permissions: Permission[];
-  tenantId: string;
+    id: string;
+    name: string;
+    permissions: Permission[];
+    tenantId: string;
+}
+
+export interface Filters {
+    searchQuery: string;
+    district: string;
+    mandal: string;
+    village: string;
+    status: string;
+    registrationDateFrom: string;
+    registrationDateTo: string;
 }
 
 export interface SubsidyPayment {
-  id: string;
-  farmerId: string;
-  paymentDate: string;
-  amount: number;
-  utrNumber: string;
-  paymentStage: PaymentStage;
-  notes?: string;
-  syncStatus: 'synced' | 'pending';
-  createdBy?: string;
-  createdAt: string;
-  tenantId: string;
-}
-
-export interface AuditLogEntry {
-  id: number;
-  user_id: string;
-  user_name?: string; // from the view
-  action: 'INSERT' | 'UPDATE' | 'DELETE';
-  table_name: string;
-  record_id: string;
-  old_record_json?: object;
-  new_record_json?: object;
-  created_at: string;
-}
-
-export interface AppContent {
-  landing_hero_title: string;
-  landing_hero_subtitle: string;
-  landing_about_us: string;
-  privacy_policy: string;
-  faqs: FAQItem[];
-}
-
-export interface FAQItem {
-  id: string;
-  question: string;
-  answer: string;
-}
-
-export interface District {
-  code: string;
-  name: string;
-  mandals: Mandal[];
-}
-
-export interface Mandal {
-  code: string;
-  name: string;
-  villages: Village[];
-}
-
-export interface Village {
-  code: string;
-  name: string;
+    id: string;
+    farmerId: string;
+    paymentDate: string;
+    amount: number;
+    utrNumber: string;
+    paymentStage: PaymentStage;
+    notes?: string;
+    syncStatus: 'synced' | 'pending';
+    createdBy: string;
+    createdAt: string;
+    tenantId: string;
 }
 
 export interface ActivityLog {
@@ -330,68 +271,60 @@ export interface ActivityLog {
     farmerId: string;
     activityType: ActivityType;
     description: string;
-    createdAt: string;
     createdBy: string;
+    createdAt: string;
     tenantId: string;
 }
 
 export interface Tenant {
-  id: string;
-  name: string;
-  subscriptionStatus: 'active' | 'trial' | 'inactive';
-  createdAt: string;
+    id: string;
+    name: string;
+    subscriptionStatus: 'trial' | 'active' | 'inactive';
 }
 
 export interface Resource {
-  id: string;
-  name: string;
-  unit: string;
-  description?: string;
-  tenantId: string;
-  cost?: number;
+    id: string;
+    name: string;
+    unit: string;
+    description?: string;
+    cost: number;
+    tenantId: string;
 }
 
 export interface ResourceDistribution {
-  id: string;
-  farmerId: string;
-  resourceId: string;
-  quantity: number;
-  distributionDate: string;
-  notes?: string;
-  createdBy: string;
-  createdAt: string;
-  tenantId: string;
+    id: string;
+    farmerId: string;
+    resourceId: string;
+    quantity: number;
+    distributionDate: string;
+    notes?: string;
+    createdBy: string;
+    tenantId: string;
+}
+
+export interface AppContent {
+    landing_hero_title: string;
+    landing_hero_subtitle: string;
+    landing_about_us: string;
+    faqs: FAQItem[];
+    privacy_policy: string;
+}
+
+export interface FAQItem {
+    id: string;
+    question: string;
+    answer: string;
 }
 
 export interface CustomFieldDefinition {
-  id: string;
-  modelName: 'farmer';
-  fieldName: string;
-  fieldLabel: string;
-  fieldType: CustomFieldType;
-  options: string[];
-  isRequired: boolean;
-  sortOrder: number;
-  tenantId: string;
-}
-
-export interface AssistanceScheme {
     id: string;
-    category: string;
-    title: string;
-    description: string;
-    assistance: string;
-}
-
-export interface AssistanceApplication {
-    id: string;
-    farmerId: string;
-    schemeId: string;
-    status: AssistanceApplicationStatus;
-    syncStatus: 'synced' | 'pending';
-    createdAt: string;
-    updatedAt: string;
-    tenantId: string;
+    modelName: 'farmer';
+    fieldName: string;
+    fieldLabel: string;
+    fieldType: CustomFieldType;
+    options?: string[];
+    isRequired: boolean;
+    sortOrder: number;
 }
 
 export interface Task {
@@ -406,275 +339,157 @@ export interface Task {
     createdBy: string;
     createdAt: string;
     updatedAt: string;
-    syncStatus: 'synced' | 'pending';
     tenantId: string;
 }
 
 export interface Harvest {
-  id: string;
-  farmerId: string;
-  harvestDate: string;
-  grossWeight: number;
-  tareWeight: number;
-  netWeight: number;
-  assessedById: string;
-  createdAt: string;
-  tenantId: string;
+    id: string;
+    farmerId: string;
+    harvestDate: string;
+    grossWeight: number;
+    tareWeight: number;
+    netWeight: number;
+    assessedById: string;
 }
 
 export interface QualityAssessment {
-  id: string;
-  harvestId: string;
-  assessmentDate: string;
-  overallGrade: OverallGrade;
-  priceAdjustment: number;
-  notes?: string;
-  appealStatus: AppealStatus;
-  createdAt: string;
-  tenantId: string;
+    id: string;
+    harvestId: string;
+    assessmentDate: string;
+    overallGrade: OverallGrade;
+    priceAdjustment: number;
+    notes?: string;
+    appealStatus: AppealStatus;
 }
 
 export interface QualityMetric {
-  id: string;
-  assessmentId: string;
-  metricName: string;
-  metricValue: string;
-}
-
-export interface QualityStandard {
-  id: string;
-  metricName: string;
-  description: string;
-  measurementUnit: '%' | 'Yes/No' | 'count';
-  tenantId: string;
+    id: string;
+    assessmentId: string;
+    metricName: string;
+    metricValue: string;
 }
 
 export interface ProcessingBatch {
-  id: string;
-  harvestId: string;
-  batchCode: string;
-  startDate: string;
-  endDate?: string;
-  status: ProcessingStatus;
-  notes?: string;
-  tenantId: string;
+    id: string;
+    harvestId: string;
+    batchCode: string;
+    startDate: string;
+    endDate?: string;
+    status: ProcessingStatus;
+    notes?: string;
 }
 
 export interface ProcessingStep {
-  id: string;
-  batchId: string;
-  stepName: string;
-  startDate: string;
-  endDate?: string;
-  parameters: string; // JSON string for flexibility
-  operatorId: string;
-  equipmentId?: string;
-  notes?: string;
-  tenantId: string;
+    id: string;
+    batchId: string;
+    stepName: string;
+    startDate: string;
+    endDate?: string;
+    parameters?: string;
+    operatorId: string;
+    equipmentId?: string;
 }
 
 export interface Equipment {
-  id: string;
-  name: string;
-  type: string;
-  location: string;
-  status: 'operational' | 'maintenance' | 'decommissioned';
-  lastMaintenanceDate?: string;
-  tenantId: string;
-}
-
-export interface EquipmentMaintenanceLog {
-  id: string;
-  equipmentId: string;
-  maintenanceDate: string;
-  description: string;
-  performedById: string;
-  cost: number;
-  tenantId: string;
+    id: string;
+    name: string;
+    type: string;
+    location: string;
+    status: 'operational' | 'maintenance' | 'decommissioned';
+    lastMaintenanceDate?: string;
 }
 
 export interface ManualLedgerEntry {
     id: string;
     farmerId: string;
     entryDate: string;
-    description: string;
-    category: 'Income' | 'Expense';
     amount: number;
-    entrySource: EntrySource;
-    syncStatus: 'synced' | 'pending';
-    createdAt: string;
-    updatedAt: string;
-    tenantId: string;
+    description: string;
+    source: EntrySource;
+    isCredit: boolean;
 }
 
 export interface EquipmentLease {
-  id: string;
-  farmerId: string;
-  equipmentId: string;
-  startDate: string;
-  endDate: string;
-  totalCost: number;
-  paymentStatus: 'Pending' | 'Paid';
-  createdAt: string;
-  tenantId: string;
-}
-
-export interface SustainabilityPractice {
     id: string;
-    name: string;
-    description: string;
-    category: 'Water Management' | 'Soil Health' | 'Pest Management' | 'Biodiversity';
-    tier: SustainabilityTier;
-}
-
-export interface SustainabilityVerification {
-    id: string;
+    equipmentId: string;
     farmerId: string;
-    practiceId: string;
-    officerId: string;
-    verificationDate: string;
-    status: 'Verified' | 'Pending' | 'Rejected' | 'Under Review';
-    notes?: string;
-    evidenceUrl?: string; // Link to photo/video evidence
-    createdAt: string;
-}
-
-export interface FarmInput {
-    id: string;
-    farmerId: string;
-    inputType: 'Fertilizer' | 'Pesticide' | 'Water' | 'Labor' | 'Other';
-    date: string;
+    startDate: string;
+    endDate: string;
     cost: number;
-    quantity: number;
-    unit: string;
+    paymentStatus: 'Paid' | 'Unpaid';
 }
 
-// --- TRAINING ---
-
-export interface TrainingModule {
-  id: string;
-  title: string;
-  description: string;
-  moduleType: 'video' | 'article';
-  content: string; // URL for video, markdown for article
-  durationMinutes?: number;
-  tenantId: string;
-  createdAt: string;
-  updatedAt: string;
+export interface PlantingRecord {
+    id: string;
+    plotId: string;
+    seedSource: string;
+    plantingDate: string;
+    geneticVariety: string;
+    numberOfPlants: number;
+    careInstructionsUrl?: string;
+    qrCodeData?: string;
 }
 
-export interface TrainingCompletion {
-  id: string;
-  farmerId: string;
-  moduleId: string;
-  completedAt: string;
-  completedByUserId?: string;
-  syncStatus: 'synced' | 'pending';
-  tenantId: string;
+export interface Wallet {
+    id: string;
+    farmerId: string;
+    balance: number;
 }
 
-// --- COMMUNITY ---
-
-export type ExpertiseTag = 'Pest Control' | 'Irrigation' | 'Soil Health' | 'Harvesting Techniques' | 'Financial Planning' | 'Nursery Management';
-
-export interface Profile {
-  id: string;
-  name: string;
-  avatar: string;
-  expertise_tags?: ExpertiseTag[];
+export interface WithdrawalAccount {
+    id: string;
+    farmerId: string;
+    accountType: WithdrawalAccountType;
+    details: string; // e.g., 'A/C: ...1234' or 'upi@id'
+    isVerified: boolean;
+    razorpayFundAccountId?: string;
 }
 
 export interface UserProfile {
-  user_id: string;
-  is_mentor: boolean;
-  expertise_tags: ExpertiseTag[];
-  needs_tags: ExpertiseTag[];
+    id: string;
+    userId: string;
+    isMentor: boolean;
+    expertiseTags: string; // JSON array of ExpertiseTagEnum
 }
 
 export interface Mentorship {
-  id: string;
-  mentor_id: string;
-  mentee_id: string;
-  status: 'requested' | 'active' | 'ended';
-  created_at: string;
-  mentor?: Profile;
-  mentee?: Profile;
-}
-
-
-export interface ForumPost {
-  id: string;
-  created_at: string;
-  author_id: string;
-  title: string;
-  content: string;
-  tenant_id: string;
-  author?: Profile;
-  answer_count?: number;
-}
-
-export interface ForumAnswer {
-  id: string;
-  created_at: string;
-  post_id: string;
-  author_id: string;
-  content: string;
-  tenant_id: string;
-  author?: Profile;
-}
-
-
-// --- FILTERS ---
-
-export interface Filters {
-  searchQuery: string;
-  district: string;
-  mandal: string;
-  village: string;
-  status: string;
-  registrationDateFrom: string;
-  registrationDateTo: string;
-}
-
-// --- MARKETPLACE ---
-
-export enum VendorStatus {
-  Pending = 'Pending',
-  Verified = 'Verified',
-  Suspended = 'Suspended',
-}
-
-export enum OrderStatus {
-    Pending = 'Pending',
-    Confirmed = 'Confirmed',
-    Shipped = 'Shipped',
-    Delivered = 'Delivered',
-    Cancelled = 'Cancelled',
-}
-
-export enum MarketplaceDisputeStatus {
-    Open = 'Open',
-    InProgress = 'In Progress',
-    Resolved = 'Resolved',
-    Closed = 'Closed',
-}
-
-export interface Vendor {
     id: string;
+    mentorId: string;
+    menteeId: string;
+    status: 'pending' | 'active' | 'completed' | 'rejected';
+    startDate?: string;
+    endDate?: string;
+}
+
+export interface AssistanceScheme {
+    id: string;
+    category: string;
+    title: string;
+    description: string;
+    assistance: string;
+}
+
+export interface District {
+    code: string;
     name: string;
-    contactPerson: string;
-    mobileNumber: string;
-    address: string;
-    status: VendorStatus;
-    rating: number; // 0-5
-    createdAt: string;
-    tenantId: string;
+    mandals: Mandal[];
+}
+
+export interface Mandal {
+    code: string;
+    name: string;
+    villages: Village[];
+}
+
+export interface Village {
+    code: string;
+    name: string;
 }
 
 export interface ProductCategory {
     id: string;
     name: string;
-    iconSvg: string;
+    iconSvg?: string;
     tenantId: string;
 }
 
@@ -685,8 +500,20 @@ export interface Product {
     imageUrl: string;
     categoryId: string;
     isQualityVerified: boolean;
-    createdAt: string;
     tenantId: string;
+    createdAt: string;
+}
+
+export interface Vendor {
+    id: string;
+    name: string;
+    contactPerson: string;
+    mobileNumber: string;
+    address: string;
+    status: VendorStatus;
+    rating: number;
+    tenantId: string;
+    createdAt: string;
 }
 
 export interface VendorProduct {
@@ -695,7 +522,7 @@ export interface VendorProduct {
     productId: string;
     price: number;
     stockQuantity: number;
-    unit: string; // e.g., '50kg bag', 'litre'
+    unit: string;
     updatedAt: string;
 }
 
@@ -706,12 +533,10 @@ export interface Order {
     status: OrderStatus;
     totalAmount: number;
     paymentMethod: 'Cash' | 'Digital';
-    paymentTransactionId?: string; // For Juspay integration
     deliveryAddress: string;
     deliveryInstructions?: string;
-    logisticsPartnerId?: string; // e.g., Blowhorn order ID
-    createdAt: string;
-    tenantId: string;
+    paymentTransactionId?: string;
+    logisticsPartnerId?: string;
 }
 
 export interface OrderItem {
@@ -722,58 +547,33 @@ export interface OrderItem {
     pricePerUnit: number;
 }
 
-export interface MarketplaceDispute {
+export interface TrainingModule {
     id: string;
-    orderId: string;
-    farmerId: string;
-    reason: string;
-    status: MarketplaceDisputeStatus;
-    resolutionNotes?: string;
-    createdAt: string;
-    resolvedAt?: string;
-    tenantId: string;
-}
-
-// --- NEW FINANCIAL INTERFACES ---
-
-export interface Wallet {
-    id: string; // Corresponds to farmerId
-    balance: number;
-    razorpayContactId?: string;
-    updatedAt: string;
-}
-
-export interface WithdrawalAccount {
-    id: string;
-    farmerId: string;
-    accountType: WithdrawalAccountType;
-    details: string; // e.g., "A/C: ****1234" or "upi: farmer@okhdfc"
-    isVerified: boolean;
-    razorpayFundAccountId?: string;
-    createdAt: string;
-}
-
-export interface FinancialTransaction {
-    id: string;
-    walletId: string;
-    type: TransactionType;
-    status: TransactionStatus;
-    source: TransactionSource;
-    amount: number;
-    fee: number;
-    netAmount: number;
+    title: string;
+    category: string;
     description: string;
-    razorpayPayoutId?: string;
-    createdAt: string;
+    durationMinutes: number;
+    moduleType: 'video' | 'article';
+    content: string; // URL for video, markdown for article
+    difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+    sortOrder: number;
 }
 
-export interface FinancialDispute {
+export interface TrainingCompletion {
     id: string;
-    transactionId: string;
-    farmerId: string;
-    reason: string;
-    status: FinancialDisputeStatus;
-    comments?: string; // JSON string for threaded comments
-    createdAt: string;
-    updatedAt: string;
+    userId: string;
+    moduleId: string;
+    completedAt: string;
+}
+
+export interface AuditLogEntry {
+    id: number;
+    user_id: string;
+    user_name?: string; // from the view
+    action: 'INSERT' | 'UPDATE' | 'DELETE';
+    table_name: string;
+    record_id: string;
+    old_record_json?: any;
+    new_record_json?: any;
+    created_at: string;
 }

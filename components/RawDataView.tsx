@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
+// FIX: Import from the newly created db/index.ts file
 import { FarmerModel } from '../db';
+// FIX: Import from the newly created types.ts file
 import { Farmer } from '../types';
 import CustomSelect from './CustomSelect';
 
