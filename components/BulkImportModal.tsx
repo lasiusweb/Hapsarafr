@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
-// FIX: Import from the newly created types.ts file
 import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import { GEO_DATA } from '../data/geoData';
-// FIX: Import `Type` from `@google/genai` to resolve type errors in the responseSchema.
 import { GoogleGenAI, Type } from '@google/genai';
 import { getGeoName } from '../lib/utils';
 
@@ -38,7 +36,6 @@ GEO_DATA.forEach(district => {
     });
 });
 
-// FIX: Define the 'Step' type to resolve the 'Cannot find name' error.
 type Step = 'upload' | 'review' | 'summary';
 
 const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, existingFarmers }) => {
@@ -126,7 +123,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     
                     const asoId = `SO${regYear}${districtCode}${mandalCode}${Math.floor(100 + Math.random() * 900)}`;
 
-                    // FIX: Add missing properties from the 'Farmer' interface to ensure type compatibility with 'NewRecord'.
                     return {
                         tempIndex: i,
                         rowNum,
@@ -139,7 +135,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         gender: ['Male', 'Female', 'Other'].includes(row.gender) ? row.gender : 'Male',
                         address: String(row.address || '').trim(),
                         ppbRofrId: String(row.ppbRofrId || '').trim(),
-                        photo: '', bankAccountNumber: String(row.bankAccountNumber || '').trim(),
+                        photo: '',
+                        bankAccountNumber: String(row.bankAccountNumber || '').trim(),
                         ifscCode: String(row.ifscCode || '').trim(),
                         accountVerified: false,
                         appliedExtent: Number(row.appliedExtent) || 0,
@@ -155,10 +152,16 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         gov_application_id: String(row.gov_application_id || '').trim(),
                         gov_farmer_id: String(row.gov_farmer_id || '').trim(),
                         asoId,
-                        proposedYear: '2024-25', registrationDate: now.split('T')[0],
-                        paymentUtrDd: '', status: FarmerStatus.Registered,
-                        district: districtCode, mandal: mandalCode, village: villageCode,
-                        syncStatus: 'pending', createdAt: now, updatedAt: now,
+                        proposedYear: '2024-25',
+                        registrationDate: now.split('T')[0],
+                        paymentUtrDd: '',
+                        status: FarmerStatus.Registered,
+                        district: districtCode,
+                        mandal: mandalCode,
+                        village: villageCode,
+                        syncStatus: 'pending',
+                        createdAt: now,
+                        updatedAt: now,
                         tenantId: '', // Will be filled by parent
                         is_in_ne_region: false,
                         primary_crop: 'Oil Palm',

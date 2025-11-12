@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-// FIX: Module '"../types"' has no exported member 'QualityStandard'.
-import { Farmer, User, OverallGrade } from '../types';
+import { Farmer, User, OverallGrade, QualityStandard } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-// FIX: Module '"../db"' has no exported member 'QualityStandardModel'.
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
 
@@ -28,10 +26,9 @@ const HarvestForm: React.FC<HarvestFormProps> = ({ allFarmers, currentUser, onCl
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Data Loading
-    // FIX: The 'quality_standards' table and 'QualityStandardModel' do not exist. Mocking query to prevent crash.
-    const qualityStandards = useQuery(useMemo(() => database.get('quality_standards' as any).query(Q.where('tenant_id', 'null')), [database, currentUser.tenantId]));
+    // The 'quality_standards' table does not exist. Mocking query to return an empty array to prevent crash.
+    const qualityStandards: QualityStandard[] = useMemo(() => [], []);
 
-    // FIX: Replaced non-existent 'farmerId' with 'hap_id' to display the correct identifier.
     const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hap_id || 'N/A'})` })), [allFarmers]);
     const netWeight = useMemo(() => {
         const gross = parseFloat(grossWeight);

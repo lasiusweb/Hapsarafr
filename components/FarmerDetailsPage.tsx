@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel, AssistanceApplicationModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, WithdrawalAccountModel } from '../db';
-import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme, PlantingRecord, Harvest, QualityAssessment, AppealStatus, OverallGrade, WithdrawalAccount } from '../types';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, PlotModel, AssistanceApplicationModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, WithdrawalAccountModel, TenantModel, TerritoryTransferRequestModel } from '../db';
+import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, Plot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme, PlantingRecord, Harvest, QualityAssessment, AppealStatus, OverallGrade, WithdrawalAccount, TerritoryTransferStatus } from '../types';
 import SubsidyPaymentForm from './SubsidyPaymentForm';
 import DistributionForm from './DistributionForm';
 import ConfirmationModal from './ConfirmationModal';
@@ -160,6 +160,65 @@ const PlotFormModal: React.FC<{
                     <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold disabled:bg-green-300">
                         {isSubmitting ? 'Saving...' : 'Save Plot'}
                     </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+const TransferModal: React.FC<{
+    farmer: Farmer;
+    currentUser: User;
+    tenants: TenantModel[];
+    onClose: () => void;
+    onSave: () => void;
+}> = ({ farmer, currentUser, tenants, onClose, onSave }) => {
+    const database = useDatabase();
+    const [toTenantId, setToTenantId] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const tenantOptions = tenants
+        .filter(t => t.id !== farmer.tenantId)
+        .map(t => ({ value: t.id, label: t.name }));
+        
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!toTenantId) {
+            alert('Please select a tenant to transfer to.');
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            await database.write(async () => {
+                await database.get<TerritoryTransferRequestModel>('territory_transfer_requests').create(req => {
+                    req.farmerId = farmer.id;
+                    req.fromTenantId = farmer.tenantId;
+                    req.toTenantId = toTenantId;
+                    req.status = TerritoryTransferStatus.Pending;
+                    req.requestedById = currentUser.id;
+                    req.syncStatusLocal = 'pending';
+                });
+            });
+            onSave();
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-2xl w-full max-w-lg">
+                <div className="p-6 border-b"><h2 className="text-xl font-bold text-gray-800">Initiate Territory Transfer</h2></div>
+                <div className="p-8 space-y-4">
+                    <p>Transferring <strong>{farmer.fullName}</strong> from their current territory.</p>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Transfer To Tenant</label>
+                        <CustomSelect options={tenantOptions} value={toTenantId} onChange={setToTenantId} placeholder="-- Select New Tenant --" />
+                    </div>
+                </div>
+                <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
+                    <button type="button" onClick={onClose} disabled={isSubmitting}>Cancel</button>
+                    <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Submit Request</button>
                 </div>
             </form>
         </div>
@@ -774,6 +833,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const [isHarvestModalOpen, setIsHarvestModalOpen] = useState(false);
     const [selectedHarvestDetails, setSelectedHarvestDetails] = useState<(CombinedHarvestData & { farmerName: string; }) | null>(null);
     const [isKycModalOpen, setIsKycModalOpen] = useState(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const database = useDatabase();
 
     // Refactored state for payment modal
@@ -789,6 +849,10 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const [isRecording, setIsRecording] = useState(false);
     const [transcript, setTranscript] = useState('');
     const recognitionRef = useRef<any>(null);
+
+    const allTenants = useQuery(useMemo(() => database.get<TenantModel>('tenants').query(), [database]));
+    const tenantMap = useMemo(() => new Map(allTenants.map(t => [t.id, t.name])), [allTenants]);
+    const currentTenantName = farmer ? tenantMap.get(farmer.tenantId) || 'Unknown' : '...';
 
 
     const handleUpdateFarmer = useCallback(async (updatedFarmerData: Farmer, photoFile?: File) => {
@@ -1223,7 +1287,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             <div className="max-w-7xl mx-auto">
                 <div className="mb-6 flex justify-between items-center">
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back to Directory
                     </button>
                     {canEdit && (
@@ -1253,6 +1317,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                             <TabButton tab="payments" label="Payment History" />
                             <TabButton tab="resources" label="Resources" />
                             <TabButton tab="timeline" label="Timeline" />
+                            <TabButton tab="territory" label="Territory" />
                         </nav>
                     </div>
                      <div className="mt-6 bg-white rounded-lg shadow-xl p-8">
@@ -1448,6 +1513,24 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                                 )}
                             </div>
                         )}
+                        {activeTab === 'territory' && (
+                            <div>
+                                <h3 className="text-lg font-semibold">Territory Information</h3>
+                                <div className="mt-4 bg-gray-50 p-6 rounded-lg border">
+                                    <dl className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <DetailItem label="Current Tenant" value={currentTenantName} />
+                                    </dl>
+                                    <div className="mt-6 pt-6 border-t">
+                                        <button 
+                                            onClick={() => setIsTransferModalOpen(true)} 
+                                            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 font-semibold"
+                                        >
+                                            Initiate Transfer
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1486,6 +1569,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                         onCancel={() => setIsEditModalOpen(false)}
                         existingFarmers={[]}
                         setNotification={setNotification}
+                        currentUser={currentUser}
                     />
                 </React.Suspense>
             )}
@@ -1566,6 +1650,18 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                         onExecuteAction={handleExecuteCoPilotAction}
                     />
                 </React.Suspense>
+            )}
+            {isTransferModalOpen && farmer && (
+                <TransferModal 
+                    farmer={farmerModelToPlain(farmer)!}
+                    currentUser={currentUser}
+                    tenants={allTenants}
+                    onClose={() => setIsTransferModalOpen(false)}
+                    onSave={() => {
+                        setIsTransferModalOpen(false);
+                        setNotification({ message: 'Transfer request submitted.', type: 'success' });
+                    }}
+                />
             )}
             <button
                 onClick={() => setIsLiveAssistantOpen(true)}

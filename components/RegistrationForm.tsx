@@ -1,18 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-// FIX: Import from the newly created types.ts file
 import { Farmer, FarmerStatus, PlantationMethod, PlantType, Plot, User } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import AiReviewModal from './AiReviewModal';
 import { getGeoName } from '../lib/utils';
 import { useDebounce } from '../hooks/useDebounce';
 import { useDatabase } from '../DatabaseContext';
-// FIX: Import from the newly created db/index.ts file
 import { DistrictModel, MandalModel, VillageModel, TerritoryModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 // @ts-ignore
 import { useObservables } from '@nozbe/watermelondb/react';
-
-// FIX: Import 'useQuery' hook to resolve 'Cannot find name 'useQuery'' error.
 import { useQuery } from '../hooks/useQuery';
 
 interface RegistrationFormProps {
@@ -141,7 +137,6 @@ const FormField = ({ children }: FormFieldProps) => <div className="md:col-span-
 type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 
-// FIX: Changed from const assignment to a default exported function to fix module resolution issues.
 export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null, setNotification, currentUser }: RegistrationFormProps) {
     const database = useDatabase();
     const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);

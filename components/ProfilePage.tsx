@@ -17,7 +17,8 @@ interface ProfilePageProps {
 const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, onBack, setNotification }) => {
     const database = useDatabase();
     const userProfileQuery = React.useMemo(() => database.get<UserProfileModel>('user_profiles').query(Q.where('user_id', currentUser.id)), [database, currentUser.id]);
-    const userProfile = useQuery(userProfileQuery)[0];
+    const userProfileResult = useQuery(userProfileQuery);
+    const userProfile = userProfileResult.length > 0 ? userProfileResult[0] : null;
 
     const [name, setName] = useState(currentUser.name);
     const [avatar, setAvatar] = useState(currentUser.avatar);
@@ -30,7 +31,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, 
     useEffect(() => {
         if (userProfile) {
             setIsMentor(userProfile.isMentor);
-            setExpertiseTags(new Set(JSON.parse(userProfile.expertiseTags || '[]')));
+            try {
+                const tags = JSON.parse(userProfile.expertiseTags || '[]');
+                setExpertiseTags(new Set(tags));
+            } catch (e) {
+                console.error("Failed to parse expertise tags", e);
+                setExpertiseTags(new Set());
+            }
         }
     }, [userProfile]);
     
@@ -126,12 +133,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, 
                     <div className="mt-8 bg-white rounded-lg shadow-xl p-8">
                         <h3 className="text-xl font-bold text-gray-800 mb-4">Community Profile</h3>
                         <div className="space-y-6">
-                             <label className="flex items-center justify-between p-4 border rounded-lg">
+                             <label className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-gray-50" onClick={() => setIsMentor(!isMentor)}>
                                 <div>
                                     <p className="font-semibold text-gray-700">Become a Mentor</p>
                                     <p className="text-sm text-gray-500">Allow other officers to request you as a mentor.</p>
                                 </div>
-                                <div className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${isMentor ? 'bg-green-600' : 'bg-gray-200'}`} onClick={() => setIsMentor(!isMentor)}>
+                                <div className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${isMentor ? 'bg-green-600' : 'bg-gray-200'}`}>
                                     <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${isMentor ? 'translate-x-6' : 'translate-x-1'}`}/>
                                 </div>
                             </label>
@@ -139,7 +146,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, 
                                 <h4 className="font-semibold text-gray-700 mb-2">My Expertise</h4>
                                 <div className="flex flex-wrap gap-2">
                                     {Object.values(ExpertiseTagEnum).map(tag => (
-                                        <button key={tag} onClick={() => handleTagChange(tag)} className={`px-3 py-1.5 text-sm font-semibold rounded-full border-2 ${expertiseTags.has(tag) ? 'bg-green-100 border-green-300 text-green-800' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'}`}>
+                                        <button key={tag} onClick={() => handleTagChange(tag)} className={`px-3 py-1.5 text-sm font-semibold rounded-full border-2 transition-colors ${expertiseTags.has(tag) ? 'bg-green-100 border-green-300 text-green-800' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'}`}>
                                             {tag}
                                         </button>
                                     ))}

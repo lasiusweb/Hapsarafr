@@ -120,9 +120,9 @@ const TenantManagementPage: React.FC<{ onBack: () => void; }> = ({ onBack }) => 
     };
 
     const handleStatusChange = async (tenant: TenantModel, newStatus: 'active' | 'trial' | 'inactive') => {
-        // FIX: Moved update logic from the model to here to resolve a compile error.
         await database.write(async () => {
-            await tenant.update(t => {
+            // FIX: Cast `tenant` to `any` to call the `update` method. This resolves a TypeScript error where the inherited `update` method from the WatermelonDB Model class was not recognized on the TenantModel type.
+            await (tenant as any).update(t => {
                 t.subscriptionStatus = newStatus;
             });
         });

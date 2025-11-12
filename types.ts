@@ -55,6 +55,7 @@ export enum ActivityType {
     HARVEST_RECORDED = 'HARVEST_RECORDED',
     QUALITY_APPEAL_STATUS_CHANGED = 'QUALITY_APPEAL_STATUS_CHANGED',
     TRAINING_ATTENDED = 'TRAINING_ATTENDED',
+    TERRITORY_TRANSFER = 'TERRITORY_TRANSFER',
 }
 
 export enum PaymentStage {
@@ -155,6 +156,17 @@ export enum OrderStatus {
     Shipped = 'Shipped',
     Delivered = 'Delivered',
     Cancelled = 'Cancelled',
+}
+
+export enum TerritoryTransferStatus {
+    Pending = 'Pending',
+    Approved = 'Approved',
+    Rejected = 'Rejected',
+}
+
+export enum TerritoryDisputeStatus {
+    Open = 'Open',
+    Resolved = 'Resolved',
 }
 
 
@@ -610,6 +622,26 @@ export interface Territory {
     tenantId: string;
     administrativeLevel: 'DISTRICT' | 'MANDAL' | 'VILLAGE';
     administrativeCode: string; // e.g., 'H', 'H-01', 'H-01-01'
+    createdAt: string;
+}
+
+export interface TerritoryTransferRequest {
+    id: string;
+    farmerId: string;
+    fromTenantId: string;
+    toTenantId: string;
+    status: TerritoryTransferStatus;
+    requestedById: string;
+    createdAt: string;
+}
+
+export interface TerritoryDispute {
+    id: string;
+    requestingTenantId: string;
+    contestedTenantId: string;
+    administrativeCode: string; // e.g., 'H-01' for a mandal
+    reason: string;
+    status: TerritoryDisputeStatus;
     createdAt: string;
 }
 

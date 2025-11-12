@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 30,
+  version: 32,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -143,6 +143,30 @@ export const mySchema = appSchema({
         { name: 'created_at', type: 'number' },
       ]
     }),
+     tableSchema({
+      name: 'territory_transfer_requests',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'from_tenant_id', type: 'string', isIndexed: true },
+        { name: 'to_tenant_id', type: 'string', isIndexed: true },
+        { name: 'status', type: 'string' },
+        { name: 'requested_by_id', type: 'string', isIndexed: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'sync_status', type: 'string' },
+      ]
+    }),
+    tableSchema({
+      name: 'territory_disputes',
+      columns: [
+        { name: 'requesting_tenant_id', type: 'string', isIndexed: true },
+        { name: 'contested_tenant_id', type: 'string', isIndexed: true },
+        { name: 'administrative_code', type: 'string' },
+        { name: 'reason', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'sync_status', type: 'string' },
+      ]
+    }),
     tableSchema({
         name: 'districts',
         columns: [
@@ -254,6 +278,16 @@ export const mySchema = appSchema({
             { name: 'expertise_tags', type: 'string' },
         ]
     }),
+    tableSchema({
+        name: 'mentorships',
+        columns: [
+            { name: 'mentor_id', type: 'string', isIndexed: true },
+            { name: 'mentee_id', type: 'string', isIndexed: true },
+            { name: 'status', type: 'string' },
+            { name: 'start_date', type: 'string', isOptional: true },
+            { name: 'end_date', type: 'string', isOptional: true },
+        ]
+    }),
      tableSchema({
         name: 'assistance_applications',
         columns: [
@@ -346,6 +380,28 @@ export const mySchema = appSchema({
 
 // --- Model Definitions ---
 
+export class TerritoryTransferRequestModel extends Model {
+    static table = 'territory_transfer_requests';
+    @text('farmer_id') farmerId!: string;
+    @text('from_tenant_id') fromTenantId!: string;
+    @text('to_tenant_id') toTenantId!: string;
+    @text('status') status!: string;
+    @text('requested_by_id') requestedById!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @text('sync_status') syncStatusLocal!: string;
+}
+
+export class TerritoryDisputeModel extends Model {
+    static table = 'territory_disputes';
+    @text('requesting_tenant_id') requestingTenantId!: string;
+    @text('contested_tenant_id') contestedTenantId!: string;
+    @text('administrative_code') administrativeCode!: string;
+    @text('reason') reason!: string;
+    @text('status') status!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @text('sync_status') syncStatusLocal!: string;
+}
+
 export class TerritoryModel extends Model {
     static table = 'territories';
     @text('tenant_id') tenantId!: string;
@@ -363,7 +419,6 @@ export class FarmerModel extends Model {
         assistance_applications: { type: 'has_many', foreignKey: 'farmer_id' },
         harvests: { type: 'has_many', foreignKey: 'farmer_id' },
         withdrawal_accounts: { type: 'has_many', foreignKey: 'farmer_id' },
-        // FIX: Added missing 'resource_distributions' association to resolve 'resourceDistributions' property not found error.
         resource_distributions: { type: 'has_many', foreignKey: 'farmer_id' },
     } as const;
     @text('hap_id') hapId!: string;
@@ -418,7 +473,6 @@ export class FarmerModel extends Model {
     @children('assistance_applications') assistanceApplications!: any;
     @children('harvests') harvests!: any;
     @children('withdrawal_accounts') withdrawalAccounts!: any;
-    // FIX: Added missing @children decorator for 'resourceDistributions' to enable observing the relation.
     @children('resource_distributions') resourceDistributions!: any;
 }
 
@@ -544,6 +598,7 @@ export class HarvestModel extends Model { static table = 'harvests'; @text('farm
 export class QualityAssessmentModel extends Model { static table = 'quality_assessments'; @text('harvest_id') harvestId!: string; @text('assessment_date') assessmentDate!: string; @text('overall_grade') overallGrade!: any; @field('price_adjustment') priceAdjustment!: number; @text('notes') notes?: string; @text('appeal_status') appealStatus!: any; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; @relation('harvests', 'harvest_id') harvest!: any;}
 export class QualityMetricModel extends Model { static table = 'quality_metrics'; }
 export class UserProfileModel extends Model { static table = 'user_profiles'; @text('user_id') userId!: string; @field('is_mentor') isMentor!: boolean; @text('expertise_tags') expertiseTags!: string; }
+export class MentorshipModel extends Model { static table = 'mentorships'; @text('mentor_id') mentorId!: string; @text('mentee_id') menteeId!: string; @text('status') status!: 'pending' | 'active' | 'completed' | 'rejected'; @text('start_date') startDate?: string; @text('end_date') endDate?: string; }
 export class AssistanceApplicationModel extends Model { static table = 'assistance_applications'; @text('farmer_id') farmerId!: string; @text('scheme_id') schemeId!: string; @text('status') status!: any; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class EquipmentModel extends Model { static table = 'equipment'; @text('name') name!: string; @text('type') type!: string; @text('location') location!: string; @text('status') status!: any; @text('last_maintenance_date') lastMaintenanceDate?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class EquipmentMaintenanceLogModel extends Model { static table = 'equipment_maintenance_logs'; @text('equipment_id') equipmentId!: string; @text('maintenance_date') maintenanceDate!: string; @text('description') description!: string; @field('cost') cost!: number; @text('performed_by_id') performedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
@@ -600,8 +655,8 @@ const adapter = new SQLiteAdapter({
 const database = new Database({
   adapter,
   modelClasses: [
-    FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
-    TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel
+    FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
+    TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel
   ],
 });
 
@@ -613,7 +668,6 @@ export class ProcessingStepModel extends Model { static table = 'processing_step
 export class EquipmentLeaseModel extends Model { static table = 'equipment_leases'; @text('equipment_id') equipmentId!: string; @text('farmer_id') farmerId!: string; @text('start_date') startDate!: string; @text('end_date') endDate!: string; @field('cost') cost!: number; @text('payment_status') paymentStatus!: 'Paid' | 'Unpaid'; }
 export class ManualLedgerEntryModel extends Model { static table = 'manual_ledger_entries'; }
 export class WalletModel extends Model { static table = 'wallets'; }
-export class MentorshipModel extends Model { static table = 'mentorships'; }
 export class ProductCategoryModel extends Model { static table = 'product_categories'; @text('name') name!: string; @text('icon_svg') iconSvg?: string; }
 export class ProductModel extends Model { static table = 'products'; }
 export class VendorModel extends Model { static table = 'vendors'; @text('name') name!: string; @text('contact_person') contactPerson!: string; @text('mobile_number') mobileNumber!: string; @text('address') address!: string; @text('status') status!: any; @field('rating') rating!: number; }

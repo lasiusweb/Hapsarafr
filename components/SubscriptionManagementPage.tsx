@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { User } from '../types';
+import { User, Tenant } from '../types';
 import { PRICING_MODEL } from '../data/subscriptionPlans';
 import ConfirmationModal from './ConfirmationModal';
+import { useDatabase } from '../DatabaseContext';
+import { TenantModel } from '../db';
+import { useQuery } from '../hooks/useQuery';
+import { Q } from '@nozbe/watermelondb';
 
 interface SubscriptionManagementPageProps {
     currentUser: User;
@@ -9,12 +13,21 @@ interface SubscriptionManagementPageProps {
 }
 
 const SubscriptionManagementPage: React.FC<SubscriptionManagementPageProps> = ({ currentUser, onBack }) => {
+    const database = useDatabase();
+    const tenantResult = useQuery(React.useMemo(() => database.get<TenantModel>('tenants').query(Q.where('id', currentUser.tenantId)), [database, currentUser.tenantId]));
+    const tenant = tenantResult.length > 0 ? tenantResult[0] : null;
+
     const [showCancelModal, setShowCancelModal] = useState(false);
 
-    const handleCancelSubscription = () => {
-        // In a real application, this would trigger a backend process.
-        // For now, we'll just show an alert and close the modal.
-        alert('Your subscription has been cancelled.');
+    const handleCancelSubscription = async () => {
+        if (tenant) {
+            await database.write(async () => {
+                await tenant.update(t => {
+                    t.subscriptionStatus = 'inactive';
+                });
+            });
+            alert('Your subscription has been cancelled.');
+        }
         setShowCancelModal(false);
     };
 
@@ -45,7 +58,7 @@ const SubscriptionManagementPage: React.FC<SubscriptionManagementPageProps> = ({
                                         <p className="text-lg font-semibold text-green-800">Usage-Based Plan</p>
                                         <p className="text-sm text-green-600">Pay-as-you-go</p>
                                     </div>
-                                    <p className="text-2xl font-bold text-gray-700">Active</p>
+                                    <p className="text-2xl font-bold text-gray-700 capitalize">{tenant?.subscriptionStatus || '...'}</p>
                                 </div>
                                 <div className="mt-4 text-sm text-gray-600">
                                     <p>Your subscription renews automatically. You are billed monthly based on the number of active users and total farmer records in your account.</p>
@@ -62,18 +75,17 @@ const SubscriptionManagementPage: React.FC<SubscriptionManagementPageProps> = ({
                                         <p className="text-sm text-gray-500">Expires 12/2026</p>
                                     </div>
                                 </div>
-                                <button className="mt-4 w-full md:w-auto px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">
-                                    Update Payment Method
-                                </button>
+                                <button className="mt-4 w-full md:w-auto px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Update Payment Method</button>
                             </div>
 
                             {/* Danger Zone Card */}
                             <div className="bg-white rounded-lg shadow-md p-6 border-2 border-red-200">
                                 <h2 className="text-xl font-bold text-red-700 mb-2">Danger Zone</h2>
-                                <p className="text-sm text-gray-600 mb-4">Cancelling your subscription will result in the loss of access to the service at the end of your billing period. Your data will be retained for 30 days before being permanently deleted.</p>
+                                <p className="text-sm text-gray-600 mb-4">Cancelling your subscription will result in the loss of access to premium features at the end of your billing period. Your data will be retained for 30 days before being permanently deleted.</p>
                                 <button 
                                     onClick={() => setShowCancelModal(true)}
                                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold text-sm"
+                                    disabled={tenant?.subscriptionStatus === 'inactive'}
                                 >
                                     Cancel Subscription
                                 </button>

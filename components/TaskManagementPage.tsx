@@ -24,6 +24,7 @@ const TaskCard: React.FC<{
     };
     
     const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
+    const isHighPriority = task.priority === TaskPriority.High;
 
     return (
         <div
@@ -32,7 +33,7 @@ const TaskCard: React.FC<{
             onDragStart={(e) => {
                 e.dataTransfer.setData('taskId', task.id);
             }}
-            className="bg-white p-4 rounded-lg shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow mb-4"
+            className={`bg-white p-4 rounded-lg shadow-sm border-l-4 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow mb-4 ${isHighPriority ? 'border-red-500' : 'border-transparent'}`}
         >
             <div className="flex justify-between items-start">
                 <h4 className="font-bold text-gray-800 pr-4">{task.title}</h4>

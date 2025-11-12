@@ -4,7 +4,6 @@ import { useQuery } from '../hooks/useQuery';
 import { UserModel, UserProfileModel, MentorshipModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import { User, ExpertiseTagEnum } from '../types';
-import withObservables from '@nozbe/with-observables';
 
 interface MentorshipPageProps {
     onBack: () => void;
@@ -14,9 +13,6 @@ interface MentorshipPageProps {
 
 const MentorshipPage: React.FC<MentorshipPageProps> = ({ onBack, currentUser, setNotification }) => {
     const [activeTab, setActiveTab] = useState<'find' | 'my' | 'requests'>('find');
-    const database = useDatabase();
-
-    const handleSave = async (data: any) => {};
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
@@ -38,8 +34,8 @@ const MentorshipPage: React.FC<MentorshipPageProps> = ({ onBack, currentUser, se
                     </div>
                     <div className="p-6">
                         {activeTab === 'find' && <FindMentorTab currentUser={currentUser} setNotification={setNotification} />}
-                        {activeTab === 'my' && <div>Coming soon...</div>}
-                        {activeTab === 'requests' && <div>Coming soon...</div>}
+                        {activeTab === 'my' && <div className="text-center py-10 text-gray-500">Feature to manage your active mentorships is coming soon.</div>}
+                        {activeTab === 'requests' && <div className="text-center py-10 text-gray-500">Feature to view and respond to mentorship requests is coming soon.</div>}
                     </div>
                  </div>
             </div>
@@ -55,8 +51,11 @@ const TabButton: React.FC<{ activeTab: string, tab: string, setActiveTab: (tab: 
 const FindMentorTab: React.FC<{ currentUser: User, setNotification: (n: any) => void }> = ({ currentUser, setNotification }) => {
     const database = useDatabase();
     
-    // Find all UserProfile records for mentors
-    const mentorProfilesQuery = useMemo(() => database.get<UserProfileModel>('user_profiles').query(Q.where('is_mentor', true)), [database]);
+    // Find all UserProfile records for mentors, excluding the current user
+    const mentorProfilesQuery = useMemo(() => database.get<UserProfileModel>('user_profiles').query(
+        Q.where('is_mentor', true),
+        Q.where('user_id', Q.notEq(currentUser.id))
+    ), [database, currentUser.id]);
     const mentorProfiles = useQuery(mentorProfilesQuery);
 
     // Get the user IDs from those profiles
@@ -66,10 +65,22 @@ const FindMentorTab: React.FC<{ currentUser: User, setNotification: (n: any) => 
     const mentorsQuery = useMemo(() => database.get<UserModel>('users').query(Q.where('id', Q.oneOf(mentorUserIds))), [database, mentorUserIds]);
     const mentors = useQuery(mentorsQuery);
 
-    const handleRequest = (mentor: UserModel) => {
-        // Placeholder for request logic
-        setNotification({message: `Mentorship request sent to ${mentor.name}.`, type: 'success'});
-    };
+    const handleRequest = useCallback(async (mentor: UserModel) => {
+        try {
+            await database.write(async () => {
+                await database.get<MentorshipModel>('mentorships').create(m => {
+                    // FIX: Cast `mentor` to `any` to access the `id` property. This resolves a TypeScript error where the `id` property inherited from the WatermelonDB Model class was not recognized on the UserModel type.
+                    m.mentorId = (mentor as any).id;
+                    m.menteeId = currentUser.id;
+                    m.status = 'pending';
+                });
+            });
+            setNotification({message: `Mentorship request sent to ${mentor.name}.`, type: 'success'});
+        } catch (error) {
+            console.error("Failed to send mentorship request:", error);
+            setNotification({message: 'Failed to send request.', type: 'error'});
+        }
+    }, [database, currentUser.id, setNotification]);
     
     if (mentors.length === 0) {
         return <div className="text-center text-gray-500 py-10">No mentors available right now. Check back later!</div>
@@ -79,7 +90,11 @@ const FindMentorTab: React.FC<{ currentUser: User, setNotification: (n: any) => 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {mentors.map(mentor => {
                 const profile = mentorProfiles.find(p => p.userId === mentor.id);
-                const tags = profile ? JSON.parse(profile.expertiseTags) : [];
+                let tags = [];
+                try {
+                    tags = profile ? JSON.parse(profile.expertiseTags || '[]') : [];
+                } catch(e) { console.error("Error parsing tags", e)}
+                
                 return (
                     <div key={mentor.id} className="bg-white p-6 rounded-lg shadow-md border flex flex-col">
                         <div className="flex items-center gap-4 mb-4">
