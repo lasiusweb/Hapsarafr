@@ -154,6 +154,7 @@ const TenantManagementPage: React.FC<{ onBack: () => void; }> = ({ onBack }) => 
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organization</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Farmers</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Farmers</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subscription Status</th>
                                 </tr>
@@ -166,6 +167,7 @@ const TenantManagementPage: React.FC<{ onBack: () => void; }> = ({ onBack }) => 
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tenant.name}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{stats.userCount}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{stats.farmerCount}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tenant.maxFarmers || 'N/A'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tenant.createdAt).toLocaleDateString()}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                 <select value={tenant.subscriptionStatus} onChange={(e) => handleStatusChange(tenant, e.target.value as any)} className="p-1 border border-gray-300 rounded-md bg-white">
@@ -178,7 +180,7 @@ const TenantManagementPage: React.FC<{ onBack: () => void; }> = ({ onBack }) => 
                                     );
                                 })}
                                 {tenants.length === 0 && (
-                                    <tr><td colSpan={5} className="text-center py-10 text-gray-500">No tenants have been onboarded yet.</td></tr>
+                                    <tr><td colSpan={6} className="text-center py-10 text-gray-500">No tenants have been onboarded yet.</td></tr>
                                 )}
                             </tbody>
                         </table>

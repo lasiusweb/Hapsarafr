@@ -56,6 +56,8 @@ export enum ActivityType {
     QUALITY_APPEAL_STATUS_CHANGED = 'QUALITY_APPEAL_STATUS_CHANGED',
     TRAINING_ATTENDED = 'TRAINING_ATTENDED',
     TERRITORY_TRANSFER = 'TERRITORY_TRANSFER',
+    DEALER_CONSENT_GRANTED = 'DEALER_CONSENT_GRANTED',
+    DEALER_CONSENT_REVOKED = 'DEALER_CONSENT_REVOKED',
 }
 
 export enum PaymentStage {
@@ -301,6 +303,7 @@ export interface Tenant {
     id: string;
     name: string;
     subscriptionStatus: 'trial' | 'active' | 'inactive';
+    maxFarmers?: number;
 }
 
 export interface Resource {
@@ -643,6 +646,17 @@ export interface TerritoryDispute {
     reason: string;
     status: TerritoryDisputeStatus;
     createdAt: string;
+}
+
+export interface FarmerDealerConsent {
+    id: string;
+    farmerId: string;
+    tenantId: string; // The dealer/vendor tenant
+    grantedAt: string;
+    isActive: boolean;
+    grantedBy: 'FARMER' | 'OFFICER';
+    createdAt: string;
+    syncStatus: 'synced' | 'pending';
 }
 
 // --- Community Forum Interfaces ---

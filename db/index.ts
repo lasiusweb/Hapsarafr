@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 32,
+  version: 33,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -132,6 +132,7 @@ export const mySchema = appSchema({
             { name: 'name', type: 'string' },
             { name: 'subscription_status', type: 'string' },
             { name: 'created_at', type: 'number' },
+            { name: 'max_farmers', type: 'number', isOptional: true },
         ]
     }),
     tableSchema({
@@ -163,6 +164,18 @@ export const mySchema = appSchema({
         { name: 'administrative_code', type: 'string' },
         { name: 'reason', type: 'string' },
         { name: 'status', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'sync_status', type: 'string' },
+      ]
+    }),
+    tableSchema({
+      name: 'farmer_dealer_consents',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'granted_at', type: 'number' },
+        { name: 'is_active', type: 'boolean' },
+        { name: 'granted_by', type: 'string' },
         { name: 'created_at', type: 'number' },
         { name: 'sync_status', type: 'string' },
       ]
@@ -380,6 +393,21 @@ export const mySchema = appSchema({
 
 // --- Model Definitions ---
 
+export class FarmerDealerConsentModel extends Model {
+    static table = 'farmer_dealer_consents';
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+    } as const;
+    @text('farmer_id') farmerId!: string;
+    @text('tenant_id') tenantId!: string;
+    @readonly @date('granted_at') grantedAt!: Date;
+    @field('is_active') isActive!: boolean;
+    @text('granted_by') grantedBy!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @text('sync_status') syncStatusLocal!: string;
+    @relation('farmers', 'farmer_id') farmer!: any;
+}
+
 export class TerritoryTransferRequestModel extends Model {
     static table = 'territory_transfer_requests';
     @text('farmer_id') farmerId!: string;
@@ -420,6 +448,7 @@ export class FarmerModel extends Model {
         harvests: { type: 'has_many', foreignKey: 'farmer_id' },
         withdrawal_accounts: { type: 'has_many', foreignKey: 'farmer_id' },
         resource_distributions: { type: 'has_many', foreignKey: 'farmer_id' },
+        farmer_dealer_consents: { type: 'has_many', foreignKey: 'farmer_id' },
     } as const;
     @text('hap_id') hapId!: string;
     @text('full_name') fullName!: string;
@@ -474,6 +503,7 @@ export class FarmerModel extends Model {
     @children('harvests') harvests!: any;
     @children('withdrawal_accounts') withdrawalAccounts!: any;
     @children('resource_distributions') resourceDistributions!: any;
+    @children('farmer_dealer_consents') consents!: any;
 }
 
 export class PlotModel extends Model {
@@ -546,6 +576,7 @@ export class TenantModel extends Model {
     @text('name') name!: string;
     @text('subscription_status') subscriptionStatus!: string;
     @readonly @date('created_at') createdAt!: Date;
+    @field('max_farmers') maxFarmers?: number;
 }
 
 export class DistrictModel extends Model {
@@ -656,7 +687,7 @@ const database = new Database({
   adapter,
   modelClasses: [
     FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
-    TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel
+    TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel
   ],
 });
 

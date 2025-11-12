@@ -7,7 +7,7 @@ import { useDatabase } from './DatabaseContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { initializeSupabase, getSupabase } from './lib/supabase';
 import { synchronize } from './lib/sync';
-import { FarmerModel, UserModel, GroupModel, TenantModel, PlotModel } from './db';
+import { FarmerModel, UserModel, GroupModel, TenantModel, PlotModel, TerritoryModel } from './db';
 import { Farmer, User, Group, Permission, Tenant, Plot } from './types';
 import { farmerModelToPlain } from './lib/utils';
 
@@ -210,11 +210,12 @@ const EnhancedApp = withObservables(['currentUser'], ({
         allUsers: database.get('users').query().observe(),
         allGroups: database.get('groups').query().observe(),
         allTenants: database.get('tenants').query().observe(),
+        allTerritories: database.get('territories').query().observe(),
         currentUser: currentUserObservable,
     };
 })((props: any) => {
     const { 
-        view, viewParam, navigate, allFarmers, allUsers, allGroups, allTenants, currentUser, 
+        view, viewParam, navigate, allFarmers, allUsers, allGroups, allTenants, allTerritories, currentUser, 
         isOnline, isSyncing, lastSync, setNotification,
         newlyAddedFarmerId, onHighlightComplete, onRegisterFarmer
     } = props;
@@ -250,7 +251,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'profile': return <ProfilePage currentUser={currentActiveUser} groups={allGroups} onBack={() => navigate('dashboard')} onSave={async() => {}} setNotification={setNotification}/>;
             case 'help': return <HelpPage onBack={() => navigate('dashboard')} />;
             case 'print-queue': return <PrintQueuePage queuedFarmerIds={[]} users={allUsers} onRemove={() => {}} onClear={() => {}} onBack={() => navigate('farmer-directory')} />;
-            case 'farmer-details': return <FarmerDetailsPage farmerId={viewParam!} users={allUsers} currentUser={currentActiveUser} onBack={() => navigate('farmer-directory')} permissions={userPermissions} setNotification={setNotification} />;
+            case 'farmer-details': return <FarmerDetailsPage farmerId={viewParam!} users={allUsers} currentUser={currentActiveUser} onBack={() => navigate('farmer-directory')} permissions={userPermissions} setNotification={setNotification} allTenants={allTenants} allTerritories={allTerritories} />;
             case 'content-manager': return <ContentManagerPage supabase={getSupabase()} currentContent={{}} onContentSave={() => {}} onBack={() => navigate('admin')} />;
             case 'geo-management': return <GeoManagementPage onBack={() => navigate('admin')} />;
             case 'schema-manager': return <SchemaManagerPage onBack={() => navigate('admin')} />;
