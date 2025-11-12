@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 29,
+  version: 30,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -363,6 +363,8 @@ export class FarmerModel extends Model {
         assistance_applications: { type: 'has_many', foreignKey: 'farmer_id' },
         harvests: { type: 'has_many', foreignKey: 'farmer_id' },
         withdrawal_accounts: { type: 'has_many', foreignKey: 'farmer_id' },
+        // FIX: Added missing 'resource_distributions' association to resolve 'resourceDistributions' property not found error.
+        resource_distributions: { type: 'has_many', foreignKey: 'farmer_id' },
     } as const;
     @text('hap_id') hapId!: string;
     @text('full_name') fullName!: string;
@@ -416,6 +418,8 @@ export class FarmerModel extends Model {
     @children('assistance_applications') assistanceApplications!: any;
     @children('harvests') harvests!: any;
     @children('withdrawal_accounts') withdrawalAccounts!: any;
+    // FIX: Added missing @children decorator for 'resourceDistributions' to enable observing the relation.
+    @children('resource_distributions') resourceDistributions!: any;
 }
 
 export class PlotModel extends Model {
@@ -488,12 +492,6 @@ export class TenantModel extends Model {
     @text('name') name!: string;
     @text('subscription_status') subscriptionStatus!: string;
     @readonly @date('created_at') createdAt!: Date;
-
-    @writer async updateSubscriptionStatus(status: 'active' | 'trial' | 'inactive') {
-        await this.update(record => {
-            record.subscriptionStatus = status;
-        });
-    }
 }
 
 export class DistrictModel extends Model {

@@ -120,7 +120,12 @@ const TenantManagementPage: React.FC<{ onBack: () => void; }> = ({ onBack }) => 
     };
 
     const handleStatusChange = async (tenant: TenantModel, newStatus: 'active' | 'trial' | 'inactive') => {
-        await tenant.updateSubscriptionStatus(newStatus);
+        // FIX: Moved update logic from the model to here to resolve a compile error.
+        await database.write(async () => {
+            await tenant.update(t => {
+                t.subscriptionStatus = newStatus;
+            });
+        });
     };
 
     return (

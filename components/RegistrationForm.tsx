@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 // FIX: Import from the newly created types.ts file
-import { Farmer, FarmerStatus, PlantationMethod, PlantType, Plot } from '../types';
+import { Farmer, FarmerStatus, PlantationMethod, PlantType, Plot, User } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import AiReviewModal from './AiReviewModal';
 import { getGeoName } from '../lib/utils';
 import { useDebounce } from '../hooks/useDebounce';
 import { useDatabase } from '../DatabaseContext';
 // FIX: Import from the newly created db/index.ts file
-import { DistrictModel, MandalModel, VillageModel } from '../db';
+import { DistrictModel, MandalModel, VillageModel, TerritoryModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 // @ts-ignore
 import { useObservables } from '@nozbe/watermelondb/react';
@@ -22,6 +22,7 @@ interface RegistrationFormProps {
     mode?: 'create' | 'edit';
     existingFarmer?: Farmer | null;
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
+    currentUser: User;
 }
 
 const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -141,7 +142,7 @@ type FormLabelProps = { children?: React.ReactNode; required?: boolean };
 const FormLabel = ({ children, required = false }: FormLabelProps) => <label className="font-medium text-gray-700">{children}{required && <span className="text-red-500 ml-1">*</span>}</label>;
 
 // FIX: Changed from const assignment to a default exported function to fix module resolution issues.
-export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null, setNotification }: RegistrationFormProps) {
+export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null, setNotification, currentUser }: RegistrationFormProps) {
     const database = useDatabase();
     const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -162,6 +163,7 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
 
     // --- Dynamic Geo Data ---
     const districts = useQuery(useMemo(() => database.get<DistrictModel>('districts').query(Q.sortBy('name')), [database]));
+    const claimedTerritories = useQuery(useMemo(() => database.get<TerritoryModel>('territories').query(Q.where('tenant_id', currentUser.tenantId)), [database, currentUser.tenantId]));
     
     const [selectedDistrict, setSelectedDistrict] = useState<DistrictModel | null>(null);
     const [selectedMandal, setSelectedMandal] = useState<MandalModel | null>(null);
