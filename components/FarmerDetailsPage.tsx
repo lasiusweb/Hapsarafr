@@ -927,7 +927,7 @@ const FieldServiceTab = withObservables(
             </div>
             <div className="space-y-3">
                 {visitRequests.map(req => (
-                    <div key={req.id} onClick={() => onOpenDetailsModal(req)} className="p-4 border rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer">
+                    <div key={req.id} onClick={() => onOpenDetailsModal(req)} className={`p-4 border rounded-lg hover:bg-gray-100 cursor-pointer ${req.status === VisitRequestStatus.Completed ? 'bg-green-50' : 'bg-gray-50'}`}>
                         <div className="flex justify-between items-start">
                             <div>
                                 <p className="font-semibold text-gray-800">{req.reason}</p>
@@ -1170,8 +1170,8 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     req.preferredDate = data.preferredDate;
                     req.notes = data.notes;
                     req.assigneeId = data.assigneeId;
-                    req.status = data.status;
-                    req.scheduledDate = data.scheduledDate;
+                    req.status = data.assigneeId ? VisitRequestStatus.Scheduled : VisitRequestStatus.Pending;
+                    req.scheduledDate = data.assigneeId ? new Date().toISOString() : undefined;
                     req.createdBy = currentUser.id;
                     req.tenantId = currentUser.tenantId;
                     req.syncStatusLocal = 'pending';
@@ -1215,6 +1215,26 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
         setSelectedVisitRequest(null);
         setNotification({ message: 'Visit cancelled.', type: 'success' });
     };
+
+    const handleCompleteVisit = async (request: VisitRequestModel, updates: any) => {
+        await database.write(async () => {
+            await (request as any).update(r => {
+                Object.assign(r, updates);
+                r.status = VisitRequestStatus.Completed;
+                r.syncStatusLocal = 'pending';
+            });
+            await database.get<ActivityLogModel>('activity_logs').create(log => {
+                log.farmerId = request.farmerId;
+                log.activityType = ActivityType.VISIT_COMPLETED;
+                log.description = `Visit for "${request.reason}" completed.`;
+                log.createdBy = currentUser.id;
+                log.tenantId = currentUser.tenantId;
+            });
+        });
+        setSelectedVisitRequest(null);
+        setNotification({ message: 'Visit marked as complete.', type: 'success' });
+    };
+
 
     const getUserName = (userId?: string) => users.find(u => u.id === userId)?.name || 'System';
     const canEdit = permissions.has(Permission.CAN_EDIT_FARMER);
@@ -1292,6 +1312,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                     onClose={() => setSelectedVisitRequest(null)}
                     onSave={handleSaveVisitDetails}
                     onCancelVisit={handleCancelVisit}
+                    onCompleteVisit={handleCompleteVisit}
                     request={selectedVisitRequest}
                     farmer={farmer}
                     users={users}

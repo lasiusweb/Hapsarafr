@@ -9,18 +9,20 @@ interface VisitDetailsModalProps {
     onClose: () => void;
     onSave: (request: VisitRequestModel, updates: { assigneeId?: string; scheduledDate?: string; resolutionNotes?: string; status?: VisitRequestStatus }) => Promise<void>;
     onCancelVisit: (request: VisitRequestModel) => Promise<void>;
+    onCompleteVisit: (request: VisitRequestModel, updates: { resolutionNotes: string; [key: string]: any }) => Promise<void>;
     request: VisitRequestModel | null;
     farmer?: FarmerModel;
     users: User[];
 }
 
-const VisitDetailsModal: React.FC<VisitDetailsModalProps> = ({ isOpen, onClose, onSave, onCancelVisit, request, farmer, users }) => {
+const VisitDetailsModal: React.FC<VisitDetailsModalProps> = ({ isOpen, onClose, onSave, onCancelVisit, onCompleteVisit, request, farmer, users }) => {
     const [formState, setFormState] = useState({
         assigneeId: '',
         scheduledDate: '',
         resolutionNotes: '',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
 
     useEffect(() => {
         if (request) {
@@ -29,15 +31,17 @@ const VisitDetailsModal: React.FC<VisitDetailsModalProps> = ({ isOpen, onClose, 
                 scheduledDate: request.scheduledDate ? new Date(request.scheduledDate).toISOString().split('T')[0] : '',
                 resolutionNotes: request.resolutionNotes || '',
             });
+            setError(''); // Reset error when a new request is opened
         }
     }, [request]);
 
     const userOptions = useMemo(() => users.map(u => ({ value: u.id, label: u.name })), [users]);
     const createdByUser = useMemo(() => users.find(u => u.id === request?.createdBy)?.name || 'Unknown', [users, request]);
+    const isCompleted = request?.status === VisitRequestStatus.Completed;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!request) return;
+        if (!request || isCompleted) return;
 
         setIsSubmitting(true);
         try {
@@ -59,6 +63,22 @@ const VisitDetailsModal: React.FC<VisitDetailsModalProps> = ({ isOpen, onClose, 
             await onCancelVisit(request);
         }
     }
+    
+    const handleComplete = async () => {
+        if (!request) return;
+        if (!formState.resolutionNotes.trim()) {
+            setError('Resolution notes are required to complete a visit.');
+            return;
+        }
+        setError('');
+        setIsSubmitting(true);
+        try {
+            await onCompleteVisit(request, formState);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
 
     if (!isOpen || !request) return null;
 
@@ -87,11 +107,11 @@ const VisitDetailsModal: React.FC<VisitDetailsModalProps> = ({ isOpen, onClose, 
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Assign To</label>
-                            <CustomSelect value={formState.assigneeId} onChange={v => setFormState(s => ({...s, assigneeId: v}))} options={userOptions} placeholder="Unassigned" />
+                            <CustomSelect value={formState.assigneeId} onChange={v => setFormState(s => ({...s, assigneeId: v}))} options={userOptions} placeholder="Unassigned" disabled={isCompleted} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Scheduled Date</label>
-                            <input type="date" value={formState.scheduledDate} onChange={e => setFormState(s => ({...s, scheduledDate: e.target.value}))} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                            <input type="date" value={formState.scheduledDate} onChange={e => setFormState(s => ({...s, scheduledDate: e.target.value}))} className="mt-1 w-full p-2 border border-gray-300 rounded-md disabled:bg-gray-100" disabled={isCompleted} />
                         </div>
                     </div>
                     
@@ -102,17 +122,27 @@ const VisitDetailsModal: React.FC<VisitDetailsModalProps> = ({ isOpen, onClose, 
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Resolution Notes</label>
-                        <textarea value={formState.resolutionNotes} onChange={e => setFormState(s => ({...s, resolutionNotes: e.target.value}))} rows={4} className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="Enter details about the visit outcome here..."></textarea>
+                        <textarea value={formState.resolutionNotes} onChange={e => setFormState(s => ({...s, resolutionNotes: e.target.value}))} rows={4} className="mt-1 w-full p-2 border border-gray-300 rounded-md disabled:bg-gray-100" placeholder="Enter details about the visit outcome here..." disabled={isCompleted}></textarea>
+                        {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
                     </div>
 
                 </div>
                 <div className="bg-gray-100 p-4 flex justify-between items-center rounded-b-lg">
-                    <button type="button" onClick={handleCancelVisit} className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 font-semibold text-sm">Cancel Visit</button>
+                    {!isCompleted ? (
+                         <button type="button" onClick={handleCancelVisit} className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 font-semibold text-sm">Cancel Visit</button>
+                    ) : <div />}
                     <div className="flex gap-4">
-                        <button type="button" onClick={onClose} disabled={isSubmitting} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Close</button>
-                        <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold disabled:bg-green-300">
-                            {isSubmitting ? 'Saving...' : 'Save Changes'}
+                        <button type="button" onClick={onClose} disabled={isSubmitting} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
+                            {isCompleted ? 'Close' : 'Cancel'}
                         </button>
+                        {!isCompleted && (
+                             <>
+                                <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-white border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 font-semibold disabled:bg-gray-200">Save Changes</button>
+                                <button type="button" onClick={handleComplete} disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold disabled:bg-green-300">
+                                    {isSubmitting ? 'Saving...' : 'Complete Visit'}
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             </form>
