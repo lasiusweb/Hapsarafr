@@ -367,9 +367,9 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
             const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
 
             if (mode === 'create') {
-                farmerData = { ...formData, id: '', asoId, createdAt: now, updatedAt: now };
+                farmerData = { ...formData, id: '', asoId, createdAt: now, updatedAt: now, createdBy: currentUser.id, tenantId: currentUser.tenantId };
             } else {
-                farmerData = { ...existingFarmer!, ...formData, updatedAt: now };
+                farmerData = { ...existingFarmer!, ...formData, updatedAt: now, updatedBy: currentUser.id };
             }
             setPreparedFarmerData(farmerData);
         } else {

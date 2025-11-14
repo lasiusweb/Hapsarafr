@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 33,
+  version: 36,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -176,6 +176,8 @@ export const mySchema = appSchema({
         { name: 'granted_at', type: 'number' },
         { name: 'is_active', type: 'boolean' },
         { name: 'granted_by', type: 'string' },
+        { name: 'expires_at', type: 'number', isOptional: true },
+        { name: 'permissions_json', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'sync_status', type: 'string' },
       ]
@@ -346,6 +348,28 @@ export const mySchema = appSchema({
         ]
     }),
     tableSchema({
+        name: 'wallets',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'balance', type: 'number' },
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'wallet_transactions',
+        columns: [
+            { name: 'wallet_id', type: 'string', isIndexed: true },
+            { name: 'transaction_type', type: 'string' },
+            { name: 'amount', type: 'number' },
+            { name: 'source', type: 'string' },
+            { name: 'description', type: 'string' },
+            { name: 'status', type: 'string' },
+            { name: 'metadata_json', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
         name: 'training_modules',
         columns: [
             { name: 'title', type: 'string' },
@@ -388,6 +412,65 @@ export const mySchema = appSchema({
             { name: 'sync_status', type: 'string' },
         ]
     }),
+    tableSchema({
+        name: 'forum_posts',
+        columns: [
+            { name: 'title', type: 'string' },
+            { name: 'content', type: 'string' },
+            { name: 'author_id', type: 'string', isIndexed: true },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+            { name: 'tags_json', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'forum_answers',
+        columns: [
+            { name: 'post_id', type: 'string', isIndexed: true },
+            { name: 'content', type: 'string' },
+            { name: 'author_id', type: 'string', isIndexed: true },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'forum_answer_votes',
+        columns: [
+            { name: 'answer_id', type: 'string', isIndexed: true },
+            { name: 'voter_id', type: 'string', isIndexed: true },
+            { name: 'created_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'forum_content_flags',
+        columns: [
+            { name: 'content_id', type: 'string', isIndexed: true },
+            { name: 'content_type', type: 'string' },
+            { name: 'flagged_by_id', type: 'string', isIndexed: true },
+            { name: 'reason', type: 'string' },
+            { name: 'notes', type: 'string', isOptional: true },
+            { name: 'status', type: 'string' },
+            { name: 'moderator_notes', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+      name: 'agronomic_alerts',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'plot_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'alert_type', type: 'string' },
+        { name: 'severity', type: 'string' },
+        { name: 'message', type: 'string' },
+        { name: 'recommendation', type: 'string' },
+        { name: 'is_read', type: 'boolean' },
+        { name: 'created_at', type: 'number' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'sync_status', type: 'string' },
+      ]
+    }),
   ]
 }));
 
@@ -404,6 +487,8 @@ export class FarmerDealerConsentModel extends Model {
     @readonly @date('granted_at') grantedAt!: Date;
     @field('is_active') isActive!: boolean;
     @text('granted_by') grantedBy!: string;
+    @field('expires_at') expiresAt?: number;
+    @text('permissions_json') permissionsJson?: string;
     @readonly @date('created_at') createdAt!: Date;
     @text('sync_status') syncStatusLocal!: string;
     @relation('farmers', 'farmer_id') farmer!: any;
@@ -454,6 +539,8 @@ export class FarmerModel extends Model {
         withdrawal_accounts: { type: 'has_many', foreignKey: 'farmer_id' },
         resource_distributions: { type: 'has_many', foreignKey: 'farmer_id' },
         farmer_dealer_consents: { type: 'has_many', foreignKey: 'farmer_id' },
+        agronomic_alerts: { type: 'has_many', foreignKey: 'farmer_id' },
+        wallet: { type: 'has_many', foreignKey: 'farmer_id' },
     } as const;
     @text('hap_id') hapId!: string;
     @text('full_name') fullName!: string;
@@ -509,6 +596,8 @@ export class FarmerModel extends Model {
     @children('withdrawal_accounts') withdrawalAccounts!: any;
     @children('resource_distributions') resourceDistributions!: any;
     @children('farmer_dealer_consents') consents!: any;
+    @children('agronomic_alerts') alerts!: any;
+    @children('wallet') wallet!: any;
 }
 
 export class PlotModel extends Model {
@@ -638,6 +727,104 @@ export class ResourceDistributionModel extends Model {
     @text('tenant_id') tenantId!: string;
 }
 
+export class ForumPostModel extends Model {
+    static table = 'forum_posts';
+    @text('title') title!: string;
+    @text('content') content!: string;
+    @text('author_id') authorId!: string;
+    @text('tenant_id') tenantId!: string;
+    @text('tags_json') tagsJson?: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @relation('users', 'author_id') author!: any;
+    @children('forum_answers') answers!: any;
+}
+
+export class ForumAnswerModel extends Model {
+    static table = 'forum_answers';
+    @text('post_id') postId!: string;
+    @text('content') content!: string;
+    @text('author_id') authorId!: string;
+    @text('tenant_id') tenantId!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @relation('forum_posts', 'post_id') post!: any;
+    @relation('users', 'author_id') author!: any;
+    @children('forum_answer_votes') votes!: any;
+}
+
+export class ForumAnswerVoteModel extends Model {
+    static table = 'forum_answer_votes';
+    @text('answer_id') answerId!: string;
+    @text('voter_id') voterId!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @relation('forum_answers', 'answer_id') answer!: any;
+    @relation('users', 'voter_id') voter!: any;
+}
+
+export class ForumContentFlagModel extends Model {
+    static table = 'forum_content_flags';
+    @text('content_id') contentId!: string;
+    @text('content_type') contentType!: string;
+    @text('flagged_by_id') flaggedById!: string;
+    @text('reason') reason!: string;
+    @text('notes') notes?: string;
+    @text('status') status!: string;
+    @text('moderator_notes') moderatorNotes?: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @relation('users', 'flagged_by_id') flagger!: any;
+}
+
+export class AgronomicAlertModel extends Model {
+    static table = 'agronomic_alerts';
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+    } as const;
+    @text('farmer_id') farmerId!: string;
+    @text('plot_id') plotId?: string;
+    @text('alert_type') alertType!: string;
+    @text('severity') severity!: string;
+    @text('message') message!: string;
+    @text('recommendation') recommendation!: string;
+    @field('is_read') isRead!: boolean;
+    @readonly @date('created_at') createdAt!: Date;
+    @text('tenant_id') tenantId!: string;
+    @text('sync_status') syncStatusLocal!: string;
+}
+
+export class WalletModel extends Model {
+    static table = 'wallets';
+    readonly id!: string;
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+        wallet_transactions: { type: 'has_many', foreignKey: 'wallet_id' },
+    } as const;
+    @text('farmer_id') farmerId!: string;
+    @field('balance') balance!: number;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @relation('farmers', 'farmer_id') farmer!: any;
+    @children('wallet_transactions') transactions!: any;
+}
+
+export class WalletTransactionModel extends Model {
+    static table = 'wallet_transactions';
+    readonly id!: string;
+    static associations = {
+        wallets: { type: 'belongs_to', key: 'wallet_id' },
+    } as const;
+    @text('wallet_id') walletId!: string;
+    @text('transaction_type') transactionType!: 'credit' | 'debit';
+    @field('amount') amount!: number;
+    @text('source') source!: string;
+    @text('description') description!: string;
+    @text('status') status!: string;
+    @text('metadata_json') metadataJson?: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @relation('wallets', 'wallet_id') wallet!: any;
+}
+
+
 export class TaskModel extends Model { static table = 'tasks'; readonly id!: string; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; readonly id!: string; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
 export class PlantingRecordModel extends Model { static table = 'planting_records'; readonly id!: string; @text('plot_id') plotId!: string; @text('seed_source') seedSource!: string; @text('planting_date') plantingDate!: string; @text('genetic_variety') geneticVariety!: string; @field('number_of_plants') numberOfPlants!: number; @text('care_instructions_url') careInstructionsUrl?: string; @text('qr_code_data') qrCodeData?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
@@ -705,7 +892,9 @@ const database = new Database({
   adapter,
   modelClasses: [
     FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
-    TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel
+    TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel,
+    ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel,
+    WalletModel, WalletTransactionModel,
   ],
 });
 
@@ -716,7 +905,6 @@ export class ProcessingBatchModel extends Model { static table = 'processing_bat
 export class ProcessingStepModel extends Model { static table = 'processing_steps'; readonly id!: string; @text('batch_id') batchId!: string; @text('step_name') stepName!: string; @text('start_date') startDate!: string; @text('operator_id') operatorId!: string; @text('equipment_id') equipmentId?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
 export class EquipmentLeaseModel extends Model { static table = 'equipment_leases'; readonly id!: string; @text('equipment_id') equipmentId!: string; @text('farmer_id') farmerId!: string; @text('start_date') startDate!: string; @text('end_date') endDate!: string; @field('cost') cost!: number; @text('payment_status') paymentStatus!: 'Paid' | 'Unpaid'; }
 export class ManualLedgerEntryModel extends Model { static table = 'manual_ledger_entries'; readonly id!: string; }
-export class WalletModel extends Model { static table = 'wallets'; readonly id!: string; }
 export class ProductCategoryModel extends Model { static table = 'product_categories'; readonly id!: string; @text('name') name!: string; @text('icon_svg') iconSvg?: string; }
 export class ProductModel extends Model { static table = 'products'; readonly id!: string; }
 export class VendorModel extends Model { static table = 'vendors'; readonly id!: string; @text('name') name!: string; @text('contact_person') contactPerson!: string; @text('mobile_number') mobileNumber!: string; @text('address') address!: string; @text('status') status!: any; @field('rating') rating!: number; }

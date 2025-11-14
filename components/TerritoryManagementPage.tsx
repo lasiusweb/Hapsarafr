@@ -4,6 +4,7 @@ import { useQuery } from '../hooks/useQuery';
 import { DistrictModel, MandalModel, TerritoryModel, TenantModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import { User } from '../types';
+import DisputeModal from './DisputeModal';
 
 interface TerritoryManagementPageProps {
     onBack: () => void;
@@ -20,6 +21,7 @@ const TerritoryManagementPage: React.FC<TerritoryManagementPageProps> = ({ onBac
     const allTerritories = useQuery(useMemo(() => database.get<TerritoryModel>('territories').query(), [database]));
 
     const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
+    const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
 
     useEffect(() => {
         if (!selectedDistrictId && allDistricts.length > 0) {
@@ -60,9 +62,9 @@ const TerritoryManagementPage: React.FC<TerritoryManagementPageProps> = ({ onBac
                     Q.where('tenant_id', currentUser.tenantId)
                 ).fetch();
                 
-                for (const territory of myTerritoriesInMandal) {
-                    await territory.destroyPermanently();
-                }
+                // WatermelonDB requires us to mark records as deleted one by one
+                const deletions = myTerritoriesInMandal.map(territory => territory.prepareDestroyPermanently());
+                await database.batch(...deletions);
             }
         });
     }, [database, currentUser.tenantId]);
@@ -73,11 +75,14 @@ const TerritoryManagementPage: React.FC<TerritoryManagementPageProps> = ({ onBac
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Service Area Definition</h1>
-                        <p className="text-gray-500">Define your organization's operational areas.</p>
+                        <p className="text-gray-500">Define your organization's operational areas by claiming mandals.</p>
                     </div>
-                    <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        Back to Admin
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setIsDisputeModalOpen(true)} className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 font-semibold text-sm">Raise a Dispute</button>
+                        <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
+                            Back to Admin
+                        </button>
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-lg shadow-xl p-6">
@@ -115,7 +120,7 @@ const TerritoryManagementPage: React.FC<TerritoryManagementPageProps> = ({ onBac
                                                         Serviced by: {servicingTenantIds.map(id => tenantMap.get(id) || 'Unknown').join(', ')}
                                                     </p>
                                                 ) : (
-                                                    <p className="text-xs text-gray-400 mt-1">No dealers currently servicing this area.</p>
+                                                    <p className="text-xs text-green-600 mt-1">No dealers currently servicing this area.</p>
                                                 )}
                                             </div>
                                             <div>
@@ -133,6 +138,16 @@ const TerritoryManagementPage: React.FC<TerritoryManagementPageProps> = ({ onBac
                     </div>
                 </div>
             </div>
+            {isDisputeModalOpen && (
+                <DisputeModal 
+                    onClose={() => setIsDisputeModalOpen(false)} 
+                    onSave={() => {
+                        setIsDisputeModalOpen(false);
+                        // Optionally, add a notification here
+                    }}
+                    currentUser={currentUser}
+                />
+            )}
         </div>
     );
 };

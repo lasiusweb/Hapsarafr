@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy } from 'react';
 import { useDatabase } from '../DatabaseContext';
-import { FarmerModel, TenantModel, UserModel } from '../db';
+import { FarmerModel, TenantModel, UserModel, FarmerDealerConsentModel } from '../db';
 import { Farmer, User, Tenant, Filters, Permission, FarmerStatus } from '../types';
 import withObservables from '@nozbe/with-observables';
 import { Q } from '@nozbe/watermelondb';
@@ -21,6 +21,7 @@ import { exportToExcel, exportToCsv } from '../lib/export';
 import { useDebounce } from '../hooks/useDebounce';
 declare const jspdf: any;
 declare const html2canvas: any;
+declare const window: any; // for rxjs from CDN
 
 interface FarmerDirectoryPageProps {
     users: User[];
@@ -283,16 +284,46 @@ const FarmerDirectoryPage: React.FC<FarmerDirectoryPageProps & { farmers: Farmer
     )
 };
 
-const enhance = withObservables([], ({ currentUser }: FarmerDirectoryPageProps) => {
+const enhance = withObservables(['currentUser'], ({ currentUser }: { currentUser: User }) => {
     const database = useDatabase();
-    const isSuperAdmin = currentUser.groupId === 'group-super-admin';
-    const query = isSuperAdmin
-        ? database.get<FarmerModel>('farmers').query(Q.where('sync_status', Q.notEq('pending_delete')))
-        : database.get<FarmerModel>('farmers').query(Q.where('sync_status', Q.notEq('pending_delete')), Q.where('tenant_id', currentUser.tenantId));
+    const { of } = window.rxjs;
+    const { map, switchMap } = window.rxjs.operators;
 
+    const isSuperAdmin = currentUser.groupId === 'group-super-admin';
+    
+    // For super admin, fetch all farmers directly.
+    if (isSuperAdmin) {
+        return {
+            farmers: database.get<FarmerModel>('farmers').query(Q.where('sync_status', Q.notEq('pending_delete'))).observe(),
+        };
+    }
+
+    // For regular users, fetch based on consent.
+    // 1. Get an observable of farmer IDs from the consent table.
+    const farmerIds$ = database.get<FarmerDealerConsentModel>('farmer_dealer_consents').query(
+        Q.where('tenant_id', currentUser.tenantId),
+        Q.where('is_active', true)
+    ).observe().pipe(
+        map(consents => consents.map(c => c.farmerId))
+    );
+
+    // 2. Use the farmer IDs to get an observable of farmer records.
+    const farmers$ = farmerIds$.pipe(
+        switchMap((ids: string[]) => {
+            if (ids.length === 0) {
+                return of([]); // Return an observable of an empty array if no consents.
+            }
+            return database.get<FarmerModel>('farmers').query(
+                Q.where('id', Q.oneOf(ids)),
+                Q.where('sync_status', Q.notEq('pending_delete'))
+            ).observe();
+        })
+    );
+    
     return {
-        farmers: query.observe(),
+        farmers: farmers$,
     };
 });
 
-export default enhance(FarmerDirectoryPage);
+
+export default enhance(FarmerDirectoryPage as React.FC<FarmerDirectoryPageProps>);

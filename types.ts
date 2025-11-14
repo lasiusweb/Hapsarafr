@@ -123,6 +123,15 @@ export enum EntrySource {
     MarketplaceSale = 'Marketplace Sale',
     ManualCredit = 'Manual Credit',
     ManualDebit = 'Manual Debit',
+    P2PTransferIn = 'P2P Transfer In',
+    P2PTransferOut = 'P2P Transfer Out',
+    Withdrawal = 'Withdrawal',
+}
+
+export enum TransactionStatus {
+    Pending = 'Pending',
+    Completed = 'Completed',
+    Failed = 'Failed',
 }
 
 export enum WithdrawalAccountType {
@@ -169,6 +178,13 @@ export enum TerritoryTransferStatus {
 export enum TerritoryDisputeStatus {
     Open = 'Open',
     Resolved = 'Resolved',
+}
+
+export enum AlertType {
+    NutrientDeficiency = 'Nutrient Deficiency',
+    PestWarning = 'Pest Warning',
+    IrrigationAlert = 'Irrigation Alert',
+    YieldForecast = 'Yield Forecast',
 }
 
 
@@ -458,6 +474,19 @@ export interface Wallet {
     id: string;
     farmerId: string;
     balance: number;
+    updatedAt: string;
+}
+
+export interface WalletTransaction {
+    id: string;
+    walletId: string;
+    transactionType: 'credit' | 'debit';
+    amount: number;
+    source: EntrySource;
+    description: string;
+    status: TransactionStatus;
+    metadata?: any;
+    createdAt: string;
 }
 
 export interface WithdrawalAccount {
@@ -654,6 +683,8 @@ export interface FarmerDealerConsent {
     tenantId: string; // The dealer/vendor tenant
     grantedAt: string;
     isActive: boolean;
+    expiresAt?: string;
+    permissions?: any; // For JSON field
     grantedBy: 'FARMER' | 'OFFICER';
     createdAt: string;
     syncStatus: 'synced' | 'pending';
@@ -667,6 +698,7 @@ export interface ForumPost {
     content: string;
     author_id: string;
     tenant_id: string;
+    tags?: string[];
     author?: Profile;
     answer_count?: number;
 }
@@ -679,6 +711,26 @@ export interface ForumAnswer {
     author_id: string;
     tenant_id: string;
     author?: Profile;
+    vote_count?: number;
+}
+
+export interface ForumAnswerVote {
+    id: string;
+    answer_id: string;
+    voter_id: string;
+    created_at: string;
+}
+
+export interface ForumContentFlag {
+    id: string;
+    content_id: string; // post or answer id
+    content_type: 'post' | 'answer';
+    flagged_by_id: string;
+    reason: 'spam' | 'harmful' | 'harassment' | 'other';
+    notes?: string;
+    status: 'pending' | 'resolved';
+    moderator_notes?: string;
+    created_at: string;
 }
 
 export interface QualityStandard {
@@ -686,5 +738,18 @@ export interface QualityStandard {
     metricName: string;
     description: string;
     measurementUnit: 'Yes/No' | '%' | 'count';
+    tenantId: string;
+}
+
+export interface AgronomicAlert {
+    id: string;
+    farmerId: string;
+    plotId?: string;
+    alertType: AlertType;
+    severity: 'Low' | 'Medium' | 'High';
+    message: string;
+    recommendation: string;
+    is_read: boolean;
+    createdAt: string;
     tenantId: string;
 }
