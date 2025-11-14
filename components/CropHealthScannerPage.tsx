@@ -1,11 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Chat } from '@google/genai';
+import { User } from '../types';
+import { useDatabase } from '../DatabaseContext';
+import { BillableEvent } from '../types';
+import { deductCredits } from '../lib/billing';
 
 interface CropHealthScannerPageProps {
     onBack: () => void;
+    currentUser: User;
+    setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
-const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack }) => {
+const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, currentUser, setNotification }) => {
+    const database = useDatabase();
     const [image, setImage] = useState<string | null>(null);
     const [imageMimeType, setImageMimeType] = useState<string | null>(null);
     const [analysis, setAnalysis] = useState<string>('');
@@ -49,12 +56,33 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack })
             setError("Gemini API key is not configured. An administrator needs to set the API_KEY environment variable.");
             return;
         }
-
+        
         setIsLoading(true);
         setAnalysis('');
         setError(null);
         setChat(null);
         setConversation([]);
+
+        // Hapsara Valorem: Credit deduction logic
+        const billingResult = await deductCredits(
+            database,
+            currentUser.tenantId,
+            BillableEvent.CROP_HEALTH_SCAN_COMPLETED,
+            { imageMimeType }
+        );
+
+        if ('error' in billingResult) {
+            setError(billingResult.error);
+            setNotification({ message: billingResult.error, type: 'error' });
+            setIsLoading(false);
+            return;
+        }
+        
+        if (billingResult.usedFreeTier) {
+            setNotification({ message: 'Free scan used.', type: 'info' });
+        } else {
+            setNotification({ message: '1 credit deducted.', type: 'info' });
+        }
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });

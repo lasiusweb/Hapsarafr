@@ -1,5 +1,4 @@
 import React from 'react';
-import { PRICING_MODEL } from '../data/subscriptionPlans';
 // FIX: Import from the newly created types.ts file
 import { AppContent } from '../types';
 import { sanitizeHTML } from '../lib/utils';
@@ -123,50 +122,65 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch, appContent }) => {
         <section id="pricing" className="py-20 bg-white">
             <div className="container mx-auto px-6">
                 <div className="text-center mb-12">
-                    <h3 className="text-3xl font-bold text-gray-800">Simple, Transparent Pricing</h3>
-                    <p className="text-gray-600 mt-2">Pay only for what you use. No hidden fees, no complex tiers.</p>
+                    <h3 className="text-3xl font-bold text-gray-800">A Radically Fair Pricing Model</h3>
+                    <p className="text-gray-600 mt-2 max-w-2xl mx-auto">Welcome to Hapsara Valorem. Instead of subscriptions, you pay only for the value you use with a simple credit system. 1 Credit = ₹1.</p>
                 </div>
                 
-                <div className="max-w-2xl mx-auto bg-gray-50/50 border border-gray-200 rounded-lg p-8">
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
-                        <div className="text-center">
-                            <p className="text-5xl font-extrabold text-gray-900">₹{PRICING_MODEL.PER_USER_COST_INR}</p>
-                            <p className="text-lg font-semibold text-gray-800">Per User</p>
-                            <p className="text-gray-500">per month</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-5xl font-extrabold text-gray-900">₹{PRICING_MODEL.PER_RECORD_COST_INR}</p>
-                            <p className="text-lg font-semibold text-gray-800">Per Farmer Record</p>
-                            <p className="text-gray-500">per month</p>
-                        </div>
+                <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8 items-center">
+                    <div className="bg-gray-50/50 border border-gray-200 rounded-lg p-8">
+                         <h4 className="text-xl font-semibold text-center mb-6 text-gray-800">Pay-Per-Value Services</h4>
+                         <p className="text-center text-gray-600 mb-6">Every premium feature has a clear, transparent cost. Use our services as you need them, and see the ROI in real-time. Every tenant receives a generous free tier for all services each month!</p>
+                         <div className="space-y-4">
+                            <div className="flex justify-between items-center bg-white p-4 rounded-lg border">
+                                <div>
+                                    <p className="font-semibold text-gray-800">AI Crop Health Scan</p>
+                                    <p className="text-sm text-gray-500">50 free scans per month</p>
+                                </div>
+                                <p className="font-bold text-green-600">1 Credit</p>
+                            </div>
+                             <div className="flex justify-between items-center bg-white p-4 rounded-lg border">
+                                <div>
+                                    <p className="font-semibold text-gray-800">AI Yield Prediction</p>
+                                    <p className="text-sm text-gray-500">Coming Soon</p>
+                                </div>
+                                <p className="font-bold text-green-600">2 Credits / plot</p>
+                            </div>
+                             <div className="flex justify-between items-center bg-white p-4 rounded-lg border">
+                                <div>
+                                    <p className="font-semibold text-gray-800">Advanced Financial Report</p>
+                                    <p className="text-sm text-gray-500">Coming Soon</p>
+                                </div>
+                                <p className="font-bold text-green-600">50 Credits</p>
+                            </div>
+                         </div>
                     </div>
-                    <div className="text-center mt-8 pt-6 border-t border-gray-200">
-                        <p className="text-gray-600">
-                            Your total monthly cost is a simple sum of both charges. <br />
-                            For example: 10 users and 500 records would be (10 × ₹99) + (500 × ₹1) = ₹1490 per month.
-                        </p>
+
+                    <div className="bg-white p-8 rounded-lg shadow-lg border">
+                        <h4 className="text-xl font-semibold text-center mb-6 text-gray-800">Get Started with Credits</h4>
+                        <p className="text-center text-gray-600 mb-6">Purchase credits in bundles. Your balance never expires, and you can top up anytime.</p>
+                         <ul className="space-y-4">
+                            <li className="flex items-start">
+                                <svg className="h-6 w-6 text-green-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                <span className="ml-3 text-sm text-gray-600"><strong>Radical Transparency:</strong> Real-time balance and consumption logging.</span>
+                            </li>
+                            <li className="flex items-start">
+                                <svg className="h-6 w-6 text-green-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                <span className="ml-3 text-sm text-gray-600"><strong>No Vendor Lock-in:</strong> Export your usage data anytime.</span>
+                            </li>
+                             <li className="flex items-start">
+                                <svg className="h-6 w-6 text-green-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                <span className="ml-3 text-sm text-gray-600"><strong>Automated Top-ups:</strong> Prevent service interruptions.</span>
+                            </li>
+                        </ul>
+                         <button
+                            onClick={onLaunch}
+                            className="mt-8 block w-full py-3 px-4 text-lg font-semibold text-center rounded-md bg-green-600 text-white hover:bg-green-700 transition"
+                        >
+                            Start with a Free Tier
+                        </button>
                     </div>
                 </div>
 
-                <div className="max-w-md mx-auto mt-10 bg-white p-8 rounded-lg shadow-lg border">
-                    <h4 className="text-xl font-semibold text-center mb-6 text-gray-800">All Features Included</h4>
-                     <ul className="space-y-4">
-                        {PRICING_MODEL.FEATURES.map((feature) => (
-                            <li key={feature} className="flex items-start">
-                                <svg className="h-6 w-6 text-green-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span className="ml-3 text-sm text-gray-600">{feature}</span>
-                            </li>
-                        ))}
-                    </ul>
-                     <button
-                        onClick={onLaunch}
-                        className="mt-8 block w-full py-3 px-4 text-lg font-semibold text-center rounded-md bg-green-600 text-white hover:bg-green-700 transition"
-                    >
-                        Get Started
-                    </button>
-                </div>
             </div>
         </section>
 

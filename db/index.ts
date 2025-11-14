@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 38,
+  version: 40,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -133,6 +133,7 @@ export const mySchema = appSchema({
             { name: 'subscription_status', type: 'string' },
             { name: 'created_at', type: 'number' },
             { name: 'max_farmers', type: 'number', isOptional: true },
+            { name: 'credit_balance', type: 'number' },
         ]
     }),
     tableSchema({
@@ -558,6 +559,94 @@ export const mySchema = appSchema({
         { name: 'price_per_unit', type: 'number' },
       ]
     }),
+     // --- New Multi-Crop Portfolio Schemas ---
+    tableSchema({
+      name: 'crops',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'icon_url', type: 'string', isOptional: true },
+        { name: 'is_perennial', type: 'boolean' },
+        { name: 'default_unit', type: 'string' },
+        { name: 'verification_status', type: 'string' },
+        { name: 'tenant_id', type: 'string', isOptional: true, isIndexed: true },
+      ]
+    }),
+    tableSchema({
+      name: 'farm_plots',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'acreage', type: 'number' },
+        { name: 'name', type: 'string' },
+        { name: 'geojson', type: 'string', isOptional: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ]
+    }),
+    tableSchema({
+      name: 'crop_assignments',
+      columns: [
+        { name: 'farm_plot_id', type: 'string', isIndexed: true },
+        { name: 'crop_id', type: 'string', isIndexed: true },
+        { name: 'season', type: 'string' },
+        { name: 'year', type: 'number' },
+        { name: 'is_primary_crop', type: 'boolean' },
+        { name: 'created_at', type: 'number' },
+      ]
+    }),
+    tableSchema({
+      name: 'harvest_logs',
+      columns: [
+        { name: 'crop_assignment_id', type: 'string', isIndexed: true },
+        { name: 'harvest_date', type: 'string' },
+        { name: 'quantity', type: 'number' },
+        { name: 'unit', type: 'string' },
+        { name: 'notes', type: 'string', isOptional: true },
+        { name: 'created_by', type: 'string' },
+        { name: 'created_at', type: 'number' },
+      ]
+    }),
+    tableSchema({
+        name: 'data_sharing_consents',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'shared_with_tenant_id', type: 'string', isIndexed: true },
+            { name: 'data_type', type: 'string' },
+            { name: 'is_active', type: 'boolean' },
+            { name: 'permissions_json', type: 'string' },
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+        ]
+    }),
+    // --- New Hapsara Valorem Schemas ---
+    tableSchema({
+      name: 'credit_ledger',
+      columns: [
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'transaction_type', type: 'string' },
+        { name: 'amount', type: 'number' },
+        { name: 'service_event_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'created_at', type: 'number' },
+      ]
+    }),
+    tableSchema({
+      name: 'service_consumption_logs',
+      columns: [
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'service_name', type: 'string' },
+        { name: 'credit_cost', type: 'number' },
+        { name: 'event_timestamp', type: 'number' },
+        { name: 'metadata_json', type: 'string', isOptional: true },
+      ]
+    }),
+    tableSchema({
+      name: 'free_tier_usages',
+      columns: [
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'service_name', type: 'string' },
+        { name: 'period', type: 'string' }, // e.g., "2024-07"
+        { name: 'usage_count', type: 'number' },
+      ]
+    }),
   ]
 }));
 
@@ -629,6 +718,7 @@ export class FarmerModel extends Model {
         agronomic_alerts: { type: 'has_many', foreignKey: 'farmer_id' },
         wallet: { type: 'has_many', foreignKey: 'farmer_id' },
         visit_requests: { type: 'has_many', foreignKey: 'farmer_id' },
+        farm_plots: { type: 'has_many', foreignKey: 'farmer_id' },
     } as const;
     @text('hap_id') hapId!: string;
     @text('full_name') fullName!: string;
@@ -687,6 +777,7 @@ export class FarmerModel extends Model {
     @children('agronomic_alerts') alerts!: any;
     @children('wallet') wallet!: any;
     @children('visit_requests') visitRequests!: any;
+    @children('farm_plots') farmPlots!: any;
 }
 
 export class PlotModel extends Model {
@@ -766,6 +857,7 @@ export class TenantModel extends Model {
     @text('subscription_status') subscriptionStatus!: string;
     @readonly @date('created_at') createdAt!: Date;
     @field('max_farmers') maxFarmers?: number;
+    @field('credit_balance') creditBalance!: number;
 }
 
 export class DistrictModel extends Model {
@@ -1028,6 +1120,83 @@ export class OrderItemModel extends Model {
     @relation('vendor_products', 'vendor_product_id') vendorProduct!: any;
 }
 
+// --- New Multi-Crop Portfolio Models ---
+
+export class CropModel extends Model {
+    static table = 'crops';
+    readonly id!: string;
+    @text('name') name!: string;
+    @text('icon_url') iconUrl?: string;
+    @field('is_perennial') isPerennial!: boolean;
+    @text('default_unit') defaultUnit!: string;
+    @text('verification_status') verificationStatus!: string;
+    @text('tenant_id') tenantId?: string;
+}
+
+export class FarmPlotModel extends Model {
+    static table = 'farm_plots';
+    readonly id!: string;
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+        crop_assignments: { type: 'has_many', foreignKey: 'farm_plot_id' },
+    } as const;
+    @text('farmer_id') farmerId!: string;
+    @field('acreage') acreage!: number;
+    @text('name') name!: string;
+    @text('geojson') geojson?: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @relation('farmers', 'farmer_id') farmer!: any;
+    @children('crop_assignments') cropAssignments!: any;
+}
+
+export class CropAssignmentModel extends Model {
+    static table = 'crop_assignments';
+    readonly id!: string;
+    static associations = {
+        farm_plots: { type: 'belongs_to', key: 'farm_plot_id' },
+        crops: { type: 'belongs_to', key: 'crop_id' },
+        harvest_logs: { type: 'has_many', foreignKey: 'crop_assignment_id' },
+    } as const;
+    @text('farm_plot_id') farmPlotId!: string;
+    @text('crop_id') cropId!: string;
+    @text('season') season!: string;
+    @field('year') year!: number;
+    @field('is_primary_crop') isPrimaryCrop!: boolean;
+    @readonly @date('created_at') createdAt!: Date;
+    @relation('farm_plots', 'farm_plot_id') farmPlot!: any;
+    @relation('crops', 'crop_id') crop!: any;
+    @children('harvest_logs') harvestLogs!: any;
+}
+
+export class HarvestLogModel extends Model {
+    static table = 'harvest_logs';
+    readonly id!: string;
+    static associations = {
+        crop_assignments: { type: 'belongs_to', key: 'crop_assignment_id' },
+    } as const;
+    @text('crop_assignment_id') cropAssignmentId!: string;
+    @text('harvest_date') harvestDate!: string;
+    @field('quantity') quantity!: number;
+    @text('unit') unit!: string;
+    @text('notes') notes?: string;
+    @text('created_by') createdBy!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @relation('crop_assignments', 'crop_assignment_id') cropAssignment!: any;
+}
+
+export class DataSharingConsentModel extends Model {
+    static table = 'data_sharing_consents';
+    readonly id!: string;
+    @text('farmer_id') farmerId!: string;
+    @text('shared_with_tenant_id') sharedWithTenantId!: string;
+    @text('data_type') dataType!: string;
+    @field('is_active') isActive!: boolean;
+    @text('permissions_json') permissionsJson!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+}
+
 
 export class TaskModel extends Model { static table = 'tasks'; readonly id!: string; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; readonly id!: string; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
@@ -1081,6 +1250,11 @@ export class EventRsvpModel extends Model {
     @relation('users', 'user_id') user!: any;
 }
 
+// --- New Hapsara Valorem Models ---
+export class CreditLedgerEntryModel extends Model { static table = 'credit_ledger'; readonly id!: string; @text('tenant_id') tenantId!: string; @text('transaction_type') transactionType!: string; @field('amount') amount!: number; @text('service_event_id') serviceEventId?: string; @readonly @date('created_at') createdAt!: Date;}
+export class ServiceConsumptionLogModel extends Model { static table = 'service_consumption_logs'; readonly id!: string; @text('tenant_id') tenantId!: string; @text('service_name') serviceName!: string; @field('credit_cost') creditCost!: number; @readonly @date('event_timestamp') eventTimestamp!: Date; @text('metadata_json') metadataJson?: string; }
+export class FreeTierUsageModel extends Model { static table = 'free_tier_usages'; readonly id!: string; @text('tenant_id') tenantId!: string; @text('service_name') serviceName!: string; @text('period') period!: string; @field('usage_count') usageCount!: number; }
+
 
 // --- Database Setup ---
 const adapter = new SQLiteAdapter({
@@ -1100,7 +1274,11 @@ const database = new Database({
     ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel,
     WalletModel, WalletTransactionModel, VisitRequestModel,
     // Marketplace Models
-    ProductCategoryModel, ProductModel, VendorModel, VendorProductModel, OrderModel, OrderItemModel
+    ProductCategoryModel, ProductModel, VendorModel, VendorProductModel, OrderModel, OrderItemModel,
+    // Multi-crop Models
+    CropModel, FarmPlotModel, CropAssignmentModel, HarvestLogModel, DataSharingConsentModel,
+    // Hapsara Valorem Models
+    CreditLedgerEntryModel, ServiceConsumptionLogModel, FreeTierUsageModel,
   ],
 });
 

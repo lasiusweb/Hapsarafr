@@ -1,13 +1,23 @@
+import { BillableEvent } from '../types';
+
+export const SERVICE_PRICING: Record<BillableEvent, number> = {
+    [BillableEvent.CROP_HEALTH_SCAN_COMPLETED]: 1, // 1 credit per scan
+};
+
+export const FREE_TIER_LIMITS: Record<BillableEvent, number> = {
+    [BillableEvent.CROP_HEALTH_SCAN_COMPLETED]: 50, // 50 free scans per month
+};
+
+// FIX: Add missing PRICING_MODEL export used by SubscriptionManagementPage.
 export const PRICING_MODEL = {
-    PER_USER_COST_INR: 99,
-    PER_RECORD_COST_INR: 1,
+    PER_USER_COST_INR: 250,
+    PER_RECORD_COST_INR: 0.5,
     FEATURES: [
-        'No limit on Farmer Records',
-        'No limit on Users',
-        'Offline Access & Real-time Sync',
-        'Data Export (Excel, CSV)',
-        'Bulk Data Import',
-        'Advanced User & Group Management',
-        'Priority Email Support'
-    ]
+        'Offline-First Data Sync',
+        'Unlimited Farmer Records',
+        'Unlimited Users',
+        'Bulk Data Import/Export',
+        'Role-Based Access Control',
+        'Standard Reporting',
+    ],
 };

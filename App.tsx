@@ -261,7 +261,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'id-verification': return <IdVerificationPage allFarmers={plainFarmers} onBack={() => navigate('dashboard')} />;
             case 'yield-prediction': return <YieldPredictionPage allFarmers={plainFarmers} onBack={() => navigate('dashboard')} />;
             case 'satellite-analysis': return <SatelliteAnalysisPage onBack={() => navigate('dashboard')} />;
-            case 'crop-health': return <CropHealthScannerPage onBack={() => navigate('dashboard')} />;
+            case 'crop-health': return <CropHealthScannerPage onBack={() => navigate('dashboard')} currentUser={currentActiveUser} setNotification={setNotification} />;
             case 'admin': return <AdminPage users={plainUsers} groups={plainGroups} currentUser={currentActiveUser} onBack={() => navigate('dashboard')} onSaveUsers={async() => {}} onSaveGroups={async() => {}} onNavigate={navigate} setNotification={setNotification} />;
             case 'profile': return <ProfilePage currentUser={currentActiveUser} groups={plainGroups} onBack={() => navigate('dashboard')} onSave={async() => {}} setNotification={setNotification}/>;
             case 'farmer-advisor': return <FarmerAdvisorPage onBack={() => navigate('dashboard')} currentUser={currentActiveUser} onNavigate={navigate} />;
@@ -272,7 +272,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'schema-manager': return <SchemaManagerPage onBack={() => navigate('admin')} />;
             case 'tenant-management': return <TenantManagementPage onBack={() => navigate('admin')} />;
             case 'territory-management': return <TerritoryManagementPage onBack={() => navigate('admin')} currentUser={currentActiveUser} />;
-            case 'billing': return <BillingPage currentUser={currentActiveUser} userCount={plainUsers.length} recordCount={plainFarmers.length} onBack={() => navigate('dashboard')} onNavigate={navigate} />;
+            case 'billing': return <BillingPage currentTenant={currentTenant} currentUser={currentActiveUser} onBack={() => navigate('dashboard')} onNavigate={navigate} setNotification={setNotification} />;
             case 'subscription-management': return <SubscriptionManagementPage currentUser={currentActiveUser} onBack={() => navigate('billing')} />;
             case 'usage-analytics': return <UsageAnalyticsPage currentUser={currentActiveUser} supabase={getSupabase()} onBack={() => navigate('dashboard')} />;
             case 'tasks': return <TaskManagementPage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;

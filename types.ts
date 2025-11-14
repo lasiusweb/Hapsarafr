@@ -62,6 +62,11 @@ export enum ActivityType {
     VISIT_SCHEDULED = 'VISIT_SCHEDULED',
     VISIT_COMPLETED = 'VISIT_COMPLETED',
     VISIT_CANCELLED = 'VISIT_CANCELLED',
+    // New activity types for multi-crop
+    FARM_PLOT_CREATED = 'FARM_PLOT_CREATED',
+    CROP_ASSIGNED = 'CROP_ASSIGNED',
+    HARVEST_LOGGED = 'HARVEST_LOGGED',
+    DATA_CONSENT_UPDATED = 'DATA_CONSENT_UPDATED',
 }
 
 export enum PaymentStage {
@@ -198,6 +203,36 @@ export enum VisitRequestStatus {
     Cancelled = 'Cancelled',
 }
 
+export enum Season {
+    Kharif = 'Kharif',
+    Rabi = 'Rabi',
+    Summer = 'Summer',
+    Annual = 'Annual',
+}
+
+export enum CropVerificationStatus {
+    Verified = 'Verified',
+    Pending = 'Pending',
+    Rejected = 'Rejected',
+}
+
+export enum DataSharingDataType {
+    PERSONAL_INFO = 'PERSONAL_INFO',
+    FINANCIALS = 'FINANCIALS',
+    CROP_DATA = 'CROP_DATA',
+}
+
+export enum BillableEvent {
+    CROP_HEALTH_SCAN_COMPLETED = 'CROP_HEALTH_SCAN_COMPLETED',
+}
+
+export enum LedgerTransactionType {
+    PURCHASE = 'purchase',
+    CONSUMPTION = 'consumption',
+    REFUND = 'refund',
+    ADJUSTMENT = 'adjustment',
+}
+
 
 // --- Interfaces ---
 
@@ -331,6 +366,7 @@ export interface Tenant {
     name: string;
     subscriptionStatus: 'trial' | 'active' | 'inactive';
     maxFarmers?: number;
+    credit_balance: number;
 }
 
 export interface Resource {
@@ -780,4 +816,87 @@ export interface AgronomicAlert {
     is_read: boolean;
     createdAt: string;
     tenantId: string;
+}
+
+
+// --- New Interfaces for Multi-Crop Portfolio ---
+
+export interface Crop {
+    id: string;
+    name: string;
+    icon_url?: string;
+    is_perennial: boolean;
+    default_unit: string; // e.g., 'kg', 'quintal', 'ton'
+    verification_status: CropVerificationStatus;
+    tenant_id?: string; // Can be null for common crops
+}
+
+export interface FarmPlot {
+    id: string;
+    farmer_id: string;
+    acreage: number;
+    name: string; // e.g., "North Field"
+    geojson?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CropAssignment {
+    id: string;
+    farm_plot_id: string;
+    crop_id: string;
+    season: Season;
+    year: number;
+    is_primary_crop: boolean;
+    created_at: string;
+}
+
+export interface HarvestLog {
+    id: string;
+    crop_assignment_id: string;
+    harvest_date: string;
+    quantity: number;
+    unit: string;
+    notes?: string;
+    created_by: string;
+    created_at: string;
+}
+
+export interface DataSharingConsent {
+    id: string;
+    farmer_id: string;
+    shared_with_tenant_id: string;
+    data_type: DataSharingDataType;
+    is_active: boolean;
+    permissions_json: string; // JSON with detailed settings
+    created_at: string;
+    updated_at: string;
+}
+
+// --- New Interfaces for Hapsara Valorem (Billing) ---
+
+export interface CreditLedgerEntry {
+    id: string;
+    tenant_id: string;
+    transaction_type: LedgerTransactionType;
+    amount: number; // Positive for purchases/refunds, negative for consumption
+    service_event_id?: string;
+    created_at: string;
+}
+
+export interface ServiceConsumptionLog {
+    id: string;
+    tenant_id: string;
+    service_name: BillableEvent;
+    credit_cost: number;
+    event_timestamp: string;
+    metadata_json?: string;
+}
+
+export interface FreeTierUsage {
+    id: string;
+    tenant_id: string;
+    service_name: BillableEvent;
+    period: string; // e.g., "2024-07"
+    usage_count: number;
 }
