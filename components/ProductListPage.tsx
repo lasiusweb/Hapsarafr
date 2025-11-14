@@ -29,7 +29,11 @@ const ProductCard: React.FC<{ item: EnrichedVendorProduct }> = ({ item }) => {
     return (
         <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
             <div className="h-48 bg-gray-200 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l-1.586-1.586a2 2 0 010-2.828L14 8" /></svg>
+                {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l-1.586-1.586a2 2 0 010-2.828L14 8" /></svg>
+                )}
             </div>
             <div className="p-4 flex-1 flex flex-col">
                 <h3 className="font-bold text-lg text-gray-800">{product.name}</h3>
@@ -61,6 +65,8 @@ const ProductListPage: React.FC<ProductListPageProps> = ({ categoryId, onBack })
 
     // Data enrichment
     const enrichedProducts = useMemo(() => {
+        if (products.length === 0 || vendors.length === 0 || vendorProducts.length === 0) return [];
+        
         const productMap = new Map(products.map(p => [p.id, p._raw as unknown as Product]));
         const vendorMap = new Map(vendors.map(v => [v.id, v._raw as unknown as Vendor]));
         

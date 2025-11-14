@@ -24,12 +24,10 @@ const VendorStatusBadge: React.FC<{ status: VendorStatus }> = ({ status }) => {
 const VendorManagementPage: React.FC<VendorManagementPageProps> = ({ onBack, currentUser, setNotification }) => {
     const database = useDatabase();
     
-    // Data query for vendors in the current tenant
+    // Data query for vendors.
     const vendors = useQuery(useMemo(() => 
-        database.get<VendorModel>('vendors').query(
-            Q.where('tenant_id', currentUser.tenantId)
-        ), 
-    [database, currentUser.tenantId]));
+        database.get<VendorModel>('vendors').query(Q.sortBy('name', Q.asc)), 
+    [database]));
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
@@ -40,7 +38,7 @@ const VendorManagementPage: React.FC<VendorManagementPageProps> = ({ onBack, cur
                         <p className="text-gray-500">Onboard, verify, and manage marketplace vendors.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        Back to Admin Panel
+                        &larr; Back to Admin Panel
                     </button>
                 </div>
 

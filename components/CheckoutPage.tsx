@@ -17,7 +17,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
     const database = useDatabase();
 
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
-    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Digital'>('Digital');
+    const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Digital'>('Cash');
     const [deliveryAddress, setDeliveryAddress] = useState('');
     const [deliveryInstructions, setDeliveryInstructions] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,9 +39,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
 
         setIsSubmitting(true);
         try {
-            let newOrderId = '';
+            let newOrder: OrderModel | null = null;
             await database.write(async () => {
-                const newOrder = await database.get<OrderModel>('orders').create(order => {
+                newOrder = await database.get<OrderModel>('orders').create(order => {
                     order.farmerId = selectedFarmerId;
                     order.orderDate = new Date().toISOString();
                     order.status = OrderStatus.Pending;
@@ -49,24 +49,23 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
                     order.paymentMethod = paymentMethod;
                     order.deliveryAddress = deliveryAddress;
                     order.deliveryInstructions = deliveryInstructions;
-                    // In a real scenario, these would be populated after API calls
-                    // order.paymentTransactionId = '...';
-                    // order.logisticsPartnerId = '...';
+                    order.syncStatusLocal = 'pending';
                 });
 
-                newOrderId = newOrder.id;
-
-                for (const item of items) {
-                    await database.get<OrderItemModel>('order_items').create(orderItem => {
-                        orderItem.orderId = newOrder.id;
+                const orderItemsPromises = items.map(item => 
+                    database.get<OrderItemModel>('order_items').create(orderItem => {
+                        orderItem.orderId = newOrder!.id;
                         orderItem.vendorProductId = item.vendorProduct.id;
                         orderItem.quantity = item.quantity;
                         orderItem.pricePerUnit = item.vendorProduct.price;
-                    });
-                }
+                    })
+                );
+                await Promise.all(orderItemsPromises);
             });
             clearCart();
-            onOrderPlaced(newOrderId);
+            if (newOrder) {
+                onOrderPlaced(newOrder.id);
+            }
         } catch (error) {
             console.error('Failed to place order:', error);
             alert('An error occurred while placing the order.');
@@ -106,8 +105,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
                                 <h2 className="text-xl font-bold text-gray-800 mb-4">2. Payment Method</h2>
                                 <div className="space-y-3">
                                     <label className={`flex items-center p-3 border rounded-lg cursor-pointer ${paymentMethod === 'Digital' ? 'bg-green-50 border-green-200' : ''}`}>
-                                        <input type="radio" name="paymentMethod" value="Digital" checked={paymentMethod === 'Digital'} onChange={() => setPaymentMethod('Digital')} className="h-4 w-4 text-green-600" />
-                                        <span className="ml-3 font-semibold">Digital Payment</span>
+                                        <input type="radio" name="paymentMethod" value="Digital" checked={paymentMethod === 'Digital'} onChange={() => setPaymentMethod('Digital')} className="h-4 w-4 text-green-600" disabled />
+                                        <span className="ml-3 font-semibold text-gray-500">Digital Payment (via Farmer Wallet)</span>
                                         <span className="ml-auto text-xs bg-gray-200 px-2 py-0.5 rounded-full">Coming Soon</span>
                                     </label>
                                     <label className={`flex items-center p-3 border rounded-lg cursor-pointer ${paymentMethod === 'Cash' ? 'bg-green-50 border-green-200' : ''}`}>

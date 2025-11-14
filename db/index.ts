@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 37,
+  version: 38,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -489,6 +489,75 @@ export const mySchema = appSchema({
         { name: 'sync_status', type: 'string' },
       ]
     }),
+    // --- Marketplace Schemas ---
+    tableSchema({
+      name: 'product_categories',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'icon_svg', type: 'string', isOptional: true },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+      ]
+    }),
+    tableSchema({
+      name: 'products',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'description', type: 'string' },
+        { name: 'image_url', type: 'string', isOptional: true },
+        { name: 'category_id', type: 'string', isIndexed: true },
+        { name: 'is_quality_verified', type: 'boolean' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'created_at', type: 'number' },
+      ]
+    }),
+    tableSchema({
+      name: 'vendors',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'contact_person', type: 'string' },
+        { name: 'mobile_number', type: 'string' },
+        { name: 'address', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'rating', type: 'number' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'created_at', type: 'number' },
+      ]
+    }),
+    tableSchema({
+      name: 'vendor_products',
+      columns: [
+        { name: 'vendor_id', type: 'string', isIndexed: true },
+        { name: 'product_id', type: 'string', isIndexed: true },
+        { name: 'price', type: 'number' },
+        { name: 'stock_quantity', type: 'number' },
+        { name: 'unit', type: 'string' },
+        { name: 'updated_at', type: 'number' },
+      ]
+    }),
+    tableSchema({
+      name: 'orders',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'order_date', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'total_amount', type: 'number' },
+        { name: 'payment_method', type: 'string' },
+        { name: 'delivery_address', type: 'string' },
+        { name: 'delivery_instructions', type: 'string', isOptional: true },
+        { name: 'payment_transaction_id', type: 'string', isOptional: true },
+        { name: 'logistics_partner_id', type: 'string', isOptional: true },
+        { name: 'sync_status', type: 'string' },
+      ]
+    }),
+    tableSchema({
+      name: 'order_items',
+      columns: [
+        { name: 'order_id', type: 'string', isIndexed: true },
+        { name: 'vendor_product_id', type: 'string', isIndexed: true },
+        { name: 'quantity', type: 'number' },
+        { name: 'price_per_unit', type: 'number' },
+      ]
+    }),
   ]
 }));
 
@@ -868,6 +937,97 @@ export class VisitRequestModel extends Model {
     @relation('farmers', 'farmer_id') farmer!: any;
 }
 
+// --- Marketplace Models ---
+export class ProductCategoryModel extends Model {
+    static table = 'product_categories';
+    readonly id!: string;
+    @text('name') name!: string;
+    @text('icon_svg') iconSvg?: string;
+    @text('tenant_id') tenantId!: string;
+}
+
+export class ProductModel extends Model {
+    static table = 'products';
+    readonly id!: string;
+    static associations = {
+        product_categories: { type: 'belongs_to', key: 'category_id' },
+    } as const;
+    @text('name') name!: string;
+    @text('description') description!: string;
+    @text('image_url') imageUrl?: string;
+    @text('category_id') categoryId!: string;
+    @field('is_quality_verified') isQualityVerified!: boolean;
+    @text('tenant_id') tenantId!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @relation('product_categories', 'category_id') category!: any;
+}
+
+export class VendorModel extends Model {
+    static table = 'vendors';
+    readonly id!: string;
+    @text('name') name!: string;
+    @text('contact_person') contactPerson!: string;
+    @text('mobile_number') mobileNumber!: string;
+    @text('address') address!: string;
+    @text('status') status!: any;
+    @field('rating') rating!: number;
+    @text('tenant_id') tenantId!: string;
+    @readonly @date('created_at') createdAt!: Date;
+}
+
+export class VendorProductModel extends Model {
+    static table = 'vendor_products';
+    readonly id!: string;
+    static associations = {
+        vendors: { type: 'belongs_to', key: 'vendor_id' },
+        products: { type: 'belongs_to', key: 'product_id' },
+    } as const;
+    @text('vendor_id') vendorId!: string;
+    @text('product_id') productId!: string;
+    @field('price') price!: number;
+    @field('stock_quantity') stockQuantity!: number;
+    @text('unit') unit!: string;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @relation('vendors', 'vendor_id') vendor!: any;
+    @relation('products', 'product_id') product!: any;
+}
+
+export class OrderModel extends Model {
+    static table = 'orders';
+    readonly id!: string;
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+        order_items: { type: 'has_many', foreignKey: 'order_id' },
+    } as const;
+    @text('farmer_id') farmerId!: string;
+    @text('order_date') orderDate!: string;
+    @text('status') status!: any;
+    @field('total_amount') totalAmount!: number;
+    @text('payment_method') paymentMethod!: any;
+    @text('delivery_address') deliveryAddress!: string;
+    @text('delivery_instructions') deliveryInstructions?: string;
+    @text('payment_transaction_id') paymentTransactionId?: string;
+    @text('logistics_partner_id') logisticsPartnerId?: string;
+    @text('sync_status') syncStatusLocal!: string;
+    @relation('farmers', 'farmer_id') farmer!: any;
+    @children('order_items') items!: any;
+}
+
+export class OrderItemModel extends Model {
+    static table = 'order_items';
+    readonly id!: string;
+    static associations = {
+        orders: { type: 'belongs_to', key: 'order_id' },
+        vendor_products: { type: 'belongs_to', key: 'vendor_product_id' },
+    } as const;
+    @text('order_id') orderId!: string;
+    @text('vendor_product_id') vendorProductId!: string;
+    @field('quantity') quantity!: number;
+    @field('price_per_unit') pricePerUnit!: number;
+    @relation('orders', 'order_id') order!: any;
+    @relation('vendor_products', 'vendor_product_id') vendorProduct!: any;
+}
+
 
 export class TaskModel extends Model { static table = 'tasks'; readonly id!: string; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; readonly id!: string; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
@@ -939,6 +1099,8 @@ const database = new Database({
     TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel,
     ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel,
     WalletModel, WalletTransactionModel, VisitRequestModel,
+    // Marketplace Models
+    ProductCategoryModel, ProductModel, VendorModel, VendorProductModel, OrderModel, OrderItemModel
   ],
 });
 
@@ -949,9 +1111,3 @@ export class ProcessingBatchModel extends Model { static table = 'processing_bat
 export class ProcessingStepModel extends Model { static table = 'processing_steps'; readonly id!: string; @text('batch_id') batchId!: string; @text('step_name') stepName!: string; @text('start_date') startDate!: string; @text('operator_id') operatorId!: string; @text('equipment_id') equipmentId?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
 export class EquipmentLeaseModel extends Model { static table = 'equipment_leases'; readonly id!: string; @text('equipment_id') equipmentId!: string; @text('farmer_id') farmerId!: string; @text('start_date') startDate!: string; @text('end_date') endDate!: string; @field('cost') cost!: number; @text('payment_status') paymentStatus!: 'Paid' | 'Unpaid'; }
 export class ManualLedgerEntryModel extends Model { static table = 'manual_ledger_entries'; readonly id!: string; }
-export class ProductCategoryModel extends Model { static table = 'product_categories'; readonly id!: string; @text('name') name!: string; @text('icon_svg') iconSvg?: string; }
-export class ProductModel extends Model { static table = 'products'; readonly id!: string; }
-export class VendorModel extends Model { static table = 'vendors'; readonly id!: string; @text('name') name!: string; @text('contact_person') contactPerson!: string; @text('mobile_number') mobileNumber!: string; @text('address') address!: string; @text('status') status!: any; @field('rating') rating!: number; }
-export class VendorProductModel extends Model { static table = 'vendor_products'; readonly id!: string; @text('vendor_id') vendorId!: string; @text('product_id') productId!: string; @field('price') price!: number; }
-export class OrderModel extends Model { static table = 'orders'; readonly id!: string; @text('farmer_id') farmerId!: string; @text('order_date') orderDate!: string; @text('status') status!: any; @field('total_amount') totalAmount!: number; @text('payment_method') paymentMethod!: any; @text('delivery_address') deliveryAddress!: string; @text('delivery_instructions') deliveryInstructions?: string; }
-export class OrderItemModel extends Model { static table = 'order_items'; readonly id!: string; @text('order_id') orderId!: string; @text('vendor_product_id') vendorProductId!: string; @field('quantity') quantity!: number; @field('price_per_unit') pricePerUnit!: number; }

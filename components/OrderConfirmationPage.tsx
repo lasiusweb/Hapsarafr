@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { OrderModel, OrderItemModel, VendorProductModel, ProductModel, VendorModel } from '../db';
+import { OrderModel, OrderItemModel, VendorProductModel, ProductModel, VendorModel, FarmerModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import { formatCurrency } from '../lib/utils';
 import { Order, OrderItem, VendorProduct, Product, Vendor } from '../types';
@@ -21,6 +21,10 @@ const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({ orderId, 
     const allProducts = useQuery(useMemo(() => database.get<ProductModel>('products').query(), [database]));
     const allVendors = useQuery(useMemo(() => database.get<VendorModel>('vendors').query(), [database]));
     
+    // Fetch farmer details for the order
+    const farmer = useQuery(useMemo(() => order ? database.get<FarmerModel>('farmers').query(Q.where('id', order.farmerId)) : database.get<FarmerModel>('farmers').query(Q.where('id', 'null')), [database, order]))[0];
+
+
     // Create maps for efficient lookup
     const vendorProductMap = useMemo(() => new Map(allVendorProducts.map(vp => [vp.id, vp._raw as unknown as VendorProduct])), [allVendorProducts]);
     const productMap = useMemo(() => new Map(allProducts.map(p => [p.id, p._raw as unknown as Product])), [allProducts]);
@@ -53,7 +57,8 @@ const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({ orderId, 
                 <h1 className="text-3xl font-bold text-gray-800">Thank You!</h1>
                 <p className="text-gray-600 mt-2">Your order has been placed successfully.</p>
                 <div className="mt-6 p-4 bg-gray-50 border rounded-lg text-left">
-                    <p className="font-semibold">Order ID: <span className="font-mono text-gray-700">{order.id}</span></p>
+                    <p className="font-semibold">Order ID: <span className="font-mono text-gray-700">{order.id.slice(-12)}</span></p>
+                    <p className="font-semibold">For Farmer: <span className="font-normal text-gray-700">{farmer?.fullName || '...'}</span></p>
                     <p className="font-semibold">Order Date: <span className="font-normal text-gray-700">{new Date(order.orderDate).toLocaleDateString()}</span></p>
                     <p className="font-semibold">Total Amount: <span className="font-bold text-green-700">{formatCurrency(order.totalAmount)}</span></p>
                     
