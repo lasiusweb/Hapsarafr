@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -6,6 +7,7 @@ import { VisitRequestModel, FarmerModel, UserModel, ActivityLogModel } from '../
 import { Q } from '@nozbe/watermelondb';
 import { User, VisitRequestStatus, ActivityType } from '../types';
 import VisitDetailsModal from './VisitDetailsModal';
+import CustomSelect from './CustomSelect';
 
 interface FieldServicePageProps {
     onBack: () => void;
@@ -61,9 +63,37 @@ const FieldServicePage: React.FC<FieldServicePageProps> = ({ onBack, currentUser
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
 
     const [selectedRequest, setSelectedRequest] = useState<VisitRequestModel | null>(null);
+    const [filters, setFilters] = useState({
+        assigneeId: '',
+        farmerId: '',
+        dateFrom: '',
+        dateTo: '',
+    });
     
     const farmerMap = useMemo(() => new Map(farmers.map(f => [f.id, f])), [farmers]);
     const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
+
+    const filteredRequests = useMemo(() => {
+        return visitRequests.filter(req => {
+            if (filters.assigneeId && req.assigneeId !== filters.assigneeId) return false;
+            if (filters.farmerId && req.farmerId !== filters.farmerId) return false;
+            if (filters.dateFrom) {
+                const reqDate = new Date(req.preferredDate);
+                const filterDate = new Date(filters.dateFrom);
+                reqDate.setHours(0,0,0,0);
+                filterDate.setHours(0,0,0,0);
+                if (reqDate < filterDate) return false;
+            }
+            if (filters.dateTo) {
+                const reqDate = new Date(req.preferredDate);
+                const filterDate = new Date(filters.dateTo);
+                reqDate.setHours(0,0,0,0);
+                filterDate.setHours(0,0,0,0);
+                if (reqDate > filterDate) return false;
+            }
+            return true;
+        });
+    }, [visitRequests, filters]);
 
     const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>, newStatus: VisitRequestStatus) => {
         e.preventDefault();
@@ -129,19 +159,30 @@ const FieldServicePage: React.FC<FieldServicePageProps> = ({ onBack, currentUser
             [VisitRequestStatus.Scheduled]: [],
             [VisitRequestStatus.Completed]: [],
         };
-        visitRequests.forEach(request => {
+        filteredRequests.forEach(request => {
             if (grouped[request.status]) {
                 grouped[request.status].push(request);
             }
         });
         return grouped;
-    }, [visitRequests]);
+    }, [filteredRequests]);
 
     const columns = [
         { title: VisitRequestStatus.Pending, tasks: requestsByStatus[VisitRequestStatus.Pending] },
         { title: VisitRequestStatus.Scheduled, tasks: requestsByStatus[VisitRequestStatus.Scheduled] },
         { title: VisitRequestStatus.Completed, tasks: requestsByStatus[VisitRequestStatus.Completed] },
     ];
+
+    const handleFilterChange = (name: keyof typeof filters, value: string) => {
+        setFilters(prev => ({ ...prev, [name]: value }));
+    };
+
+    const clearFilters = () => {
+        setFilters({ assigneeId: '', farmerId: '', dateFrom: '', dateTo: '' });
+    };
+
+    const userOptions = useMemo(() => users.map(u => ({ value: u.id, label: u.name })), [users]);
+    const farmerOptions = useMemo(() => farmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hapId || 'N/A'})`})), [farmers]);
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
@@ -155,6 +196,47 @@ const FieldServicePage: React.FC<FieldServicePageProps> = ({ onBack, currentUser
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back
                     </button>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                        <CustomSelect
+                            label="Filter by Assignee"
+                            options={[{ value: '', label: 'All Officers' }, ...userOptions]}
+                            value={filters.assigneeId}
+                            onChange={v => handleFilterChange('assigneeId', v)}
+                        />
+                        <CustomSelect
+                            label="Filter by Farmer"
+                            options={[{ value: '', label: 'All Farmers' }, ...farmerOptions]}
+                            value={filters.farmerId}
+                            onChange={v => handleFilterChange('farmerId', v)}
+                        />
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date From</label>
+                            <input
+                                type="date"
+                                name="dateFrom"
+                                value={filters.dateFrom}
+                                onChange={e => handleFilterChange('dateFrom', e.target.value)}
+                                className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date To</label>
+                            <input
+                                type="date"
+                                name="dateTo"
+                                value={filters.dateTo}
+                                onChange={e => handleFilterChange('dateTo', e.target.value)}
+                                min={filters.dateFrom}
+                                className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm"
+                            />
+                        </div>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                        <button onClick={clearFilters} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Clear Filters</button>
+                    </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
