@@ -149,8 +149,7 @@ const App: React.FC = () => {
         });
 
         if (newFarmer) {
-            // FIX: Property 'id' does not exist on type 'FarmerModel'. Cast to any to access the ID property.
-            setNewlyAddedFarmerId((newFarmer as any).id);
+            setNewlyAddedFarmerId(newFarmer.id);
             navigate('farmer-directory');
         }
     };
@@ -223,15 +222,13 @@ const EnhancedApp = withObservables(['currentUser'], ({
     const currentActiveUser = currentUser?.[0];
     const userPermissions = useMemo(() => {
         if (!currentActiveUser || !allGroups) return new Set<Permission>();
-        // FIX: Property 'id' does not exist on type 'GroupModel'. Cast to any to access the ID property.
-        const group = allGroups.find((g: GroupModel) => (g as any).id === currentActiveUser.groupId);
+        const group = allGroups.find((g: GroupModel) => g.id === currentActiveUser.groupId);
         return new Set(group?.permissions || []);
     }, [currentActiveUser, allGroups]);
 
     const currentTenant = useMemo(() => {
         if (!currentActiveUser || !allTenants) return undefined;
-        // FIX: Property 'id' does not exist on type 'TenantModel'. Cast to any to access the ID property.
-        return allTenants.find((t: TenantModel) => (t as any).id === currentActiveUser.tenantId);
+        return allTenants.find((t: TenantModel) => t.id === currentActiveUser.tenantId);
     }, [currentActiveUser, allTenants]);
     
     // FIX: Cannot find name 'suspenseFallback'. Defined it here to be in scope for Suspense.

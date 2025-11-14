@@ -395,6 +395,7 @@ export const mySchema = appSchema({
 
 export class FarmerDealerConsentModel extends Model {
     static table = 'farmer_dealer_consents';
+    readonly id!: string;
     static associations = {
         farmers: { type: 'belongs_to', key: 'farmer_id' },
     } as const;
@@ -410,6 +411,7 @@ export class FarmerDealerConsentModel extends Model {
 
 export class TerritoryTransferRequestModel extends Model {
     static table = 'territory_transfer_requests';
+    readonly id!: string;
     @text('farmer_id') farmerId!: string;
     @text('from_tenant_id') fromTenantId!: string;
     @text('to_tenant_id') toTenantId!: string;
@@ -421,6 +423,7 @@ export class TerritoryTransferRequestModel extends Model {
 
 export class TerritoryDisputeModel extends Model {
     static table = 'territory_disputes';
+    readonly id!: string;
     @text('requesting_tenant_id') requestingTenantId!: string;
     @text('contested_tenant_id') contestedTenantId!: string;
     @text('administrative_code') administrativeCode!: string;
@@ -432,6 +435,7 @@ export class TerritoryDisputeModel extends Model {
 
 export class TerritoryModel extends Model {
     static table = 'territories';
+    readonly id!: string;
     @text('tenant_id') tenantId!: string;
     @text('administrative_level') administrativeLevel!: 'DISTRICT' | 'MANDAL' | 'VILLAGE';
     @text('administrative_code') administrativeCode!: string;
@@ -440,6 +444,7 @@ export class TerritoryModel extends Model {
 
 export class FarmerModel extends Model {
     static table = 'farmers';
+    readonly id!: string;
     static associations = {
         plots: { type: 'has_many', foreignKey: 'farmer_id' },
         subsidy_payments: { type: 'has_many', foreignKey: 'farmer_id' },
@@ -508,6 +513,7 @@ export class FarmerModel extends Model {
 
 export class PlotModel extends Model {
     static table = 'plots';
+    readonly id!: string;
     static associations = {
         farmers: { type: 'belongs_to', key: 'farmer_id' },
         planting_records: { type: 'has_many', foreignKey: 'plot_id' },
@@ -529,6 +535,7 @@ export class PlotModel extends Model {
 
 export class SubsidyPaymentModel extends Model {
     static table = 'subsidy_payments';
+    readonly id!: string;
     @text('farmer_id') farmerId!: string;
     @text('payment_date') paymentDate!: string;
     @field('amount') amount!: number;
@@ -543,6 +550,7 @@ export class SubsidyPaymentModel extends Model {
 
 export class ActivityLogModel extends Model {
     static table = 'activity_logs';
+    readonly id!: string;
     @text('farmer_id') farmerId!: string;
     @text('activity_type') activityType!: string;
     @text('description') description!: string;
@@ -553,6 +561,7 @@ export class ActivityLogModel extends Model {
 
 export class UserModel extends Model {
     static table = 'users';
+    readonly id!: string;
     @text('name') name!: string;
     @text('email') email!: string;
     @text('group_id') groupId!: string;
@@ -563,6 +572,7 @@ export class UserModel extends Model {
 
 export class GroupModel extends Model {
     static table = 'groups';
+    readonly id!: string;
     @text('name') name!: string;
     @text('permissions_str') permissionsStr!: string;
     @text('tenant_id') tenantId!: string;
@@ -573,6 +583,7 @@ export class GroupModel extends Model {
 
 export class TenantModel extends Model {
     static table = 'tenants';
+    readonly id!: string;
     @text('name') name!: string;
     @text('subscription_status') subscriptionStatus!: string;
     @readonly @date('created_at') createdAt!: Date;
@@ -581,12 +592,14 @@ export class TenantModel extends Model {
 
 export class DistrictModel extends Model {
     static table = 'districts';
+    readonly id!: string;
     @text('code') code!: string;
     @text('name') name!: string;
 }
 
 export class MandalModel extends Model {
     static table = 'mandals';
+    readonly id!: string;
     @text('code') code!: string;
     @text('name') name!: string;
     @text('district_id') districtId!: string;
@@ -595,6 +608,7 @@ export class MandalModel extends Model {
 
 export class VillageModel extends Model {
     static table = 'villages';
+    readonly id!: string;
     @text('code') code!: string;
     @text('name') name!: string;
     @text('mandal_id') mandalId!: string;
@@ -603,6 +617,7 @@ export class VillageModel extends Model {
 
 export class ResourceModel extends Model {
     static table = 'resources';
+    readonly id!: string;
     @text('name') name!: string;
     @text('unit') unit!: string;
     @text('description') description?: string;
@@ -612,6 +627,7 @@ export class ResourceModel extends Model {
 
 export class ResourceDistributionModel extends Model {
     static table = 'resource_distributions';
+    readonly id!: string;
     @text('farmer_id') farmerId!: string;
     @text('resource_id') resourceId!: string;
     @field('quantity') quantity!: number;
@@ -622,22 +638,23 @@ export class ResourceDistributionModel extends Model {
     @text('tenant_id') tenantId!: string;
 }
 
-export class TaskModel extends Model { static table = 'tasks'; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
-export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
-export class PlantingRecordModel extends Model { static table = 'planting_records'; @text('plot_id') plotId!: string; @text('seed_source') seedSource!: string; @text('planting_date') plantingDate!: string; @text('genetic_variety') geneticVariety!: string; @field('number_of_plants') numberOfPlants!: number; @text('care_instructions_url') careInstructionsUrl?: string; @text('qr_code_data') qrCodeData?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
-export class HarvestModel extends Model { static table = 'harvests'; @text('farmer_id') farmerId!: string; @text('harvest_date') harvestDate!: string; @field('gross_weight') grossWeight!: number; @field('tare_weight') tareWeight!: number; @field('net_weight') netWeight!: number; @text('assessed_by_id') assessedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
-export class QualityAssessmentModel extends Model { static table = 'quality_assessments'; @text('harvest_id') harvestId!: string; @text('assessment_date') assessmentDate!: string; @text('overall_grade') overallGrade!: any; @field('price_adjustment') priceAdjustment!: number; @text('notes') notes?: string; @text('appeal_status') appealStatus!: any; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; @relation('harvests', 'harvest_id') harvest!: any;}
-export class QualityMetricModel extends Model { static table = 'quality_metrics'; }
-export class UserProfileModel extends Model { static table = 'user_profiles'; @text('user_id') userId!: string; @field('is_mentor') isMentor!: boolean; @text('expertise_tags') expertiseTags!: string; }
-export class MentorshipModel extends Model { static table = 'mentorships'; @text('mentor_id') mentorId!: string; @text('mentee_id') menteeId!: string; @text('status') status!: 'pending' | 'active' | 'completed' | 'rejected'; @text('start_date') startDate?: string; @text('end_date') endDate?: string; }
-export class AssistanceApplicationModel extends Model { static table = 'assistance_applications'; @text('farmer_id') farmerId!: string; @text('scheme_id') schemeId!: string; @text('status') status!: any; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
-export class EquipmentModel extends Model { static table = 'equipment'; @text('name') name!: string; @text('type') type!: string; @text('location') location!: string; @text('status') status!: any; @text('last_maintenance_date') lastMaintenanceDate?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
-export class EquipmentMaintenanceLogModel extends Model { static table = 'equipment_maintenance_logs'; @text('equipment_id') equipmentId!: string; @text('maintenance_date') maintenanceDate!: string; @text('description') description!: string; @field('cost') cost!: number; @text('performed_by_id') performedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
-export class WithdrawalAccountModel extends Model { static table = 'withdrawal_accounts'; @text('farmer_id') farmerId!: string; @text('account_type') accountType!: any; @text('details') details!: string; @field('is_verified') isVerified!: boolean; @text('razorpay_fund_account_id') razorpayFundAccountId?: string; }
-export class TrainingModuleModel extends Model { static table = 'training_modules'; @text('title') title!: string; @text('category') category!: string; @text('description') description!: string; @field('duration_minutes') durationMinutes!: number; @text('module_type') moduleType!: 'video' | 'article'; @text('content') content!: string; @text('difficulty') difficulty!: 'Beginner' | 'Intermediate' | 'Advanced'; @field('sort_order') sortOrder!: number; }
-export class TrainingCompletionModel extends Model { static table = 'training_completions'; }
+export class TaskModel extends Model { static table = 'tasks'; readonly id!: string; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; readonly id!: string; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
+export class PlantingRecordModel extends Model { static table = 'planting_records'; readonly id!: string; @text('plot_id') plotId!: string; @text('seed_source') seedSource!: string; @text('planting_date') plantingDate!: string; @text('genetic_variety') geneticVariety!: string; @field('number_of_plants') numberOfPlants!: number; @text('care_instructions_url') careInstructionsUrl?: string; @text('qr_code_data') qrCodeData?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class HarvestModel extends Model { static table = 'harvests'; readonly id!: string; @text('farmer_id') farmerId!: string; @text('harvest_date') harvestDate!: string; @field('gross_weight') grossWeight!: number; @field('tare_weight') tareWeight!: number; @field('net_weight') netWeight!: number; @text('assessed_by_id') assessedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class QualityAssessmentModel extends Model { static table = 'quality_assessments'; readonly id!: string; @text('harvest_id') harvestId!: string; @text('assessment_date') assessmentDate!: string; @text('overall_grade') overallGrade!: any; @field('price_adjustment') priceAdjustment!: number; @text('notes') notes?: string; @text('appeal_status') appealStatus!: any; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; @relation('harvests', 'harvest_id') harvest!: any;}
+export class QualityMetricModel extends Model { static table = 'quality_metrics'; readonly id!: string; }
+export class UserProfileModel extends Model { static table = 'user_profiles'; readonly id!: string; @text('user_id') userId!: string; @field('is_mentor') isMentor!: boolean; @text('expertise_tags') expertiseTags!: string; }
+export class MentorshipModel extends Model { static table = 'mentorships'; readonly id!: string; @text('mentor_id') mentorId!: string; @text('mentee_id') menteeId!: string; @text('status') status!: 'pending' | 'active' | 'completed' | 'rejected'; @text('start_date') startDate?: string; @text('end_date') endDate?: string; }
+export class AssistanceApplicationModel extends Model { static table = 'assistance_applications'; readonly id!: string; @text('farmer_id') farmerId!: string; @text('scheme_id') schemeId!: string; @text('status') status!: any; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class EquipmentModel extends Model { static table = 'equipment'; readonly id!: string; @text('name') name!: string; @text('type') type!: string; @text('location') location!: string; @text('status') status!: any; @text('last_maintenance_date') lastMaintenanceDate?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class EquipmentMaintenanceLogModel extends Model { static table = 'equipment_maintenance_logs'; readonly id!: string; @text('equipment_id') equipmentId!: string; @text('maintenance_date') maintenanceDate!: string; @text('description') description!: string; @field('cost') cost!: number; @text('performed_by_id') performedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class WithdrawalAccountModel extends Model { static table = 'withdrawal_accounts'; readonly id!: string; @text('farmer_id') farmerId!: string; @text('account_type') accountType!: any; @text('details') details!: string; @field('is_verified') isVerified!: boolean; @text('razorpay_fund_account_id') razorpayFundAccountId?: string; }
+export class TrainingModuleModel extends Model { static table = 'training_modules'; readonly id!: string; @text('title') title!: string; @text('category') category!: string; @text('description') description!: string; @field('duration_minutes') durationMinutes!: number; @text('module_type') moduleType!: 'video' | 'article'; @text('content') content!: string; @text('difficulty') difficulty!: 'Beginner' | 'Intermediate' | 'Advanced'; @field('sort_order') sortOrder!: number; }
+export class TrainingCompletionModel extends Model { static table = 'training_completions'; readonly id!: string; }
 export class EventModel extends Model {
     static table = 'events';
+    readonly id!: string;
     static associations = {
         event_rsvps: { type: 'has_many', foreignKey: 'event_id' },
         users: { type: 'belongs_to', key: 'created_by' },
@@ -658,6 +675,7 @@ export class EventModel extends Model {
 
 export class EventRsvpModel extends Model {
     static table = 'event_rsvps';
+    readonly id!: string;
     static associations = {
         events: { type: 'belongs_to', key: 'event_id' },
         users: { type: 'belongs_to', key: 'user_id' },
@@ -694,14 +712,14 @@ const database = new Database({
 export default database;
 
 // Models not fully implemented yet but schema exists
-export class ProcessingBatchModel extends Model { static table = 'processing_batches'; @text('harvest_id') harvestId!: string; @text('batch_code') batchCode!: string; @text('start_date') startDate!: string; @text('status') status!: any; @text('notes') notes?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
-export class ProcessingStepModel extends Model { static table = 'processing_steps'; @text('batch_id') batchId!: string; @text('step_name') stepName!: string; @text('start_date') startDate!: string; @text('operator_id') operatorId!: string; @text('equipment_id') equipmentId?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
-export class EquipmentLeaseModel extends Model { static table = 'equipment_leases'; @text('equipment_id') equipmentId!: string; @text('farmer_id') farmerId!: string; @text('start_date') startDate!: string; @text('end_date') endDate!: string; @field('cost') cost!: number; @text('payment_status') paymentStatus!: 'Paid' | 'Unpaid'; }
-export class ManualLedgerEntryModel extends Model { static table = 'manual_ledger_entries'; }
-export class WalletModel extends Model { static table = 'wallets'; }
-export class ProductCategoryModel extends Model { static table = 'product_categories'; @text('name') name!: string; @text('icon_svg') iconSvg?: string; }
-export class ProductModel extends Model { static table = 'products'; }
-export class VendorModel extends Model { static table = 'vendors'; @text('name') name!: string; @text('contact_person') contactPerson!: string; @text('mobile_number') mobileNumber!: string; @text('address') address!: string; @text('status') status!: any; @field('rating') rating!: number; }
-export class VendorProductModel extends Model { static table = 'vendor_products'; @text('vendor_id') vendorId!: string; @text('product_id') productId!: string; @field('price') price!: number; }
-export class OrderModel extends Model { static table = 'orders'; @text('farmer_id') farmerId!: string; @text('order_date') orderDate!: string; @text('status') status!: any; @field('total_amount') totalAmount!: number; @text('payment_method') paymentMethod!: any; @text('delivery_address') deliveryAddress!: string; @text('delivery_instructions') deliveryInstructions?: string; }
-export class OrderItemModel extends Model { static table = 'order_items'; @text('order_id') orderId!: string; @text('vendor_product_id') vendorProductId!: string; @field('quantity') quantity!: number; @field('price_per_unit') pricePerUnit!: number; }
+export class ProcessingBatchModel extends Model { static table = 'processing_batches'; readonly id!: string; @text('harvest_id') harvestId!: string; @text('batch_code') batchCode!: string; @text('start_date') startDate!: string; @text('status') status!: any; @text('notes') notes?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
+export class ProcessingStepModel extends Model { static table = 'processing_steps'; readonly id!: string; @text('batch_id') batchId!: string; @text('step_name') stepName!: string; @text('start_date') startDate!: string; @text('operator_id') operatorId!: string; @text('equipment_id') equipmentId?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
+export class EquipmentLeaseModel extends Model { static table = 'equipment_leases'; readonly id!: string; @text('equipment_id') equipmentId!: string; @text('farmer_id') farmerId!: string; @text('start_date') startDate!: string; @text('end_date') endDate!: string; @field('cost') cost!: number; @text('payment_status') paymentStatus!: 'Paid' | 'Unpaid'; }
+export class ManualLedgerEntryModel extends Model { static table = 'manual_ledger_entries'; readonly id!: string; }
+export class WalletModel extends Model { static table = 'wallets'; readonly id!: string; }
+export class ProductCategoryModel extends Model { static table = 'product_categories'; readonly id!: string; @text('name') name!: string; @text('icon_svg') iconSvg?: string; }
+export class ProductModel extends Model { static table = 'products'; readonly id!: string; }
+export class VendorModel extends Model { static table = 'vendors'; readonly id!: string; @text('name') name!: string; @text('contact_person') contactPerson!: string; @text('mobile_number') mobileNumber!: string; @text('address') address!: string; @text('status') status!: any; @field('rating') rating!: number; }
+export class VendorProductModel extends Model { static table = 'vendor_products'; readonly id!: string; @text('vendor_id') vendorId!: string; @text('product_id') productId!: string; @field('price') price!: number; }
+export class OrderModel extends Model { static table = 'orders'; readonly id!: string; @text('farmer_id') farmerId!: string; @text('order_date') orderDate!: string; @text('status') status!: any; @field('total_amount') totalAmount!: number; @text('payment_method') paymentMethod!: any; @text('delivery_address') deliveryAddress!: string; @text('delivery_instructions') deliveryInstructions?: string; }
+export class OrderItemModel extends Model { static table = 'order_items'; readonly id!: string; @text('order_id') orderId!: string; @text('vendor_product_id') vendorProductId!: string; @field('quantity') quantity!: number; @field('price_per_unit') pricePerUnit!: number; }

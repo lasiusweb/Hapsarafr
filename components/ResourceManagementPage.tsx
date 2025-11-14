@@ -56,8 +56,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
     };
 
     const handleDelete = async (resource: ResourceModel) => {
-        // FIX: Cast `resource` to `any` to access `.id` and resolve type error.
-        const usageCount = await database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('resource_id', (resource as any).id)).fetchCount();
+        const usageCount = await database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('resource_id', resource.id)).fetchCount();
         if (usageCount > 0) {
             alert(`Cannot delete "${resource.name}". It has been distributed ${usageCount} time(s).`);
             return;

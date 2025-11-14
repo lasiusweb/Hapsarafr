@@ -69,8 +69,7 @@ const FindMentorTab: React.FC<{ currentUser: User, setNotification: (n: any) => 
         try {
             await database.write(async () => {
                 await database.get<MentorshipModel>('mentorships').create(m => {
-                    // FIX: Cast `mentor` to `any` to access the `id` property. This resolves a TypeScript error where the `id` property inherited from the WatermelonDB Model class was not recognized on the UserModel type.
-                    m.mentorId = (mentor as any).id;
+                    m.mentorId = mentor.id;
                     m.menteeId = currentUser.id;
                     m.status = 'pending';
                 });
