@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 36,
+  version: 37,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -471,6 +471,24 @@ export const mySchema = appSchema({
         { name: 'sync_status', type: 'string' },
       ]
     }),
+    tableSchema({
+      name: 'visit_requests',
+      columns: [
+        { name: 'farmer_id', type: 'string', isIndexed: true },
+        { name: 'assignee_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'reason', type: 'string' },
+        { name: 'preferred_date', type: 'string' },
+        { name: 'scheduled_date', type: 'string', isOptional: true },
+        { name: 'status', type: 'string' },
+        { name: 'notes', type: 'string', isOptional: true },
+        { name: 'resolution_notes', type: 'string', isOptional: true },
+        { name: 'created_by', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'sync_status', type: 'string' },
+      ]
+    }),
   ]
 }));
 
@@ -541,6 +559,7 @@ export class FarmerModel extends Model {
         farmer_dealer_consents: { type: 'has_many', foreignKey: 'farmer_id' },
         agronomic_alerts: { type: 'has_many', foreignKey: 'farmer_id' },
         wallet: { type: 'has_many', foreignKey: 'farmer_id' },
+        visit_requests: { type: 'has_many', foreignKey: 'farmer_id' },
     } as const;
     @text('hap_id') hapId!: string;
     @text('full_name') fullName!: string;
@@ -598,6 +617,7 @@ export class FarmerModel extends Model {
     @children('farmer_dealer_consents') consents!: any;
     @children('agronomic_alerts') alerts!: any;
     @children('wallet') wallet!: any;
+    @children('visit_requests') visitRequests!: any;
 }
 
 export class PlotModel extends Model {
@@ -824,6 +844,30 @@ export class WalletTransactionModel extends Model {
     @relation('wallets', 'wallet_id') wallet!: any;
 }
 
+export class VisitRequestModel extends Model {
+    static table = 'visit_requests';
+    readonly id!: string;
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+    } as const;
+
+    @text('farmer_id') farmerId!: string;
+    @text('assignee_id') assigneeId?: string;
+    @text('reason') reason!: string;
+    @text('preferred_date') preferredDate!: string;
+    @text('scheduled_date') scheduledDate?: string;
+    @text('status') status!: string;
+    @text('notes') notes?: string;
+    @text('resolution_notes') resolutionNotes?: string;
+    @text('created_by') createdBy!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @text('tenant_id') tenantId!: string;
+    @text('sync_status') syncStatusLocal!: string;
+
+    @relation('farmers', 'farmer_id') farmer!: any;
+}
+
 
 export class TaskModel extends Model { static table = 'tasks'; readonly id!: string; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; readonly id!: string; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
@@ -894,7 +938,7 @@ const database = new Database({
     FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
     TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel,
     ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel,
-    WalletModel, WalletTransactionModel,
+    WalletModel, WalletTransactionModel, VisitRequestModel,
   ],
 });
 

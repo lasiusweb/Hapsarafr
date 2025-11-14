@@ -1,19 +1,23 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import withObservables from '@nozbe/with-observables';
-import { User, Farmer, EntrySource, TransactionStatus } from '../types';
+import { User, Farmer, EntrySource, TransactionStatus, WithdrawalAccount, PaymentStage, Permission } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { FarmerModel, WalletModel, WalletTransactionModel } from '../db';
+import { FarmerModel, WalletModel, WalletTransactionModel, WithdrawalAccountModel, SubsidyPaymentModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import SendMoneyModal from './SendMoneyModal';
+import WithdrawMoneyModal from './WithdrawMoneyModal';
+import SubsidyDisbursementModal from './SubsidyDisbursementModal';
 
 interface FinancialsPageProps {
     allFarmers: Farmer[];
     onBack: () => void;
     currentUser: User;
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
+    onNavigate: (view: string, param?: string) => void;
+    permissions: Set<Permission>;
 }
 
 const formatCurrency = (value: number) => {
@@ -32,9 +36,10 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
     farmerId: string, 
     wallets: WalletModel[], 
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
-    onOpenSendMoney: () => void; 
+    onOpenSendMoney: () => void;
+    onOpenWithdrawMoney: () => void;
 }) => {
-    const { farmerId, wallets, setNotification, onOpenSendMoney } = props;
+    const { farmerId, wallets, setNotification, onOpenSendMoney, onOpenWithdrawMoney } = props;
     const wallet = wallets?.[0];
     const database = useDatabase();
     
@@ -85,7 +90,7 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button onClick={onOpenSendMoney} disabled={wallet.balance <= 0} className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-3 disabled:bg-gray-100 disabled:cursor-not-allowed"><span className="text-2xl">💸</span> <span className="font-semibold">Send Money</span></button>
-                <button onClick={() => setNotification({ message: 'Withdrawals via payment gateway are coming soon.', type: 'info' })} className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-3"><span className="text-2xl">🏦</span> <span className="font-semibold">Withdraw</span></button>
+                <button onClick={onOpenWithdrawMoney} disabled={wallet.balance <= 0} className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-3 disabled:bg-gray-100 disabled:cursor-not-allowed"><span className="text-2xl">🏦</span> <span className="font-semibold">Withdraw</span></button>
                 <button onClick={() => setNotification({ message: 'Adding money to the wallet is coming soon.', type: 'info' })} className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-3"><span className="text-2xl">💳</span> <span className="font-semibold">Add Money</span></button>
             </div>
 
@@ -114,10 +119,12 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
 });
 
 
-const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, currentUser, setNotification }) => {
+const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, currentUser, setNotification, onNavigate, permissions }) => {
     const isOnline = useOnlineStatus();
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
     const [isSendMoneyModalOpen, setIsSendMoneyModalOpen] = useState(false);
+    const [isWithdrawMoneyModalOpen, setIsWithdrawMoneyModalOpen] = useState(false);
+    const [isDisburseModalOpen, setIsDisburseModalOpen] = useState(false);
     const database = useDatabase();
 
     const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hap_id || 'N/A'})` })), [allFarmers]);
@@ -126,6 +133,12 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
     const senderWallet = useQuery(useMemo(() => 
         selectedFarmerId ? database.get<WalletModel>('wallets').query(Q.where('farmer_id', selectedFarmerId)) : database.get<WalletModel>('wallets').query(Q.where('id', 'null')),
     [database, selectedFarmerId]))[0];
+
+    const withdrawalAccounts = useQuery(useMemo(() =>
+        selectedFarmerId ? database.get<WithdrawalAccountModel>('withdrawal_accounts').query(Q.where('farmer_id', selectedFarmerId)) : database.get<WithdrawalAccountModel>('withdrawal_accounts').query(Q.where('id', 'null')),
+    [database, selectedFarmerId]));
+    
+    const plainWithdrawalAccounts: WithdrawalAccount[] = useMemo(() => withdrawalAccounts.map(acc => acc._raw as unknown as WithdrawalAccount), [withdrawalAccounts]);
 
     const handleSendMoney = useCallback(async ({ recipientId, amount, description }: { recipientId: string, amount: number, description: string }) => {
         const recipientFarmer = allFarmers.find(f => f.id === recipientId);
@@ -182,7 +195,63 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
             setNotification({ message: 'Failed to send money. Please try again.', type: 'error' });
         }
     }, [database, senderWallet, selectedFarmer, selectedFarmerId, allFarmers, setNotification]);
+
+    const handleWithdrawMoney = useCallback(async ({ accountId, amount }: { accountId: string, amount: number }) => {
+        const account = plainWithdrawalAccounts.find(acc => acc.id === accountId);
+        if (!account || !senderWallet) {
+            setNotification({ message: 'An error occurred. Sender wallet or account not found.', type: 'error' });
+            return;
+        }
+
+        try {
+            await database.write(async () => {
+                // 1. Update wallet balance
+                await senderWallet.update(w => { w.balance -= amount; });
+
+                // 2. Create withdrawal transaction
+                await database.get<WalletTransactionModel>('wallet_transactions').create(t => {
+                    t.walletId = senderWallet.id;
+                    t.transactionType = 'debit';
+                    t.amount = amount;
+                    t.source = EntrySource.Withdrawal;
+                    t.description = `Withdrawal to ${account.details}`;
+                    t.status = TransactionStatus.Pending; // Pending until processed by a payment gateway
+                    t.metadataJson = JSON.stringify({ withdrawalAccountId: accountId });
+                });
+            });
+            setNotification({ message: 'Withdrawal request submitted successfully.', type: 'success' });
+            setIsWithdrawMoneyModalOpen(false);
+        } catch (error) {
+            console.error("Failed to request withdrawal:", error);
+            setNotification({ message: 'Failed to request withdrawal. Please try again.', type: 'error' });
+        }
+    }, [database, senderWallet, plainWithdrawalAccounts, setNotification]);
     
+    const handleRecordSubsidy = useCallback(async ({ farmers, stage, amount, notes }: { farmers: Farmer[], stage: PaymentStage, amount: number, notes: string }) => {
+        try {
+            await database.write(async () => {
+                for (const farmer of farmers) {
+                    await database.get<SubsidyPaymentModel>('subsidy_payments').create(p => {
+                        p.farmerId = farmer.id;
+                        p.paymentDate = new Date().toISOString().split('T')[0];
+                        p.amount = amount;
+                        p.utrNumber = 'N/A (Recorded Externally)';
+                        p.paymentStage = stage;
+                        p.notes = notes || `External subsidy for ${stage} recorded`;
+                        p.createdBy = currentUser.id;
+                        p.tenantId = currentUser.tenantId;
+                        p.syncStatusLocal = 'pending';
+                    });
+                }
+            });
+            setNotification({ message: `Subsidy recorded for ${farmers.length} farmer(s).`, type: 'success' });
+            setIsDisburseModalOpen(false);
+        } catch (error) {
+            console.error("Failed to record subsidy:", error);
+            setNotification({ message: 'Failed to record subsidy.', type: 'error' });
+        }
+    }, [database, currentUser, setNotification]);
+
     if (!isOnline) {
          return (
             <div className="p-6 bg-gray-50 min-h-full">
@@ -207,12 +276,19 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     </button>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-                    <CustomSelect label="Select a Farmer" options={farmerOptions} value={selectedFarmerId} onChange={setSelectedFarmerId} placeholder="-- Choose a farmer to view their wallet --" />
+                <div className="bg-white rounded-lg shadow-md p-4 mb-6 flex justify-between items-end">
+                    <div className="flex-grow">
+                       <CustomSelect label="Select a Farmer" options={farmerOptions} value={selectedFarmerId} onChange={setSelectedFarmerId} placeholder="-- Choose a farmer to view their wallet --" />
+                    </div>
+                    {permissions.has(Permission.CAN_EDIT_FARMER) && (
+                         <button onClick={() => setIsDisburseModalOpen(true)} className="ml-4 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm">
+                            Record Subsidy
+                        </button>
+                    )}
                 </div>
                 
                 {selectedFarmerId ? (
-                    <WalletView farmerId={selectedFarmerId} setNotification={setNotification} onOpenSendMoney={() => setIsSendMoneyModalOpen(true)} />
+                    <WalletView farmerId={selectedFarmerId} setNotification={setNotification} onOpenSendMoney={() => setIsSendMoneyModalOpen(true)} onOpenWithdrawMoney={() => setIsWithdrawMoneyModalOpen(true)} />
                 ) : (
                     <div className="text-center py-20 text-gray-500 bg-white rounded-lg shadow-md">
                         <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -228,6 +304,22 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     onSave={handleSendMoney}
                     senderWallet={senderWallet}
                     senderFarmer={selectedFarmer}
+                    allFarmers={allFarmers}
+                />
+            )}
+            {isWithdrawMoneyModalOpen && selectedFarmer && senderWallet && (
+                <WithdrawMoneyModal
+                    onClose={() => setIsWithdrawMoneyModalOpen(false)}
+                    onSave={handleWithdrawMoney}
+                    walletBalance={senderWallet.balance}
+                    withdrawalAccounts={plainWithdrawalAccounts}
+                    onAddAccount={() => onNavigate('farmer-details', selectedFarmer.id)}
+                />
+            )}
+            {isDisburseModalOpen && (
+                <SubsidyDisbursementModal
+                    onClose={() => setIsDisburseModalOpen(false)}
+                    onSave={handleRecordSubsidy}
                     allFarmers={allFarmers}
                 />
             )}

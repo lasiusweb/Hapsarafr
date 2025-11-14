@@ -58,6 +58,10 @@ export enum ActivityType {
     TERRITORY_TRANSFER = 'TERRITORY_TRANSFER',
     DEALER_CONSENT_GRANTED = 'DEALER_CONSENT_GRANTED',
     DEALER_CONSENT_REVOKED = 'DEALER_CONSENT_REVOKED',
+    VISIT_REQUESTED = 'VISIT_REQUESTED',
+    VISIT_SCHEDULED = 'VISIT_SCHEDULED',
+    VISIT_COMPLETED = 'VISIT_COMPLETED',
+    VISIT_CANCELLED = 'VISIT_CANCELLED',
 }
 
 export enum PaymentStage {
@@ -185,6 +189,13 @@ export enum AlertType {
     PestWarning = 'Pest Warning',
     IrrigationAlert = 'Irrigation Alert',
     YieldForecast = 'Yield Forecast',
+}
+
+export enum VisitRequestStatus {
+    Pending = 'Pending',
+    Scheduled = 'Scheduled',
+    Completed = 'Completed',
+    Cancelled = 'Cancelled',
 }
 
 
@@ -687,6 +698,23 @@ export interface FarmerDealerConsent {
     permissions?: any; // For JSON field
     grantedBy: 'FARMER' | 'OFFICER';
     createdAt: string;
+    syncStatus: 'synced' | 'pending';
+}
+
+export interface VisitRequest {
+    id: string;
+    farmerId: string;
+    assigneeId?: string; // officer
+    reason: string;
+    preferredDate: string;
+    scheduledDate?: string;
+    status: VisitRequestStatus;
+    notes?: string;
+    resolutionNotes?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    tenantId: string;
     syncStatus: 'synced' | 'pending';
 }
 

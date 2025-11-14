@@ -56,6 +56,7 @@ const OrderConfirmationPage = lazy(() => import('./components/OrderConfirmationP
 const VendorManagementPage = lazy(() => import('./components/VendorManagementPage'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
+const FieldServicePage = lazy(() => import('./components/FieldServicePage'));
 
 
 type View =
@@ -65,7 +66,8 @@ type View =
     | 'content-manager' | 'geo-management' | 'schema-manager' | 'tenant-management' | 'territory-management'
     | 'billing' | 'subscription-management' | 'usage-analytics' | 'tasks' | 'resource-management'
     | 'distribution-report' | 'performance-analytics' | 'mentorship' | 'community' | 'resource-library' | 'events'
-    | 'financials' | 'marketplace' | 'product-list' | 'checkout' | 'order-confirmation' | 'vendor-management';
+    | 'financials' | 'marketplace' | 'product-list' | 'checkout' | 'order-confirmation' | 'vendor-management'
+    | 'field-service';
 
 const App: React.FC = () => {
     // Component State
@@ -274,6 +276,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'subscription-management': return <SubscriptionManagementPage currentUser={currentActiveUser} onBack={() => navigate('billing')} />;
             case 'usage-analytics': return <UsageAnalyticsPage currentUser={currentActiveUser} supabase={getSupabase()} onBack={() => navigate('dashboard')} />;
             case 'tasks': return <TaskManagementPage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
+            case 'field-service': return <FieldServicePage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
             case 'resource-management': return <ResourceManagementPage currentUser={currentActiveUser} onBack={() => navigate('admin')} />;
             case 'distribution-report': return <DistributionReportPage onBack={() => navigate('dashboard')} />;
             case 'performance-analytics': return <PerformanceAnalyticsPage onBack={() => navigate('dashboard')} />;
@@ -281,7 +284,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'community': return <CommunityForumPage currentUser={currentActiveUser} setNotification={setNotification} onBack={() => navigate('dashboard')} />;
             case 'resource-library': return <ResourceLibraryPage onBack={() => navigate('dashboard')} currentUser={currentActiveUser} />;
             case 'events': return <EventsPage onBack={() => navigate('dashboard')} currentUser={currentActiveUser} setNotification={setNotification} />;
-            case 'financials': return <FinancialsPage allFarmers={plainFarmers} currentUser={currentActiveUser} onBack={() => navigate('dashboard')} setNotification={setNotification} />;
+            case 'financials': return <FinancialsPage allFarmers={plainFarmers} currentUser={currentActiveUser} onBack={() => navigate('dashboard')} setNotification={setNotification} onNavigate={navigate} permissions={userPermissions} />;
             case 'marketplace': return <MarketplacePage onBack={() => navigate('dashboard')} onNavigate={(v,p) => navigate(v,p)} />;
             case 'product-list': return <ProductListPage categoryId={viewParam!} onBack={() => navigate('marketplace')} />;
             case 'checkout': return <CheckoutPage onBack={() => navigate('marketplace')} onOrderPlaced={(orderId) => navigate('order-confirmation', orderId)} />;
