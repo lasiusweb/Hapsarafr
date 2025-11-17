@@ -5,6 +5,7 @@ import { TaskModel, UserModel, FarmerModel, DirectiveModel, TenantModel, Territo
 import { Q } from '@nozbe/watermelondb';
 import { Task, TaskStatus, TaskPriority, User, DirectiveStatus, DirectiveTaskType } from '../types';
 import CustomSelect from './CustomSelect';
+import { Card, CardContent } from './ui/Card';
 
 interface TaskManagementPageProps {
     onBack: () => void;
@@ -31,36 +32,38 @@ const TaskCard: React.FC<{
     const isGovtTask = task.source === 'GOVERNMENT';
 
     return (
-        <div
+        <Card
             onClick={onClick}
             draggable
             onDragStart={(e) => {
                 e.dataTransfer.setData('taskId', task.id);
             }}
-            className={`bg-white p-4 rounded-lg shadow-sm border-l-4 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow mb-4 ${isHighPriority ? 'border-red-500' : 'border-transparent'}`}
+            className={`cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow mb-4 border-l-4 ${isHighPriority ? 'border-red-500' : 'border-transparent'}`}
         >
-            <div className="flex justify-between items-start">
-                <h4 className="font-bold text-gray-800 pr-4">{task.title}</h4>
-                <div className="flex items-center gap-2">
-                    {isGovtTask && (
-                        <div title="Government Directive" className="p-1 bg-blue-100 rounded-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-700" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
-                        </div>
-                    )}
-                    {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-8 h-8 rounded-full flex-shrink-0" title={`Assigned to ${assignee.name}`} />}
+            <CardContent className="p-4">
+                <div className="flex justify-between items-start">
+                    <h4 className="font-bold text-gray-800 pr-4">{task.title}</h4>
+                    <div className="flex items-center gap-2">
+                        {isGovtTask && (
+                            <div title="Government Directive" className="p-1 bg-blue-100 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-700" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                            </div>
+                        )}
+                        {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-8 h-8 rounded-full flex-shrink-0" title={`Assigned to ${assignee.name}`} />}
+                    </div>
                 </div>
-            </div>
-            <div className="flex items-center justify-between mt-3 text-xs">
-                <div className="flex items-center gap-2">
-                    <span className={`w-3 h-3 rounded-full ${priorityClasses[task.priority]}`} title={`Priority: ${task.priority}`}></span>
-                     {task.dueDate && (
-                        <span className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-500'}`}>
-                            {new Date(task.dueDate).toLocaleDateString()}
-                        </span>
-                     )}
+                <div className="flex items-center justify-between mt-3 text-xs">
+                    <div className="flex items-center gap-2">
+                        <span className={`w-3 h-3 rounded-full ${priorityClasses[task.priority]}`} title={`Priority: ${task.priority}`}></span>
+                         {task.dueDate && (
+                            <span className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-500'}`}>
+                                {new Date(task.dueDate).toLocaleDateString()}
+                            </span>
+                         )}
+                    </div>
                 </div>
-            </div>
-        </div>
+            </CardContent>
+        </Card>
     );
 };
 

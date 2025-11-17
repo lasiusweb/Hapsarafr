@@ -5,6 +5,8 @@ import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { UserProfileModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
+import { Label } from './ui/Label';
+import { Input } from './ui/Input';
 
 interface ProfilePageProps {
     currentUser: User;
@@ -112,17 +114,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, groups, onSave, 
 
                         <div className="mt-8 space-y-6">
                             <div>
-                                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">Full Name</label>
-                                <input
+                                <Label htmlFor="fullName" className="block text-sm">Full Name</Label>
+                                <Input
                                     type="text"
                                     id="fullName"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
-                                    className="mt-1 w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                                    className="mt-1"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Group</label>
+                                <Label>Group</Label>
                                 <p className="mt-1 p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600">
                                     {userGroup?.name || 'No Group'} (Group is managed by an administrator)
                                 </p>

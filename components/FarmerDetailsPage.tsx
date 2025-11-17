@@ -14,6 +14,7 @@ import CustomSelect from './CustomSelect';
 import { ASSISTANCE_SCHEMES } from '../data/assistanceSchemes';
 import RequestVisitModal from './RequestVisitModal';
 import VisitDetailsModal from './VisitDetailsModal';
+import { Card, CardHeader, CardContent } from './ui/Card';
 
 
 const RegistrationForm = lazy(() => import('./RegistrationForm'));
@@ -891,118 +892,4 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     };
 
     if (isEditing) {
-        return <Suspense fallback={<div>Loading form...</div>}><RegistrationForm onSubmit={handleUpdateFarmer} onCancel={() => setIsEditing(false)} existingFarmers={[]} mode="edit" existingFarmer={plainFarmer} setNotification={setNotification} currentUser={currentUser} /></Suspense>;
-    }
-    
-    // This is a minimal implementation. In a real app, this would be more robust.
-    const Details = () => (
-        <dl className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-8">
-            <DetailItem label="HAP ID" value={plainFarmer.hap_id} />
-            <DetailItem label="Full Name" value={plainFarmer.fullName} />
-            <DetailItem label="Father/Husband Name" value={plainFarmer.fatherHusbandName} />
-            <DetailItem label="Mobile Number" value={plainFarmer.mobileNumber} />
-            <DetailItem label="Aadhaar Number" value={`**** **** ${plainFarmer.aadhaarNumber.slice(-4)}`} />
-            <DetailItem label="Gender" value={plainFarmer.gender} />
-            <DetailItem label="District" value={getGeoName('district', plainFarmer)} />
-            <DetailItem label="Mandal" value={getGeoName('mandal', plainFarmer)} />
-            <DetailItem label="Village" value={getGeoName('village', plainFarmer)} />
-            <DetailItem label="Address" value={plainFarmer.address} />
-            <DetailItem label="Registration Date" value={new Date(plainFarmer.registrationDate).toLocaleDateString()} />
-            <DetailItem label="Bank Account No." value={`...${plainFarmer.bankAccountNumber.slice(-4)}`} />
-            <DetailItem label="IFSC Code" value={plainFarmer.ifscCode} />
-            <DetailItem label="Account Verified" value={plainFarmer.accountVerified ? 'Yes' : 'No'} />
-        </dl>
-    );
-
-    return (
-        <div className="bg-white rounded-lg shadow-xl">
-            {/* Header */}
-            <div className="p-6 border-b">
-                 <div className="flex justify-between items-start">
-                    <div className="flex items-start gap-6">
-                        {plainFarmer.photo ? (
-                            <img src={plainFarmer.photo} alt={plainFarmer.fullName} className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-md -mt-12" />
-                        ) : (
-                            <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-3xl border-4 border-white shadow-md -mt-12">
-                                {plainFarmer.fullName.charAt(0)}
-                            </div>
-                        )}
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-800">{plainFarmer.fullName}</h1>
-                            <p className="text-gray-500 font-mono">{plainFarmer.hap_id}</p>
-                        </div>
-                    </div>
-                     <div className="flex flex-col items-end gap-2">
-                        <button onClick={onBack} className="text-sm font-semibold text-gray-600 hover:text-gray-900">&larr; Back to Directory</button>
-                        {permissions.has(Permission.CAN_EDIT_FARMER) && <button onClick={handleEdit} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm">Edit Farmer</button>}
-                    </div>
-                </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="px-6 -mt-px">
-                <div className="flex gap-2">
-                     <TabButton tabName="details" label="Details" />
-                     <TabButton tabName="farm-portfolio" label="Farm Portfolio" />
-                     <TabButton tabName="subsidy-status" label="Subsidy Status" />
-                     <TabButton tabName="service-providers" label="Service Providers" />
-                     <TabButton tabName="field-service" label="Field Service" />
-                </div>
-            </div>
-
-            <div className="p-6">
-                {activeTab === 'details' && (
-                    <div className="space-y-8">
-                        <Details />
-                         <div className="pt-8 border-t">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Plot Information</h3>
-                            {isLoadingPlots ? <p>Loading plot details...</p> : plots.length > 0 ? (
-                                <div className="space-y-4">
-                                    {plots.map((plot, index) => (
-                                        <div key={plot.id} className="p-4 bg-gray-50 rounded-lg border">
-                                            <h4 className="font-bold text-gray-700">{plot.name || `Plot ${index + 1}`}</h4>
-                                            <dl className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-                                               <DetailItem label="Acreage" value={`${plot.acreage} ac`} />
-                                               <DetailItem label="No. of Plants" value={plot.number_of_plants} />
-                                               <DetailItem label="Plantation Method" value={plot.method_of_plantation} />
-                                               <DetailItem label="Plant Type" value={plot.plant_type} />
-                                               <DetailItem label="Plantation Date" value={plot.plantation_date ? new Date(plot.plantation_date).toLocaleDateString() : 'N/A'} />
-                                               <DetailItem label="Soil Type" value={plot.soil_type} />
-                                            </dl>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p>No plot details available for this farmer.</p>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {activeTab === 'farm-portfolio' && <FarmPortfolioTab farmer={farmer} currentUser={currentUser} setNotification={setNotification} />}
-                {activeTab === 'subsidy-status' && <SubsidyStatusView farmer={plainFarmer} payments={subsidyPayments} onRecordPayment={handleRecordPaymentClick} />}
-                {activeTab === 'service-providers' && <ServiceProvidersTab farmer={farmer} consents={[]} allTenants={allTenants} allTerritories={allTerritories} currentUser={currentUser} onOpenConsentModal={() => {}} onRevokeConsent={() => {}} />}
-                {activeTab === 'field-service' && <FieldServiceTab onOpenRequestModal={() => setShowRequestVisitModal(true)} onOpenDetailsModal={setVisitDetailsModal} users={users} />}
-            </div>
-
-             {/* Modals */}
-             {showPaymentForm && <SubsidyPaymentForm onClose={() => { setShowPaymentForm(false); setEditingPayment(null); }} onSubmit={handleSavePayment} existingPayment={editingPayment} initialStage={initialPaymentStage} />}
-             {paymentToDelete && <ConfirmationModal isOpen={!!paymentToDelete} title="Delete Payment?" message="Are you sure you want to delete this payment record? This cannot be undone." onConfirm={handleDeletePayment} onCancel={() => setPaymentToDelete(null)} confirmText="Delete" confirmButtonClass="bg-red-600 hover:bg-red-700" />}
-             {showProfitSimulator && <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl p-8 relative"><button onClick={() => setShowProfitSimulator(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-200">&times;</button><Suspense fallback={<div>Loading...</div>}><ProfitabilitySimulator plots={plots} /></Suspense></div></div>}
-             {showTransferModal && <TransferModal farmer={plainFarmer} currentUser={currentUser} tenants={allTenants} onClose={() => setShowTransferModal(false)} onSave={() => { setShowTransferModal(false); setNotification({ message: 'Transfer request submitted.', type: 'success' }); }} />}
-             <Suspense fallback={<div/>}>{showRequestVisitModal && <RequestVisitModal farmer={plainFarmer} users={users} onClose={() => setShowRequestVisitModal(false)} onSave={async () => {}} currentUser={currentUser} />}</Suspense>
-             {visitDetailsModal && <VisitDetailsModal isOpen={!!visitDetailsModal} onClose={() => setVisitDetailsModal(null)} request={visitDetailsModal} farmer={farmer} users={users} onSave={async () => {}} onCancelVisit={async () => {}} onCompleteVisit={async () => {}} />}
-        </div>
-    );
-};
-
-const enhance = withObservables(
-    ['farmerId'],
-    ({ farmerId, database }: { farmerId: string, database: Database }) => ({
-        farmer: database.get<FarmerModel>('farmers').findAndObserve(farmerId),
-        subsidyPayments: database.get<SubsidyPaymentModel>('subsidy_payments').query(Q.where('farmer_id', farmerId), Q.sortBy('payment_date', 'desc')).observe(),
-        activityLogs: database.get<ActivityLogModel>('activity_logs').query(Q.where('farmer_id', farmerId), Q.sortBy('created_at', 'desc')).observe(),
-        resourceDistributions: database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('farmer_id', farmerId), Q.sortBy('distribution_date', 'desc')).observe(),
-    })
-);
-
-export default enhance(InnerFarmerDetailsPage);
+        return <Susp

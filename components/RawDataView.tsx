@@ -4,6 +4,7 @@ import { FarmerModel } from '../db';
 // FIX: Import from the newly created types.ts file
 import { Farmer } from '../types';
 import CustomSelect from './CustomSelect';
+import { Input } from './ui/Input';
 
 // Component to render sort icons
 const SortIcon: React.FC<{ direction: 'ascending' | 'descending' | null }> = ({ direction }) => {
@@ -113,12 +114,12 @@ const RawDataView: React.FC<{ farmers: FarmerModel[]; onClose: () => void; }> = 
                 
                 {/* Controls */}
                 <div className="p-4 flex-shrink-0">
-                     <input
+                     <Input
                         type="text"
                         placeholder="Search all columns..."
                         value={searchTerm}
                         onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                        className="w-full md:w-1/3 p-2 border border-gray-300 rounded-md"
+                        className="w-full md:w-1/3"
                     />
                 </div>
 

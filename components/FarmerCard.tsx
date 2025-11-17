@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Farmer, FarmerStatus } from '../types';
 import StatusBadge from './StatusBadge';
 import { getGeoName } from '../lib/utils';
+import { Card, CardContent } from './ui/Card';
 
 interface FarmerCardProps {
     farmer: Farmer;
@@ -32,10 +33,11 @@ const FarmerCard: React.FC<FarmerCardProps> = ({ farmer, isSelected, onSelection
     };
 
     const cardBgClass = isNewlyAdded ? 'bg-green-100' : isSelected ? 'bg-green-50' : 'bg-white';
+    const cardBorderClass = isSelected ? 'border-green-400 ring-2 ring-green-200' : 'border-gray-200';
 
     return (
-        <div className={`rounded-lg shadow-md overflow-hidden border hover:shadow-xl transition-all duration-1000 ${isSelected ? 'border-green-400 ring-2 ring-green-200' : 'border-gray-200'} ${cardBgClass}`}>
-            <div className="p-4 relative">
+        <Card className={`overflow-hidden hover:shadow-xl transition-all duration-1000 ${cardBgClass} ${cardBorderClass}`}>
+            <CardContent className="p-4 relative">
                 <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                     <input
                         type="checkbox"
@@ -97,8 +99,8 @@ const FarmerCard: React.FC<FarmerCardProps> = ({ farmer, isSelected, onSelection
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </CardContent>
+        </Card>
     );
 };
 

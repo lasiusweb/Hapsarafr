@@ -4,6 +4,7 @@ import { Farmer, FarmerStatus, User, Tenant } from '../types';
 import { getGeoName } from '../lib/utils';
 import StatusBadge from './StatusBadge';
 import FarmerCard from './FarmerCard';
+import { Select } from './ui/Select';
 
 interface FarmerListProps {
     farmers: Farmer[];
@@ -106,11 +107,11 @@ export default function FarmerList({
         <div className="px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-700">Rows per page:</span>
-                <select value={rowsPerPage} onChange={e => onRowsPerPageChange(Number(e.target.value))} className="p-1 border border-gray-300 rounded-md">
+                <Select value={String(rowsPerPage)} onChange={e => onRowsPerPageChange(Number(e.target.value))} className="w-24">
                     <option value={10}>10</option>
                     <option value={25}>25</option>
                     <option value={50}>50</option>
-                </select>
+                </Select>
             </div>
             <div className="flex items-center gap-4">
                 <span className="text-sm text-gray-700">

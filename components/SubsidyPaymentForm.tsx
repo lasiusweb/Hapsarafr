@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { SubsidyPayment, PaymentStage } from '../types';
 import { SubsidyPaymentModel } from '../db';
 import CustomSelect from './CustomSelect';
+import { Label } from './ui/Label';
+import { Input } from './ui/Input';
+import { Textarea } from './ui/Textarea';
 
 interface SubsidyPaymentFormProps {
     onClose: () => void;
@@ -100,11 +103,11 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                 </div>
                 <div className="p-8 space-y-4">
                     <div>
-                        <label htmlFor="paymentDate" className="block text-sm font-medium text-gray-700">Payment Date</label>
-                        <input type="date" id="paymentDate" name="paymentDate" value={formData.paymentDate} onChange={handleChange} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                        <Label htmlFor="paymentDate" className="block text-sm">Payment Date</Label>
+                        <Input type="date" id="paymentDate" name="paymentDate" value={formData.paymentDate} onChange={handleChange} required className="mt-1" />
                     </div>
                     <div>
-                        <label htmlFor="paymentStage" className="block text-sm font-medium text-gray-700">Payment Stage</label>
+                        <Label htmlFor="paymentStage" className="block text-sm">Payment Stage</Label>
                         <CustomSelect
                             value={formData.paymentStage}
                             onChange={(value) => handleStageChange(value as PaymentStage)}
@@ -112,16 +115,16 @@ const SubsidyPaymentForm: React.FC<SubsidyPaymentFormProps> = ({ onClose, onSubm
                         />
                     </div>
                      <div>
-                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Amount (₹)</label>
-                        <input type="number" id="amount" name="amount" value={formData.amount} onChange={handleChange} required placeholder="e.g., 5250" className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                        <Label htmlFor="amount" className="block text-sm">Amount (₹)</Label>
+                        <Input type="number" id="amount" name="amount" value={formData.amount} onChange={handleChange} required placeholder="e.g., 5250" className="mt-1" />
                     </div>
                     <div>
-                        <label htmlFor="utrNumber" className="block text-sm font-medium text-gray-700">UTR/DD Number</label>
-                        <input type="text" id="utrNumber" name="utrNumber" value={formData.utrNumber} onChange={handleChange} required className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                        <Label htmlFor="utrNumber" className="block text-sm">UTR/DD Number</Label>
+                        <Input type="text" id="utrNumber" name="utrNumber" value={formData.utrNumber} onChange={handleChange} required className="mt-1" />
                     </div>
                      <div>
-                        <label htmlFor="notes" className="block text-sm font-medium text-gray-700">Notes (Optional)</label>
-                        <textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} rows={3} className="mt-1 w-full p-2 border border-gray-300 rounded-md"></textarea>
+                        <Label htmlFor="notes" className="block text-sm">Notes (Optional)</Label>
+                        <Textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} rows={3} className="mt-1"></Textarea>
                     </div>
                 </div>
                 <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">

@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, Group, Permission } from '../types';
 import { PERMISSIONS_LIST } from '../data/permissionsData';
 import CustomSelect from './CustomSelect';
+import { Input } from './ui/Input';
+import { Label } from './ui/Label';
 
 interface AdminPageProps {
     users: User[];
@@ -217,8 +219,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                                             <h3 className="font-semibold text-lg mb-4">Edit Group: {selectedGroup.name}</h3>
                                             <div className="space-y-6">
                                                 <div>
-                                                    <label htmlFor="groupName" className="block text-sm font-medium text-gray-700">Group Name</label>
-                                                    <input id="groupName" type="text" value={selectedGroup.name} onChange={handleGroupNameChange} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
+                                                    <Label htmlFor="groupName" className="block text-sm">Group Name</Label>
+                                                    <Input id="groupName" type="text" value={selectedGroup.name} onChange={handleGroupNameChange} className="mt-1" />
                                                 </div>
                                                 <div>
                                                     <h4 className="text-sm font-medium text-gray-700 mb-2">Permissions</h4>
