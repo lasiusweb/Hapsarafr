@@ -238,6 +238,20 @@ export enum LedgerTransactionType {
     ADJUSTMENT = 'adjustment',
 }
 
+export enum DirectiveStatus {
+    Open = 'OPEN',
+    Claimed = 'CLAIMED',
+    InProgress = 'IN_PROGRESS',
+    Completed = 'COMPLETED',
+    Cancelled = 'CANCELLED',
+}
+
+export enum DirectiveTaskType {
+    PestScouting = 'Pest Scouting',
+    PlotVerification = 'Plot Verification',
+    TrainingAnnouncement = 'Training Announcement',
+}
+
 
 // --- Interfaces ---
 
@@ -417,6 +431,25 @@ export interface Task {
     createdAt: string;
     updatedAt: string;
     tenantId: string;
+    directiveId?: string;
+    source: 'INTERNAL' | 'GOVERNMENT';
+    completionEvidenceJson?: string;
+}
+
+export interface Directive {
+    id: string;
+    createdByGovUserId: string;
+    administrativeCode: string; // e.g., 'H-01'
+    taskType: DirectiveTaskType;
+    priority: TaskPriority;
+    detailsJson: string; // JSON with instructions, etc.
+    dueDate?: string;
+    status: DirectiveStatus;
+    claimedByTenantId?: string;
+    claimedAt?: number;
+    completionDetailsJson?: string; // Evidence from the completed task
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface Harvest {

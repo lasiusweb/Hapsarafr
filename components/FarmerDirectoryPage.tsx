@@ -279,7 +279,7 @@ const FarmerDirectoryPage: React.FC<FarmerDirectoryPageProps & { farmers: Farmer
             
             {/* Modals */}
              {isBatchUpdateModalOpen && <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleConfirmBatchUpdate} onCancel={() => setIsBatchUpdateModalOpen(false)} />}
-             {isDeleteConfirmationOpen && <ConfirmationModal isOpen={isDeleteConfirmationOpen} title="Delete Farmers?" message={`Are you sure you want to delete ${selectedFarmerIds.length} farmer(s)? This action cannot be undone.`} onConfirm={handleConfirmDelete} onCancel={() => setIsDeleteConfirmationOpen(false)} confirmText="Delete" confirmButtonClass="bg-red-600 hover:bg-red-700" />}
+             {isDeleteConfirmationOpen && <ConfirmationModal isOpen={isDeleteConfirmationOpen} title="Delete Farmers?" message={`Are you sure you want to delete ${selectedFarmerIds.length} farmer(s)? This action cannot be undone.`} onConfirm={handleConfirmDelete} onCancel={() => setIsDeleteConfirmationOpen(false)} confirmText="Delete" confirmButtonVariant="destructive" />}
              {isBulkImportModalOpen && <BulkImportModal onClose={() => setIsBulkImportModalOpen(false)} onSubmit={async () => {}} existingFarmers={processedFarmers} />}
              {isRawDataViewOpen && <RawDataView farmers={rawFarmers} onClose={() => setIsRawDataViewOpen(false)} />}
              {farmerToPrint && <PrintView farmer={farmerToPrint} plots={plotsForPrint} users={users} />}

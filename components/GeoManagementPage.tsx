@@ -220,7 +220,7 @@ const GeoManagementPage: React.FC<GeoManagementPageProps> = ({ onBack }) => {
                     onConfirm={handleConfirmDelete}
                     onCancel={() => setItemToDelete(null)}
                     confirmText="Delete"
-                    confirmButtonClass="bg-red-600 hover:bg-red-700"
+                    confirmButtonVariant="destructive"
                 />
             )}
         </div>

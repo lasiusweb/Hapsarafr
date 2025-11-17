@@ -128,7 +128,7 @@ const SubscriptionManagementPage: React.FC<SubscriptionManagementPageProps> = ({
                     onConfirm={handleCancelSubscription}
                     onCancel={() => setShowCancelModal(false)}
                     confirmText="Yes, Cancel"
-                    confirmButtonClass="bg-red-600 hover:bg-red-700"
+                    confirmButtonVariant="destructive"
                 />
             )}
         </>

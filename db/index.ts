@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 43,
+  version: 44,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -226,7 +226,28 @@ export const mySchema = appSchema({
             { name: 'updated_at', type: 'number' },
             { name: 'sync_status', type: 'string' },
             { name: 'tenant_id', type: 'string', isIndexed: true },
+            { name: 'directive_id', type: 'string', isOptional: true, isIndexed: true },
+            { name: 'source', type: 'string' },
+            { name: 'completion_evidence_json', type: 'string', isOptional: true },
         ]
+    }),
+    tableSchema({
+      name: 'directives',
+      columns: [
+        { name: 'created_by_gov_user_id', type: 'string', isIndexed: true },
+        { name: 'administrative_code', type: 'string', isIndexed: true },
+        { name: 'task_type', type: 'string' },
+        { name: 'priority', type: 'string' },
+        { name: 'details_json', type: 'string' },
+        { name: 'due_date', type: 'string', isOptional: true },
+        { name: 'status', type: 'string', isIndexed: true },
+        { name: 'claimed_by_tenant_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'claimed_at', type: 'number', isOptional: true },
+        { name: 'completion_details_json', type: 'string', isOptional: true },
+        { name: 'sync_status', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ]
     }),
     tableSchema({
         name: 'planting_records',
@@ -1228,8 +1249,44 @@ export class DataSharingConsentModel extends Model {
     @readonly @date('updated_at') updatedAt!: Date;
 }
 
+export class DirectiveModel extends Model {
+    static table = 'directives';
+    // FIX: Add missing 'id' property to DirectiveModel to resolve type error.
+    readonly id!: string;
+    @text('created_by_gov_user_id') createdByGovUserId!: string;
+    @text('administrative_code') administrativeCode!: string;
+    @text('task_type') taskType!: string;
+    @text('priority') priority!: string;
+    @text('details_json') detailsJson!: string;
+    @text('due_date') dueDate?: string;
+    @text('status') status!: string;
+    @text('claimed_by_tenant_id') claimedByTenantId?: string;
+    @field('claimed_at') claimedAt?: number;
+    @text('completion_details_json') completionDetailsJson?: string;
+    @text('sync_status') syncStatusLocal!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+}
 
-export class TaskModel extends Model { static table = 'tasks'; readonly id!: string; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class TaskModel extends Model { 
+    static table = 'tasks'; 
+    readonly id!: string; 
+    @text('title') title!: string; 
+    @text('description') description?: string; 
+    @text('status') status!: any; 
+    @text('priority') priority!: any; 
+    @text('due_date') dueDate?: string; 
+    @text('assignee_id') assigneeId?: string; 
+    @text('farmer_id') farmerId?: string; 
+    @text('created_by') createdBy!: string; 
+    @readonly @date('created_at') createdAt!: Date; 
+    @readonly @date('updated_at') updatedAt!: Date; 
+    @text('sync_status') syncStatusLocal!: string; 
+    @text('tenant_id') tenantId!: string; 
+    @text('directive_id') directiveId?: string;
+    @text('source') source!: 'INTERNAL' | 'GOVERNMENT';
+    @text('completion_evidence_json') completionEvidenceJson?: string;
+}
 export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; readonly id!: string; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
 export class PlantingRecordModel extends Model { static table = 'planting_records'; readonly id!: string; @text('farm_plot_id') farmPlotId!: string; @text('seed_source') seedSource!: string; @text('planting_date') plantingDate!: string; @text('genetic_variety') geneticVariety!: string; @field('number_of_plants') numberOfPlants!: number; @text('care_instructions_url') careInstructionsUrl?: string; @text('qr_code_data') qrCodeData?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; static associations = { farm_plots: { type: 'belongs_to', key: 'farm_plot_id' } } as const; @relation('farm_plots', 'farm_plot_id') farmPlot!: any; }
 export class HarvestModel extends Model { static table = 'harvests'; readonly id!: string; @text('farmer_id') farmerId!: string; @text('harvest_date') harvestDate!: string; @field('gross_weight') grossWeight!: number; @field('tare_weight') tareWeight!: number; @field('net_weight') netWeight!: number; @text('assessed_by_id') assessedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
@@ -1345,7 +1402,7 @@ const database = new Database({
     FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
     TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel,
     ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel,
-    WalletModel, WalletTransactionModel, VisitRequestModel,
+    WalletModel, WalletTransactionModel, VisitRequestModel, DirectiveModel,
     // Marketplace Models
     ProductCategoryModel, ProductModel, VendorModel, VendorProductModel, OrderModel, OrderItemModel,
     // Multi-crop Models

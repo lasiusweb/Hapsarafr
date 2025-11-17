@@ -7,9 +7,11 @@ import { useDatabase } from './DatabaseContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { initializeSupabase, getSupabase } from './lib/supabase';
 import { synchronize } from './lib/sync';
-import { FarmerModel, UserModel, GroupModel, TenantModel, TerritoryModel, FarmerDealerConsentModel, FarmPlotModel } from './db';
+import { FarmerModel, UserModel, GroupModel, TenantModel, TerritoryModel, FarmerDealerConsentModel, FarmPlotModel, DirectiveModel, TaskModel } from './db';
 import { Farmer, User, Group, Permission, Tenant } from './types';
 import { farmerModelToPlain, userModelToPlain, groupModelToPlain, tenantModelToPlain } from './lib/utils';
+// FIX: Import `useQuery` hook to resolve 'Cannot find name' error.
+import { useQuery } from './hooks/useQuery';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -59,6 +61,7 @@ const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
 const FieldServicePage = lazy(() => import('./components/FieldServicePage'));
 const HapsaraNexusPage = lazy(() => import('./components/HapsaraNexusPage'));
 const CaelusDashboard = lazy(() => import('./components/CaelusDashboard'));
+const StateCraftDashboard = lazy(() => import('./components/StateCraftDashboard'));
 
 
 type View =
@@ -69,7 +72,7 @@ type View =
     | 'billing' | 'subscription-management' | 'usage-analytics' | 'tasks' | 'resource-management'
     | 'distribution-report' | 'performance-analytics' | 'mentorship' | 'community' | 'resource-library' | 'events'
     | 'financials' | 'marketplace' | 'product-list' | 'checkout' | 'order-confirmation' | 'vendor-management'
-    | 'field-service' | 'hapsara-nexus' | 'climate-resilience';
+    | 'field-service' | 'hapsara-nexus' | 'climate-resilience' | 'statecraft-dashboard';
 
 const App: React.FC = () => {
     // Component State
@@ -243,14 +246,16 @@ const EnhancedApp = withObservables(['currentUser'], ({
         allGroups: database.get('groups').query().observe(),
         allTenants: database.get('tenants').query().observe(),
         allTerritories: database.get('territories').query().observe(),
+        allDirectives: database.get('directives').query().observe(),
         currentUser: currentUserObservable,
     };
 })((props: any) => {
     const { 
-        view, viewParam, navigate, allFarmers, allUsers, allGroups, allTenants, allTerritories, currentUser, 
+        view, viewParam, navigate, allFarmers, allUsers, allGroups, allTenants, allTerritories, allDirectives, currentUser, 
         isOnline, isSyncing, lastSync, setNotification,
         newlyAddedFarmerId, onHighlightComplete, onRegisterFarmer
     } = props;
+    const database = useDatabase();
 
     const plainFarmers: Farmer[] = useMemo(() => allFarmers.map((f: FarmerModel) => farmerModelToPlain(f)!), [allFarmers]);
     const plainUsers: User[] = useMemo(() => allUsers.map((u: UserModel) => userModelToPlain(u)!), [allUsers]);
@@ -258,6 +263,44 @@ const EnhancedApp = withObservables(['currentUser'], ({
     const plainTenants: Tenant[] = useMemo(() => allTenants.map((t: TenantModel) => tenantModelToPlain(t)!), [allTenants]);
     
     const currentActiveUser = currentUser?.[0];
+
+    // Background processor for completed directives
+    const completedGovTasks = useQuery(database.get('tasks').query(
+        Q.where('source', 'GOVERNMENT'),
+        Q.where('status', 'Done')
+    ));
+
+    useEffect(() => {
+        const processCompletedDirectives = async () => {
+            const directivesToUpdate = [];
+            for (const task of completedGovTasks) {
+                if (!task.directiveId) continue;
+                try {
+                    const directive = await database.get('directives').find(task.directiveId);
+                    if (directive && directive.status !== 'COMPLETED') {
+                        directivesToUpdate.push({ directive, task });
+                    }
+                } catch (error) {
+                    // Directive might not be in local DB yet, ignore
+                }
+            }
+            
+            if (directivesToUpdate.length > 0) {
+                await database.write(async () => {
+                    for (const { directive, task } of directivesToUpdate) {
+                        await directive.update((d: any) => { // Use any to bypass strict type checking for model update
+                            d.status = 'COMPLETED';
+                            d.completionDetailsJson = task.completionEvidenceJson;
+                        });
+                    }
+                });
+            }
+        };
+
+        if (completedGovTasks.length > 0) {
+            processCompletedDirectives();
+        }
+    }, [completedGovTasks, database]);
 
     const userPermissions = useMemo(() => {
         if (!currentActiveUser || !plainGroups) return new Set<Permission>();
@@ -295,7 +338,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'billing': return <BillingPage currentTenant={currentTenant} currentUser={currentActiveUser} onBack={() => navigate('dashboard')} onNavigate={navigate} setNotification={setNotification} />;
             case 'subscription-management': return <SubscriptionManagementPage currentUser={currentActiveUser} onBack={() => navigate('billing')} />;
             case 'usage-analytics': return <UsageAnalyticsPage currentUser={currentActiveUser} supabase={getSupabase()} onBack={() => navigate('dashboard')} />;
-            case 'tasks': return <TaskManagementPage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
+            case 'tasks': return <TaskManagementPage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} allDirectives={allDirectives} allTenants={allTenants} allTerritories={allTerritories} />;
             case 'field-service': return <FieldServicePage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
             case 'hapsara-nexus': return <HapsaraNexusPage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
             case 'resource-management': return <ResourceManagementPage currentUser={currentActiveUser} onBack={() => navigate('admin')} />;
@@ -311,6 +354,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'checkout': return <CheckoutPage onBack={() => navigate('marketplace')} onOrderPlaced={(orderId) => navigate('order-confirmation', orderId)} />;
             case 'order-confirmation': return <OrderConfirmationPage orderId={viewParam!} onNavigate={navigate} />;
             case 'vendor-management': return <VendorManagementPage currentUser={currentActiveUser} setNotification={setNotification} onBack={() => navigate('admin')} />;
+            case 'statecraft-dashboard': return <StateCraftDashboard onBack={() => navigate('dashboard')} currentUser={currentActiveUser} allDirectives={allDirectives} allTenants={allTenants} allUsers={allUsers} />;
             case 'climate-resilience': return <CaelusDashboard onBack={() => navigate('dashboard')} />;
             default: return <NotFoundPage onBack={() => navigate('dashboard')} />;
         }

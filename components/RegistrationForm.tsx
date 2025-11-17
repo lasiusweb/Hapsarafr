@@ -632,7 +632,7 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
                             </div>
                         </div>
                     </form>
-                    {showCancelConfirmation && <ConfirmationModal isOpen={showCancelConfirmation} title="Discard Changes?" message="Are you sure you want to cancel? Any unsaved changes will be lost." onConfirm={handleConfirmCancel} onCancel={handleAbortCancel} confirmText="Discard" confirmButtonClass="bg-red-600 hover:bg-red-700" />}
+                    {showCancelConfirmation && <ConfirmationModal isOpen={showCancelConfirmation} title="Discard Changes?" message="Are you sure you want to cancel? Any unsaved changes will be lost." onConfirm={handleConfirmCancel} onCancel={handleAbortCancel} confirmText="Discard" confirmButtonVariant="destructive" />}
                     {showAiReview && preparedFarmerData && <AiReviewModal farmerData={preparedFarmerData} plotsData={[]} onClose={() => setShowAiReview(false)} />}
                 </div>
             )}
