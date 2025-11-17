@@ -1,14 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { ProductCategoryModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import { useCart } from '../CartContext';
 import { formatCurrency } from '../lib/utils';
+import { User } from '../types';
+import CreateListingModal from './CreateListingModal';
 
 interface MarketplacePageProps {
     onBack: () => void;
     onNavigate: (view: 'product-list' | 'checkout', param?: string) => void;
+    currentUser: User;
 }
 
 const CategoryCard: React.FC<{ title: string; iconSvg?: string; onClick: () => void }> = ({ title, iconSvg, onClick }) => (
@@ -50,9 +53,14 @@ const CartWidget: React.FC<{ onNavigate: (view: 'checkout') => void }> = ({ onNa
 };
 
 
-const MarketplacePage: React.FC<MarketplacePageProps> = ({ onBack, onNavigate }) => {
+const MarketplacePage: React.FC<MarketplacePageProps> = ({ onBack, onNavigate, currentUser }) => {
     const database = useDatabase();
     const categories = useQuery(useMemo(() => database.get<ProductCategoryModel>('product_categories').query(Q.sortBy('name', 'asc')), [database]));
+    const [isCreateListingOpen, setIsCreateListingOpen] = useState(false);
+
+    const handleSaveSuccess = () => {
+        alert('Item listed successfully!');
+    };
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
@@ -63,6 +71,9 @@ const MarketplacePage: React.FC<MarketplacePageProps> = ({ onBack, onNavigate })
                         <h1 className="text-3xl font-bold text-gray-800">Hapsara Marketplace</h1>
                         <p className="text-gray-500">Your trusted source for quality agricultural inputs.</p>
                     </div>
+                     <button onClick={() => setIsCreateListingOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">
+                        + Sell an Item
+                    </button>
                 </div>
 
                 {/* Search Bar Placeholder */}
@@ -102,6 +113,14 @@ const MarketplacePage: React.FC<MarketplacePageProps> = ({ onBack, onNavigate })
                 </div>
             </div>
             <CartWidget onNavigate={onNavigate} />
+            {isCreateListingOpen && (
+                <CreateListingModal 
+                    onClose={() => setIsCreateListingOpen(false)} 
+                    currentUser={currentUser} 
+                    categories={categories}
+                    onSaveSuccess={handleSaveSuccess}
+                />
+            )}
         </div>
     );
 };

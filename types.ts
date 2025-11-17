@@ -176,6 +176,7 @@ export enum OrderStatus {
     Shipped = 'Shipped',
     Delivered = 'Delivered',
     Cancelled = 'Cancelled',
+    Disputed = 'Disputed',
 }
 
 export enum TerritoryTransferStatus {
@@ -614,6 +615,8 @@ export interface Vendor {
     rating: number;
     tenantId: string;
     createdAt: string;
+    sellerType: 'FARMER' | 'VENDOR';
+    farmerId?: string;
 }
 
 export interface VendorProduct {
@@ -637,6 +640,7 @@ export interface Order {
     deliveryInstructions?: string;
     paymentTransactionId?: string;
     logisticsPartnerId?: string;
+    disputeReason?: string;
 }
 
 export interface OrderItem {

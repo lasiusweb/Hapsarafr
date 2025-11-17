@@ -285,7 +285,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'resource-library': return <ResourceLibraryPage onBack={() => navigate('dashboard')} currentUser={currentActiveUser} />;
             case 'events': return <EventsPage onBack={() => navigate('dashboard')} currentUser={currentActiveUser} setNotification={setNotification} />;
             case 'financials': return <FinancialsPage allFarmers={plainFarmers} currentUser={currentActiveUser} onBack={() => navigate('dashboard')} setNotification={setNotification} onNavigate={navigate} permissions={userPermissions} />;
-            case 'marketplace': return <MarketplacePage onBack={() => navigate('dashboard')} onNavigate={(v,p) => navigate(v,p)} />;
+            case 'marketplace': return <MarketplacePage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} onNavigate={(v,p) => navigate(v,p)} />;
             case 'product-list': return <ProductListPage categoryId={viewParam!} onBack={() => navigate('marketplace')} />;
             case 'checkout': return <CheckoutPage onBack={() => navigate('marketplace')} onOrderPlaced={(orderId) => navigate('order-confirmation', orderId)} />;
             case 'order-confirmation': return <OrderConfirmationPage orderId={viewParam!} onNavigate={navigate} />;

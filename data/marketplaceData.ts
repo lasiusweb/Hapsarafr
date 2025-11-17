@@ -26,7 +26,8 @@ export const SAMPLE_VENDORS: Omit<Vendor, 'tenantId' | 'createdAt'>[] = [
         mobileNumber: '9876543210',
         address: '123 Agri St, Hanmakonda',
         status: VendorStatus.Verified,
-        rating: 4.5
+        rating: 4.5,
+        sellerType: 'VENDOR',
     },
     {
         id: 'vendor_farm_essentials',
@@ -35,7 +36,8 @@ export const SAMPLE_VENDORS: Omit<Vendor, 'tenantId' | 'createdAt'>[] = [
         mobileNumber: '9876543211',
         address: '456 Farmer Rd, Mulugu',
         status: VendorStatus.Verified,
-        rating: 4.2
+        rating: 4.2,
+        sellerType: 'VENDOR',
     }
 ];
 

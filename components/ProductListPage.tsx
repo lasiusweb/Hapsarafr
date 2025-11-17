@@ -83,7 +83,8 @@ const ProductListPage: React.FC<ProductListPageProps> = ({ categoryId, onBack })
                 }
                 return null;
             })
-            .filter((item): item is EnrichedVendorProduct => item !== null && item.product.categoryId === categoryId);
+            .filter((item): item is EnrichedVendorProduct => item !== null && item.product.categoryId === categoryId)
+            .sort((a, b) => a.vendorProduct.price - b.vendorProduct.price);
     }, [products, vendors, vendorProducts, categoryId]);
 
     return (

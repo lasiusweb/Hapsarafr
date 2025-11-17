@@ -91,10 +91,6 @@ const GranularConsentModal: React.FC<GranularConsentModalProps> = ({ isOpen, onC
                 </div>
 
                 <div className="p-8 space-y-6 overflow-y-auto">
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                        <p><strong>Prototype Notice:</strong> This is a UI prototype for gathering feedback on granular consent. The settings here are not yet saved to the database.</p>
-                    </div>
-
                     <div className="space-y-4">
                         <div className="flex justify-between items-center p-4 border rounded-lg">
                             <div><h4 className="font-semibold text-gray-700">Personal Information</h4><p className="text-xs text-gray-500">Includes name, contact details, and address.</p></div>

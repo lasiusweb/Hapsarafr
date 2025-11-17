@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 40,
+  version: 41,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -522,6 +522,8 @@ export const mySchema = appSchema({
         { name: 'rating', type: 'number' },
         { name: 'tenant_id', type: 'string', isIndexed: true },
         { name: 'created_at', type: 'number' },
+        { name: 'seller_type', type: 'string' },
+        { name: 'farmer_id', type: 'string', isOptional: true, isIndexed: true },
       ]
     }),
     tableSchema({
@@ -548,6 +550,7 @@ export const mySchema = appSchema({
         { name: 'payment_transaction_id', type: 'string', isOptional: true },
         { name: 'logistics_partner_id', type: 'string', isOptional: true },
         { name: 'sync_status', type: 'string' },
+        { name: 'dispute_reason', type: 'string', isOptional: true },
       ]
     }),
     tableSchema({
@@ -1065,6 +1068,8 @@ export class VendorModel extends Model {
     @field('rating') rating!: number;
     @text('tenant_id') tenantId!: string;
     @readonly @date('created_at') createdAt!: Date;
+    @text('seller_type') sellerType!: 'FARMER' | 'VENDOR';
+    @text('farmer_id') farmerId?: string;
 }
 
 export class VendorProductModel extends Model {
@@ -1101,6 +1106,7 @@ export class OrderModel extends Model {
     @text('payment_transaction_id') paymentTransactionId?: string;
     @text('logistics_partner_id') logisticsPartnerId?: string;
     @text('sync_status') syncStatusLocal!: string;
+    @text('dispute_reason') disputeReason?: string;
     @relation('farmers', 'farmer_id') farmer!: any;
     @children('order_items') items!: any;
 }

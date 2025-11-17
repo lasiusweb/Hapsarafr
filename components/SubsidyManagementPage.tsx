@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { User, PaymentStage, Farmer } from '../types';
-import { SubsidyPaymentModel } from '../db';
+import { User, PaymentStage, Farmer, SubsidyPayment, ActivityType } from '../types';
+import { SubsidyPaymentModel, ActivityLogModel } from '../db';
 import SubsidyPaymentForm from './SubsidyPaymentForm';
 import { GEO_DATA } from '../data/geoData';
-import { getGeoName } from '../lib/utils';
+import { getGeoName, formatCurrency } from '../lib/utils';
 import CustomSelect from './CustomSelect';
 
 interface SubsidyManagementPageProps {
@@ -42,9 +42,9 @@ type FarmerWithStatuses = {
 };
 
 const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, payments, currentUser, onBack, database, setNotification }) => {
-    // FIX: Corrected a syntax error in the `useState` hook for filters. The shorthand property 'subsidy' was replaced with 'subsidyStage: ""' to provide a valid key-value pair and a more descriptive filter name.
     const [filters, setFilters] = useState({ district: '', mandal: '', subsidyStage: '' });
     const [currentPage, setCurrentPage] = useState(1);
+    const [paymentModalInfo, setPaymentModalInfo] = useState<{ isOpen: boolean; farmer?: Farmer; stage?: PaymentStage }>({ isOpen: false });
     const rowsPerPage = 10;
     
     const mandals = useMemo(() => {
@@ -109,17 +109,91 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
         });
     }, [farmersWithStatuses, filters]);
 
+    const stats = useMemo(() => {
+        let eligibleCount = 0;
+        let awaitingFarmers = new Set<string>();
+
+        filteredFarmers.forEach(({ farmer, statuses }) => {
+            let isAwaiting = false;
+            TABLE_STAGES.forEach(stage => {
+                if (statuses[stage]?.status === 'Eligible') {
+                    eligibleCount++;
+                    isAwaiting = true;
+                }
+            });
+            if (isAwaiting) {
+                awaitingFarmers.add(farmer.id);
+            }
+        });
+        
+        const filteredFarmerIds = new Set(filteredFarmers.map(f => f.farmer.id));
+        const disbursedAmount = payments
+            .filter(p => filteredFarmerIds.has(p.farmerId))
+            .reduce((sum, p) => sum + p.amount, 0);
+
+        return {
+            eligiblePayments: eligibleCount.toLocaleString(),
+            disbursedAmount: formatCurrency(disbursedAmount),
+            farmersAwaiting: awaitingFarmers.size.toLocaleString(),
+        };
+    }, [filteredFarmers, payments]);
+
+    const paginatedFarmers = useMemo(() => {
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        return filteredFarmers.slice(startIndex, startIndex + rowsPerPage);
+    }, [filteredFarmers, currentPage, rowsPerPage]);
+
+    const totalPages = Math.ceil(filteredFarmers.length / rowsPerPage);
 
     const handleFilterChange = (name: keyof typeof filters, value: string) => {
         setFilters(prev => ({ ...prev, [name]: value }));
         setCurrentPage(1);
     };
 
+    const handleRecordPayment = (farmer: Farmer, statusInfo: SubsidyStatusInfo, stage: PaymentStage) => {
+        if (statusInfo.status === 'Eligible') {
+            setPaymentModalInfo({ isOpen: true, farmer, stage });
+        }
+    };
+    
+    // FIX: Removed explicit 'any' types from create() callbacks and the database.write() callback to allow for proper type inference, resolving TypeScript errors.
+    const handleSavePayment = useCallback(async (paymentData: Omit<SubsidyPayment, 'syncStatus' | 'createdAt' | 'createdBy' | 'farmerId' | 'tenantId'>) => {
+        if (!paymentModalInfo.farmer) return;
+        try {
+            await database.write(async () => {
+                await database.get<SubsidyPaymentModel>('subsidy_payments').create(rec => {
+                    Object.assign(rec, {
+                        ...paymentData,
+                        farmerId: paymentModalInfo.farmer!.id,
+                        createdBy: currentUser.id,
+                        syncStatusLocal: 'pending',
+                        tenantId: paymentModalInfo.farmer!.tenantId,
+                    });
+                });
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    Object.assign(log, {
+                        farmerId: paymentModalInfo.farmer!.id,
+                        activityType: ActivityType.PAYMENT_RECORDED,
+                        description: `${paymentData.paymentStage} of ₹${paymentData.amount.toLocaleString()} recorded.`,
+                        createdBy: currentUser.id,
+                        tenantId: paymentModalInfo.farmer!.tenantId,
+                    });
+                });
+            });
+            setNotification({ message: 'Payment recorded successfully.', type: 'success' });
+        } catch (error) {
+            console.error("Failed to save payment:", error);
+            setNotification({ message: 'Failed to save payment. Please try again.', type: 'error' });
+        } finally {
+            setPaymentModalInfo({ isOpen: false });
+        }
+    }, [database, currentUser, setNotification, paymentModalInfo.farmer]);
+
     const StatusCell: React.FC<{ info: SubsidyStatusInfo, onClick: () => void }> = ({ info, onClick }) => {
-        const baseClass = "h-6 w-6 rounded-full mx-auto cursor-pointer transition-transform hover:scale-125";
+        const baseClass = "h-6 w-6 rounded-full mx-auto transition-transform hover:scale-125";
         switch (info.status) {
             case 'Paid': return <div className={`${baseClass} bg-green-500`} title={`Paid on ${new Date(info.payment!.paymentDate).toLocaleDateString()}`}></div>;
-            case 'Eligible': return <div onClick={onClick} className={`${baseClass} bg-blue-500`} title="Eligible - Click to pay"></div>;
+            case 'Eligible': return <button onClick={onClick} className={`${baseClass} bg-blue-500`} title="Eligible - Click to pay"></button>;
             case 'Pending': return <div className={`${baseClass} bg-orange-400`} title="Pending"></div>;
             case 'Not Yet Eligible': return <div className={`${baseClass} bg-gray-300`} title="Not Yet Eligible"></div>;
             default: return <div className={`${baseClass} bg-gray-100 border`} title="N/A"></div>;
@@ -134,6 +208,12 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
                         <h1 className="text-3xl font-bold text-gray-800">Subsidy Eligibility Dashboard</h1>
                         <p className="text-gray-500">Track and manage subsidy payments for all farmers.</p>
                     </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <StatCard title="Eligible Payments" value={stats.eligiblePayments} icon={<svg className="h-8 w-8 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>} />
+                    <StatCard title="Farmers Awaiting Payment" value={stats.farmersAwaiting} icon={<svg className="h-8 w-8 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01"></path></svg>} />
+                    <StatCard title="Total Disbursed (Filtered)" value={stats.disbursedAmount} icon={<svg className="h-8 w-8 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>} />
                 </div>
                 
                  <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -156,12 +236,52 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {/* Table body will be implemented in a future phase */}
+                                {paginatedFarmers.map(({ farmer, statuses }) => (
+                                    <tr key={farmer.id}>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className="font-medium text-gray-900">{farmer.fullName}</div>
+                                            <div className="text-xs text-gray-500">{getGeoName('mandal', farmer)}, {getGeoName('district', farmer)}</div>
+                                        </td>
+                                        {TABLE_STAGES.map(stage => (
+                                            <td key={stage} className="px-2 py-3 text-center">
+                                                <StatusCell 
+                                                    info={statuses[stage]} 
+                                                    onClick={() => handleRecordPayment(farmer, statuses[stage], stage)}
+                                                />
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                                {filteredFarmers.length === 0 && (
+                                    <tr>
+                                        <td colSpan={TABLE_STAGES.length + 1} className="text-center py-10 text-gray-500">
+                                            No farmers match the current criteria.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
+                    {totalPages > 1 && (
+                         <div className="px-6 py-4 flex items-center justify-between border-t">
+                            <span className="text-sm text-gray-700">
+                                Showing {Math.min(1 + (currentPage - 1) * rowsPerPage, filteredFarmers.length)} to {Math.min(currentPage * rowsPerPage, filteredFarmers.length)} of {filteredFarmers.length} farmers
+                            </span>
+                            <div className="flex gap-2">
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 text-sm">Prev</button>
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="px-3 py-1 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 text-sm">Next</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
+            {paymentModalInfo.isOpen && (
+                <SubsidyPaymentForm 
+                    onClose={() => setPaymentModalInfo({ isOpen: false })}
+                    onSubmit={handleSavePayment}
+                    initialStage={paymentModalInfo.stage}
+                />
+            )}
         </div>
     );
 };
