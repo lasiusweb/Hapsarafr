@@ -33,8 +33,8 @@ export const synchronize = async (database: Database, supabase: any): Promise<{ 
     const farmersCollection = database.get<FarmerModel>('farmers');
     const paymentsCollection = database.get<SubsidyPaymentModel>('subsidy_payments');
     
-    const pendingFarmers = await farmersCollection.query(Q.where('syncStatus', Q.notEq('synced'))).fetch();
-    const pendingPayments = await paymentsCollection.query(Q.where('syncStatus', Q.notEq('synced'))).fetch();
+    const pendingFarmers = await farmersCollection.query(Q.where('sync_status', Q.notEq('synced'))).fetch();
+    const pendingPayments = await paymentsCollection.query(Q.where('sync_status', Q.notEq('synced'))).fetch();
 
     // 2. Separate records into upserts and deletes for farmers
     const farmersToUpsert = pendingFarmers

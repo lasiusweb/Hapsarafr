@@ -1,6 +1,6 @@
 import { GEO_DATA } from '../data/geoData';
-import { Farmer, Plot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, EquipmentLease, PlantingRecord } from '../types';
-import { FarmerModel, PlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, EquipmentLeaseModel, PlantingRecordModel } from '../db';
+import { Farmer, FarmPlot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, EquipmentLease, PlantingRecord } from '../types';
+import { FarmerModel, FarmPlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, EquipmentLeaseModel, PlantingRecordModel } from '../db';
 import DOMPurify from 'dompurify';
 
 
@@ -28,10 +28,9 @@ const modelToPlain = <T,>(model: any): T | null => {
 };
 
 export const farmerModelToPlain = (model: FarmerModel | null): Farmer | null => model ? modelToPlain<Farmer>(model) : null;
-export const plotModelToPlain = (model: PlotModel | null): Plot | null => {
+export const farmPlotModelToPlain = (model: FarmPlotModel | null): FarmPlot | null => {
     if (!model) return null;
-    const plainPlot: any = modelToPlain<Plot>(model);
-    // Ensure boolean fields are not null/undefined
+    const plainPlot: any = modelToPlain<FarmPlot>(model);
     plainPlot.is_replanting = !!plainPlot.is_replanting;
     return plainPlot;
 };

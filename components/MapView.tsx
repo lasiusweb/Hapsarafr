@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Farmer, FarmerStatus } from '../types';
-import { FarmerModel, PlotModel } from '../db';
+// FIX: Replaced 'PlotModel' with 'FarmPlotModel' to match the actual model name in the database schema.
+import { FarmerModel, FarmPlotModel } from '../db';
 
 // Declare Leaflet in the global scope since it's loaded from a CDN
 declare var L: any;
@@ -14,14 +15,15 @@ const MapView: React.FC<MapViewProps> = ({ farmers, onNavigate }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [plotsWithGeo, setPlotsWithGeo] = useState<{ plot: PlotModel; farmer: FarmerModel; }[]>([]);
+    const [plotsWithGeo, setPlotsWithGeo] = useState<{ plot: FarmPlotModel; farmer: FarmerModel; }[]>([]);
 
     useEffect(() => {
         const processFarmerData = async () => {
             setIsLoading(true);
             const allPlots = (await Promise.all(farmers.map(async f => {
-                const plots = await f.plots.fetch();
-                return plots.map(p => ({ plot: p, farmer: f }));
+                // FIX: The association on the FarmerModel is 'farmPlots', not 'plots'.
+                const plots = await f.farmPlots.fetch();
+                return plots.map(p => ({ plot: p as FarmPlotModel, farmer: f }));
             }))).flat();
 
             setPlotsWithGeo(allPlots.filter(p => p.plot.geojson));
@@ -69,7 +71,7 @@ const MapView: React.FC<MapViewProps> = ({ farmers, onNavigate }) => {
                     const geoJsonData = JSON.parse(plot.geojson!);
                     const layer = L.geoJSON(geoJsonData, {
                         style: {
-                            color: statusColors[farmer.status],
+                            color: statusColors[farmer.status as FarmerStatus],
                             weight: 2,
                             opacity: 0.8,
                             fillOpacity: 0.3
@@ -82,7 +84,7 @@ const MapView: React.FC<MapViewProps> = ({ farmers, onNavigate }) => {
                             <p style="margin: 0 0 3px;"><strong>Plot Acreage:</strong> ${plot.acreage} ac</p>
                             <p style="margin: 0 0 8px; display: flex; align-items: center; gap: 6px;">
                                 <strong>Status:</strong> 
-                                <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; background-color: ${statusColors[farmer.status]}; color: white; font-size: 12px; font-weight: 500; line-height: 1;">
+                                <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; background-color: ${statusColors[farmer.status as FarmerStatus]}; color: white; font-size: 12px; font-weight: 500; line-height: 1;">
                                     ${farmer.status}
                                 </span>
                             </p>

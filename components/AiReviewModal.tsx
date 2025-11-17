@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Farmer, Plot } from '../types';
+// FIX: The 'Plot' type is not exported from 'types'. It should be 'FarmPlot'. Aliasing 'FarmPlot' as 'Plot' to avoid further changes in the component.
+import { Farmer, FarmPlot as Plot } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { getGeoName } from '../lib/utils';
 
@@ -29,7 +30,7 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, plotsData, on
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 
                 const totalAcreage = plotsData.reduce((sum, plot) => sum + (plot.acreage || 0), 0);
-                const totalPlants = plotsData.reduce((sum, plot) => sum + (plot.numberOfPlants || 0), 0);
+                const totalPlants = plotsData.reduce((sum, plot) => sum + (plot.number_of_plants || 0), 0);
 
                 const prompt = `
                     You are an expert agricultural data verification assistant for India's Oil Palm Mission.
@@ -45,8 +46,8 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, plotsData, on
                     - Bank Account Number: ${farmerData.bankAccountNumber || 'Not Provided'}
                     - IFSC Code: ${farmerData.ifscCode || 'Not Provided'}
                     - Number of Plots: ${plotsData.length > 0 ? plotsData.length : 'Not Provided'}
-                    - Total Acreage: ${plotsData.length > 0 ? totalAcreage.toFixed(2) : 'Not Provided'}
-                    - Total Number of Plants: ${plotsData.length > 0 ? totalPlants : 'Not Provided'}
+                    - Total Acreage: ${totalAcreage > 0 ? totalAcreage.toFixed(2) : (farmerData as any).approvedExtent || 'Not Provided'}
+                    - Total Number of Plants: ${totalPlants > 0 ? totalPlants : (farmerData as any).numberOfPlants || 'Not Provided'}
                     - District: ${getGeoName('district', { district: farmerData.district! })}
                     - Mandal: ${getGeoName('mandal', { district: farmerData.district!, mandal: farmerData.mandal! })}
                     - Village: ${getGeoName('village', { district: farmerData.district!, mandal: farmerData.mandal!, village: farmerData.village! })}
@@ -88,7 +89,8 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, plotsData, on
                     );
                 }
                 return <p key={index}>{line}</p>;
-            });
+            })
+            .join('');
     };
 
 
@@ -119,7 +121,7 @@ const AiReviewModal: React.FC<AiReviewModalProps> = ({ farmerData, plotsData, on
                     )}
                     {!isLoading && !error && (
                          <div className="space-y-3 text-gray-700">
-                            <ul className="space-y-3">{formatReview(review)}</ul>
+                            <ul className="space-y-3" dangerouslySetInnerHTML={{ __html: formatReview(review) }}></ul>
                         </div>
                     )}
                 </div>

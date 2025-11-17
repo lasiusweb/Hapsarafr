@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plot } from '../types';
+// FIX: The 'Plot' type is not exported from 'types'. It should be 'FarmPlot'. Aliasing 'FarmPlot' as 'Plot' to avoid further changes in the component.
+import { FarmPlot as Plot } from '../types';
 
 // Constants for calculation, can be moved to a config file later
 const HECTARE_TO_ACRE = 2.471;

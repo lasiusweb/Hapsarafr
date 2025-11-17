@@ -4,7 +4,8 @@ import { FarmerModel, TenantModel, UserModel, FarmerDealerConsentModel } from '.
 import { Farmer, User, Tenant, Filters, Permission, FarmerStatus } from '../types';
 import withObservables from '@nozbe/with-observables';
 import { Q } from '@nozbe/watermelondb';
-import { farmerModelToPlain, plotModelToPlain } from '../lib/utils';
+// FIX: The import for 'plotModelToPlain' was corrected to 'farmPlotModelToPlain' to match the exported function name in 'lib/utils.ts'. Additionally, the logic for fetching farmer plots was updated to use 'farmPlots.fetch()' instead of the non-existent 'plots.fetch()' to align with the database model association.
+import { farmerModelToPlain, farmPlotModelToPlain } from '../lib/utils';
 
 // Components
 import FilterBar from './FilterBar';
@@ -179,9 +180,11 @@ const FarmerDirectoryPage: React.FC<FarmerDirectoryPageProps & { farmers: Farmer
     const prepareForPrint = async (farmerId: string) => {
         const farmerModel = rawFarmers.find(f => f.id === farmerId);
         if (farmerModel) {
-            const plots = await farmerModel.plots.fetch();
+            // FIX: The association on the FarmerModel is 'farmPlots', not 'plots'.
+            const plots = await farmerModel.farmPlots.fetch();
             setFarmerToPrint(farmerModelToPlain(farmerModel));
-            setPlotsForPrint(plots.map(p => plotModelToPlain(p)!));
+            // FIX: The import for 'plotModelToPlain' was corrected to 'farmPlotModelToPlain' to match the exported function name in 'lib/utils.ts'. Additionally, the logic for fetching farmer plots was updated to use 'farmPlots.fetch()' instead of the non-existent 'plots.fetch()' to align with the database model association.
+            setPlotsForPrint(plots.map(p => farmPlotModelToPlain(p as any)!));
         }
     };
     

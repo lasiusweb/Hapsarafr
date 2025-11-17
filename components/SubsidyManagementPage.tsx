@@ -161,7 +161,8 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
         if (!paymentModalInfo.farmer) return;
         try {
             await database.write(async () => {
-                await database.get<SubsidyPaymentModel>('subsidy_payments').create(rec => {
+                // FIX: Untyped function calls may not accept type arguments. Removed generic type argument.
+                await database.get('subsidy_payments').create(rec => {
                     Object.assign(rec, {
                         ...paymentData,
                         farmerId: paymentModalInfo.farmer!.id,
@@ -170,7 +171,8 @@ const SubsidyManagementPage: React.FC<SubsidyManagementPageProps> = ({ farmers, 
                         tenantId: paymentModalInfo.farmer!.tenantId,
                     });
                 });
-                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                // FIX: Untyped function calls may not accept type arguments. Removed generic type argument.
+                await database.get('activity_logs').create(log => {
                     Object.assign(log, {
                         farmerId: paymentModalInfo.farmer!.id,
                         activityType: ActivityType.PAYMENT_RECORDED,

@@ -1,13 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 // FIX: Import from the newly created types.ts file
-import { Farmer, User, Plot } from '../types';
+import { Farmer, User, FarmPlot } from '../types';
 
 declare var JsBarcode: any;
 declare var QRCode: any;
 
 interface PrintViewProps {
   farmer: Farmer | null;
-  plots: Plot[];
+  plots: FarmPlot[];
   users: User[];
   isForPdf?: boolean;
 }
@@ -135,10 +135,10 @@ const PrintView: React.FC<PrintViewProps> = ({ farmer, plots, users, isForPdf = 
                 {plots.map((plot) => (
                   <tr key={plot.id} className="border-b">
                     <td className="py-2 px-3 border border-gray-300">{plot.acreage}</td>
-                    <td className="py-2 px-3 border border-gray-300">{plot.soilType || 'N/A'}</td>
-                    <td className="py-2 px-3 border border-gray-300">{plot.numberOfPlants}</td>
-                    <td className="py-2 px-3 border border-gray-300">{plot.methodOfPlantation}</td>
-                    <td className="py-2 px-3 border border-gray-300">{plot.plantationDate ? new Date(plot.plantationDate).toLocaleDateString() : 'N/A'}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.soil_type || 'N/A'}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.number_of_plants}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.method_of_plantation}</td>
+                    <td className="py-2 px-3 border border-gray-300">{plot.plantation_date ? new Date(plot.plantation_date).toLocaleDateString() : 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>

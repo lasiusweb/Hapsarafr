@@ -290,21 +290,6 @@ export interface Farmer {
     territoryId?: string;
 }
 
-export interface Plot {
-    id: string;
-    farmerId: string;
-    acreage: number;
-    soilType: SoilType | string;
-    plantationDate?: string;
-    numberOfPlants: number;
-    methodOfPlantation: PlantationMethod;
-    plantType: PlantType;
-    mlrdPlants: number;
-    fullCostPlants: number;
-    geojson?: string;
-    is_replanting: boolean;
-}
-
 export interface User {
     id: string;
     name: string;
@@ -509,7 +494,7 @@ export interface EquipmentLease {
 
 export interface PlantingRecord {
     id: string;
-    plotId: string;
+    farmPlotId: string;
     seedSource: string;
     plantingDate: string;
     geneticVariety: string;
@@ -839,10 +824,21 @@ export interface FarmPlot {
     id: string;
     farmer_id: string;
     acreage: number;
-    name: string; // e.g., "North Field"
+    name: string;
     geojson?: string;
     created_at: string;
     updated_at: string;
+    // Merged fields
+    soil_type?: SoilType | string;
+    plantation_date?: string;
+    number_of_plants: number;
+    method_of_plantation: PlantationMethod;
+    plant_type: PlantType;
+    mlrd_plants: number;
+    full_cost_plants: number;
+    is_replanting: boolean;
+    sync_status: 'synced' | 'pending';
+    tenant_id: string;
 }
 
 export interface CropAssignment {

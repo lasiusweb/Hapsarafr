@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { Farmer, Plot } from '../types';
+// FIX: The 'Plot' type is not exported from 'types'. It should be 'FarmPlot'. Aliasing 'FarmPlot' as 'Plot' to avoid further changes in the component.
+import { Farmer, FarmPlot as Plot } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 interface CoPilotSuggestionsProps {
@@ -29,10 +30,8 @@ const CoPilotSuggestions: React.FC<CoPilotSuggestionsProps> = ({ farmer, plots }
             const farmerDataContext = JSON.stringify({
                 status: farmer.status,
                 registrationDate: farmer.registrationDate,
-                plantationDate: farmer.plantationDate,
-                approvedExtent: farmer.approvedExtent,
                 accountVerified: farmer.accountVerified,
-                plots: plots.map(p => ({ acreage: p.acreage, numberOfPlants: p.numberOfPlants, plantationDate: p.plantationDate })),
+                plots: plots.map(p => ({ acreage: p.acreage, numberOfPlants: p.number_of_plants, plantationDate: p.plantation_date })),
             });
 
             const prompt = `
@@ -45,8 +44,8 @@ const CoPilotSuggestions: React.FC<CoPilotSuggestionsProps> = ({ farmer, plots }
                 
                 Guidelines for your recommendations:
                 - If the bank account is not verified, this is a high priority.
-                - If the farmer is "Registered" but has no plantation date, suggest a follow-up to check on planting progress.
-                - If the farmer is "Planted" for more than a year, check if they are eligible for their next maintenance subsidy.
+                - If the farmer is "Registered" and has plots but no plantation date, suggest a follow-up to check on planting progress.
+                - If the farmer is "Planted" for more than a year, check if they are eligible for their next maintenance subsidy based on the plot's plantation date.
                 - Analyze plant density (standard is 57 plants/acre). If it's too high or low, suggest a verification visit.
                 - Keep suggestions short and to the point. Start each with an action verb.
                 - If there are no obvious issues or next steps, state that the farmer's record is up-to-date and looks good.

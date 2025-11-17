@@ -7,8 +7,8 @@ import { useDatabase } from './DatabaseContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { initializeSupabase, getSupabase } from './lib/supabase';
 import { synchronize } from './lib/sync';
-import { FarmerModel, UserModel, GroupModel, TenantModel, PlotModel, TerritoryModel, FarmerDealerConsentModel } from './db';
-import { Farmer, User, Group, Permission, Tenant, Plot } from './types';
+import { FarmerModel, UserModel, GroupModel, TenantModel, TerritoryModel, FarmerDealerConsentModel, FarmPlotModel } from './db';
+import { Farmer, User, Group, Permission, Tenant } from './types';
 import { farmerModelToPlain, userModelToPlain, groupModelToPlain, tenantModelToPlain } from './lib/utils';
 
 // Components
@@ -129,7 +129,7 @@ const App: React.FC = () => {
         }
     };
     
-    const handleRegisterFarmer = async (farmerData: Farmer, photoFile?: File) => {
+    const handleRegisterFarmer = async (farmerData: any, photoFile?: File) => {
         let photoBase64 = '';
         if (photoFile) {
             photoBase64 = await new Promise<string>((resolve, reject) => {
@@ -148,6 +148,24 @@ const App: React.FC = () => {
                 farmer.photo = photoBase64;
                 farmer.syncStatusLocal = 'pending';
             });
+
+            // Create the first FarmPlot based on registration data
+            if (newFarmer && farmerData.approvedExtent > 0) {
+                 await database.get<FarmPlotModel>('farm_plots').create(plot => {
+                    plot.farmerId = newFarmer!.id;
+                    plot.acreage = farmerData.approvedExtent;
+                    plot.name = "Primary Plot";
+                    plot.plantationDate = farmerData.plantationDate;
+                    plot.numberOfPlants = farmerData.numberOfPlants;
+                    plot.methodOfPlantation = farmerData.methodOfPlantation;
+                    plot.plantType = farmerData.plantType;
+                    plot.mlrdPlants = farmerData.mlrdPlants;
+                    plot.fullCostPlants = farmerData.fullCostPlants;
+                    plot.isReplanting = false;
+                    plot.syncStatusLocal = 'pending';
+                    plot.tenantId = newFarmer!.tenantId;
+                 });
+            }
 
             if (newFarmer) {
                 // Create initial consent record for the registering organization

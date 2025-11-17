@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Farmer, FarmerStatus, PlantationMethod, PlantType, Plot, User } from '../types';
+import { Farmer, FarmerStatus, PlantationMethod, PlantType, User } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import AiReviewModal from './AiReviewModal';
 import { getGeoName } from '../lib/utils';
@@ -21,7 +21,7 @@ interface RegistrationFormProps {
     currentUser: User;
 }
 
-const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = {
+const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> & any = {
     fullName: '',
     fatherHusbandName: '',
     aadhaarNumber: '',
@@ -71,7 +71,7 @@ const STEPS = [
     { id: 5, name: 'Review & Submit' },
 ];
 
-const FIELDS_BY_STEP: (keyof Farmer)[][] = [
+const FIELDS_BY_STEP: (keyof Farmer | string)[][] = [
     [], // 1-based index
     ['fullName', 'fatherHusbandName', 'address', 'aadhaarNumber', 'mobileNumber', 'registrationDate'],
     ['district', 'mandal', 'village'],
@@ -79,7 +79,7 @@ const FIELDS_BY_STEP: (keyof Farmer)[][] = [
     ['appliedExtent', 'approvedExtent', 'numberOfPlants', 'mlrdPlants'],
 ];
 
-const runValidationForStep = (step: number, data: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>): Record<string, string> => {
+const runValidationForStep = (step: number, data: any): Record<string, string> => {
     const newErrors: Record<string, string> = {};
     if (step === 1) {
         if (!data.fullName.trim()) newErrors.fullName = "Full Name is required.";
@@ -139,13 +139,13 @@ const FormLabel = ({ children, required = false }: FormLabelProps) => <label cla
 
 export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, mode = 'create', existingFarmer = null, setNotification, currentUser }: RegistrationFormProps) {
     const database = useDatabase();
-    const [formData, setFormData] = useState<Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'>>(initialFormData);
+    const [formData, setFormData] = useState<any>(initialFormData);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
-    const [preparedFarmerData, setPreparedFarmerData] = useState<Farmer | null>(null);
+    const [preparedFarmerData, setPreparedFarmerData] = useState<any | null>(null);
     const [hasDraft, setHasDraft] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
@@ -178,7 +178,7 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
 
     useEffect(() => {
         if (mode === 'edit' && existingFarmer) {
-            const formStateFromFarmer: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> = { ...initialFormData, ...existingFarmer };
+            const formStateFromFarmer = { ...initialFormData, ...existingFarmer };
             setFormData(formStateFromFarmer);
             if (existingFarmer.photo) {
                 setPhotoPreview(existingFarmer.photo);
@@ -333,7 +333,7 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
         } else {
             setErrors(prev => {
                 const newErrors = { ...prev };
-                FIELDS_BY_STEP[step].forEach(field => delete newErrors[field as keyof Farmer]);
+                FIELDS_BY_STEP[step].forEach(field => delete newErrors[field as string]);
                 return newErrors;
             });
         }
@@ -362,7 +362,7 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
 
         if (Object.keys(allErrors).length === 0) {
             const now = new Date().toISOString();
-            let farmerData: Farmer;
+            let farmerData: any;
             const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
             const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
 

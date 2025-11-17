@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 41,
+  version: 42,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -61,24 +61,6 @@ export const mySchema = appSchema({
         { name: 'preferred_communication_methods', type: 'string', isOptional: true },
         { name: 'last_consent_update', type: 'string', isOptional: true },
         { name: 'territory_id', type: 'string', isOptional: true, isIndexed: true },
-      ]
-    }),
-    tableSchema({
-      name: 'plots',
-      columns: [
-        { name: 'farmer_id', type: 'string', isIndexed: true },
-        { name: 'acreage', type: 'number' },
-        { name: 'soil_type', type: 'string', isOptional: true },
-        { name: 'plantation_date', type: 'string', isOptional: true },
-        { name: 'number_of_plants', type: 'number' },
-        { name: 'method_of_plantation', type: 'string' },
-        { name: 'plant_type', type: 'string' },
-        { name: 'mlrd_plants', type: 'number' },
-        { name: 'full_cost_plants', type: 'number' },
-        { name: 'geojson', type: 'string', isOptional: true },
-        { name: 'is_replanting', type: 'boolean' },
-        { name: 'sync_status', type: 'string' },
-        { name: 'tenant_id', type: 'string', isIndexed: true },
       ]
     }),
     tableSchema({
@@ -249,7 +231,7 @@ export const mySchema = appSchema({
     tableSchema({
         name: 'planting_records',
         columns: [
-            { name: 'plot_id', type: 'string', isIndexed: true },
+            { name: 'farm_plot_id', type: 'string', isIndexed: true },
             { name: 'seed_source', type: 'string' },
             { name: 'planting_date', type: 'string' },
             { name: 'genetic_variety', type: 'string' },
@@ -583,6 +565,17 @@ export const mySchema = appSchema({
         { name: 'geojson', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
+        // Merged fields
+        { name: 'soil_type', type: 'string', isOptional: true },
+        { name: 'plantation_date', type: 'string', isOptional: true },
+        { name: 'number_of_plants', type: 'number' },
+        { name: 'method_of_plantation', type: 'string' },
+        { name: 'plant_type', type: 'string' },
+        { name: 'mlrd_plants', type: 'number' },
+        { name: 'full_cost_plants', type: 'number' },
+        { name: 'is_replanting', type: 'boolean' },
+        { name: 'sync_status', type: 'string' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
       ]
     }),
     tableSchema({
@@ -710,7 +703,6 @@ export class FarmerModel extends Model {
     static table = 'farmers';
     readonly id!: string;
     static associations = {
-        plots: { type: 'has_many', foreignKey: 'farmer_id' },
         subsidy_payments: { type: 'has_many', foreignKey: 'farmer_id' },
         activity_logs: { type: 'has_many', foreignKey: 'farmer_id' },
         assistance_applications: { type: 'has_many', foreignKey: 'farmer_id' },
@@ -769,7 +761,6 @@ export class FarmerModel extends Model {
     @text('last_consent_update') lastConsentUpdate?: string;
     @text('territory_id') territoryId?: string;
 
-    @children('plots') plots!: any;
     @children('subsidy_payments') subsidyPayments!: any;
     @children('activity_logs') activityLogs!: any;
     @children('assistance_applications') assistanceApplications!: any;
@@ -781,28 +772,6 @@ export class FarmerModel extends Model {
     @children('wallet') wallet!: any;
     @children('visit_requests') visitRequests!: any;
     @children('farm_plots') farmPlots!: any;
-}
-
-export class PlotModel extends Model {
-    static table = 'plots';
-    readonly id!: string;
-    static associations = {
-        farmers: { type: 'belongs_to', key: 'farmer_id' },
-        planting_records: { type: 'has_many', foreignKey: 'plot_id' },
-    } as const;
-    @text('farmer_id') farmerId!: string;
-    @field('acreage') acreage!: number;
-    @text('soil_type') soilType?: string;
-    @text('plantation_date') plantationDate?: string;
-    @field('number_of_plants') numberOfPlants!: number;
-    @text('method_of_plantation') methodOfPlantation!: string;
-    @text('plant_type') plantType!: string;
-    @field('mlrd_plants') mlrdPlants!: number;
-    @field('full_cost_plants') fullCostPlants!: number;
-    @text('geojson') geojson?: string;
-    @field('is_replanting') isReplanting!: boolean;
-    @relation('farmers', 'farmer_id') farmer!: any;
-    @children('planting_records') plantingRecords!: any;
 }
 
 export class SubsidyPaymentModel extends Model {
@@ -1145,6 +1114,7 @@ export class FarmPlotModel extends Model {
     static associations = {
         farmers: { type: 'belongs_to', key: 'farmer_id' },
         crop_assignments: { type: 'has_many', foreignKey: 'farm_plot_id' },
+        planting_records: { type: 'has_many', foreignKey: 'farm_plot_id' },
     } as const;
     @text('farmer_id') farmerId!: string;
     @field('acreage') acreage!: number;
@@ -1154,6 +1124,19 @@ export class FarmPlotModel extends Model {
     @readonly @date('updated_at') updatedAt!: Date;
     @relation('farmers', 'farmer_id') farmer!: any;
     @children('crop_assignments') cropAssignments!: any;
+    @children('planting_records') plantingRecords!: any;
+    
+    // Merged fields
+    @text('soil_type') soilType?: string;
+    @text('plantation_date') plantationDate?: string;
+    @field('number_of_plants') numberOfPlants!: number;
+    @text('method_of_plantation') methodOfPlantation!: string;
+    @text('plant_type') plantType!: string;
+    @field('mlrd_plants') mlrdPlants!: number;
+    @field('full_cost_plants') fullCostPlants!: number;
+    @field('is_replanting') isReplanting!: boolean;
+    @text('sync_status') syncStatusLocal!: string;
+    @text('tenant_id') tenantId!: string;
 }
 
 export class CropAssignmentModel extends Model {
@@ -1206,7 +1189,7 @@ export class DataSharingConsentModel extends Model {
 
 export class TaskModel extends Model { static table = 'tasks'; readonly id!: string; @text('title') title!: string; @text('description') description?: string; @text('status') status!: any; @text('priority') priority!: any; @text('due_date') dueDate?: string; @text('assignee_id') assigneeId?: string; @text('farmer_id') farmerId?: string; @text('created_by') createdBy!: string; @readonly @date('created_at') createdAt!: Date; @readonly @date('updated_at') updatedAt!: Date; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class CustomFieldDefinitionModel extends Model { static table = 'custom_field_definitions'; readonly id!: string; @text('model_name') modelName!: string; @text('field_name') fieldName!: string; @text('field_label') fieldLabel!: string; @text('field_type') fieldType!: string; @text('options_json') optionsJson?: string; @field('is_required') isRequired!: boolean; @field('sort_order') sortOrder!: number; get options() { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } }
-export class PlantingRecordModel extends Model { static table = 'planting_records'; readonly id!: string; @text('plot_id') plotId!: string; @text('seed_source') seedSource!: string; @text('planting_date') plantingDate!: string; @text('genetic_variety') geneticVariety!: string; @field('number_of_plants') numberOfPlants!: number; @text('care_instructions_url') careInstructionsUrl?: string; @text('qr_code_data') qrCodeData?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
+export class PlantingRecordModel extends Model { static table = 'planting_records'; readonly id!: string; @text('farm_plot_id') farmPlotId!: string; @text('seed_source') seedSource!: string; @text('planting_date') plantingDate!: string; @text('genetic_variety') geneticVariety!: string; @field('number_of_plants') numberOfPlants!: number; @text('care_instructions_url') careInstructionsUrl?: string; @text('qr_code_data') qrCodeData?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; static associations = { farm_plots: { type: 'belongs_to', key: 'farm_plot_id' } } as const; @relation('farm_plots', 'farm_plot_id') farmPlot!: any; }
 export class HarvestModel extends Model { static table = 'harvests'; readonly id!: string; @text('farmer_id') farmerId!: string; @text('harvest_date') harvestDate!: string; @field('gross_weight') grossWeight!: number; @field('tare_weight') tareWeight!: number; @field('net_weight') netWeight!: number; @text('assessed_by_id') assessedById!: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; }
 export class QualityAssessmentModel extends Model { static table = 'quality_assessments'; readonly id!: string; @text('harvest_id') harvestId!: string; @text('assessment_date') assessmentDate!: string; @text('overall_grade') overallGrade!: any; @field('price_adjustment') priceAdjustment!: number; @text('notes') notes?: string; @text('appeal_status') appealStatus!: any; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string; @relation('harvests', 'harvest_id') harvest!: any;}
 export class QualityMetricModel extends Model { static table = 'quality_metrics'; readonly id!: string; }
@@ -1275,7 +1258,7 @@ const adapter = new SQLiteAdapter({
 const database = new Database({
   adapter,
   modelClasses: [
-    FarmerModel, PlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
+    FarmerModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel,
     TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel,
     ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel,
     WalletModel, WalletTransactionModel, VisitRequestModel,

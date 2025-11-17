@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import { Q } from '@nozbe/watermelondb';
-import { FarmerModel, PlotModel } from '../db';
-import { User, Farmer, Plot } from '../types';
+import { FarmerModel, FarmPlotModel } from '../db';
+import { User, Farmer, FarmPlot } from '../types';
 import PrintView from './PrintView';
-import { farmerModelToPlain, plotModelToPlain } from '../lib/utils';
+import { farmerModelToPlain, farmPlotModelToPlain } from '../lib/utils';
 import { useDatabase } from '../DatabaseContext';
 
 interface PrintQueuePageProps {
@@ -17,7 +17,7 @@ interface PrintQueuePageProps {
 
 interface FarmerWithPlots {
     farmer: Farmer;
-    plots: Plot[];
+    plots: FarmPlot[];
 }
 
 
@@ -40,12 +40,12 @@ const PrintQueuePage: React.FC<PrintQueuePageProps> = ({ queuedFarmerIds, users,
                 // Ensure the order is the same as the queue order
                 const sortedFarmers = queuedFarmerIds.map(id => farmers.find(f => f.id === id)).filter(Boolean) as FarmerModel[];
                 
-                const plotsPromises = sortedFarmers.map(f => f.plots.fetch());
+                const plotsPromises = sortedFarmers.map(f => f.farmPlots.fetch());
                 const plotsByFarmerArray = await Promise.all(plotsPromises);
 
                 const combinedData = sortedFarmers.map((f, index) => ({
                     farmer: farmerModelToPlain(f)!,
-                    plots: plotsByFarmerArray[index].map(p => plotModelToPlain(p)!)
+                    plots: plotsByFarmerArray[index].map(p => farmPlotModelToPlain(p as any)!)
                 }));
 
                 setFarmersWithPlots(combinedData);
