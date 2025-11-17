@@ -1,15 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { Farmer, User, VisitRequestStatus, ActivityType } from '../types';
 import CustomSelect from './CustomSelect';
+import { useDatabase } from '../DatabaseContext';
+import { VisitRequestModel, ActivityLogModel } from '../db';
 
 interface RequestVisitModalProps {
     onClose: () => void;
-    onSave: (data: any) => Promise<void>;
+    onSave: (data: any) => Promise<void>; // This is a mock onSave, the real logic is inside
     farmer: Farmer;
     users: User[];
+    currentUser: User; // Need this to log activity
 }
 
-const RequestVisitModal: React.FC<RequestVisitModalProps> = ({ onClose, onSave, farmer, users }) => {
+const RequestVisitModal: React.FC<RequestVisitModalProps> = ({ onClose, onSave, farmer, users, currentUser }) => {
+    const database = useDatabase();
     const [formState, setFormState] = useState({
         reason: '',
         preferredDate: new Date().toISOString().split('T')[0],
@@ -27,13 +31,38 @@ const RequestVisitModal: React.FC<RequestVisitModalProps> = ({ onClose, onSave, 
             return;
         }
 
+        // Calculate priority score
+        let priorityScore = 50; // Default
+        const reasonLower = formState.reason.toLowerCase();
+        if (reasonLower.includes('pest') || reasonLower.includes('disease') || reasonLower.includes('outbreak')) priorityScore = 90;
+        if (reasonLower.includes('urgent') || reasonLower.includes('emergency')) priorityScore = 100;
+        if (reasonLower.includes('subsidy') || reasonLower.includes('query') || reasonLower.includes('question')) priorityScore = 30;
+
         setIsSubmitting(true);
         try {
-            await onSave({
-                ...formState,
-                status: formState.assigneeId ? VisitRequestStatus.Scheduled : VisitRequestStatus.Pending,
-                scheduledDate: formState.assigneeId ? new Date().toISOString() : undefined,
+            await database.write(async () => {
+                await database.get<VisitRequestModel>('visit_requests').create(req => {
+                    req.farmerId = farmer.id;
+                    req.reason = formState.reason;
+                    req.preferredDate = formState.preferredDate;
+                    req.assigneeId = formState.assigneeId || undefined;
+                    req.notes = formState.notes;
+                    req.status = formState.assigneeId ? VisitRequestStatus.Scheduled : VisitRequestStatus.Pending;
+                    req.scheduledDate = formState.assigneeId ? new Date().toISOString() : undefined;
+                    req.createdBy = currentUser.id;
+                    req.tenantId = currentUser.tenantId;
+                    req.syncStatusLocal = 'pending';
+                    req.priorityScore = priorityScore;
+                });
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = farmer.id;
+                    log.activityType = ActivityType.VISIT_REQUESTED;
+                    log.description = `Visit requested for reason: ${formState.reason}`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = currentUser.tenantId;
+                });
             });
+            onClose(); // This will trigger a re-render in the parent, showing the new request
         } finally {
             setIsSubmitting(false);
         }

@@ -57,6 +57,8 @@ const VendorManagementPage = lazy(() => import('./components/VendorManagementPag
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
 const FieldServicePage = lazy(() => import('./components/FieldServicePage'));
+const HapsaraNexusPage = lazy(() => import('./components/HapsaraNexusPage'));
+const CaelusDashboard = lazy(() => import('./components/CaelusDashboard'));
 
 
 type View =
@@ -67,7 +69,7 @@ type View =
     | 'billing' | 'subscription-management' | 'usage-analytics' | 'tasks' | 'resource-management'
     | 'distribution-report' | 'performance-analytics' | 'mentorship' | 'community' | 'resource-library' | 'events'
     | 'financials' | 'marketplace' | 'product-list' | 'checkout' | 'order-confirmation' | 'vendor-management'
-    | 'field-service';
+    | 'field-service' | 'hapsara-nexus' | 'climate-resilience';
 
 const App: React.FC = () => {
     // Component State
@@ -295,6 +297,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'usage-analytics': return <UsageAnalyticsPage currentUser={currentActiveUser} supabase={getSupabase()} onBack={() => navigate('dashboard')} />;
             case 'tasks': return <TaskManagementPage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
             case 'field-service': return <FieldServicePage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
+            case 'hapsara-nexus': return <HapsaraNexusPage currentUser={currentActiveUser} onBack={() => navigate('dashboard')} />;
             case 'resource-management': return <ResourceManagementPage currentUser={currentActiveUser} onBack={() => navigate('admin')} />;
             case 'distribution-report': return <DistributionReportPage onBack={() => navigate('dashboard')} />;
             case 'performance-analytics': return <PerformanceAnalyticsPage onBack={() => navigate('dashboard')} />;
@@ -308,6 +311,7 @@ const EnhancedApp = withObservables(['currentUser'], ({
             case 'checkout': return <CheckoutPage onBack={() => navigate('marketplace')} onOrderPlaced={(orderId) => navigate('order-confirmation', orderId)} />;
             case 'order-confirmation': return <OrderConfirmationPage orderId={viewParam!} onNavigate={navigate} />;
             case 'vendor-management': return <VendorManagementPage currentUser={currentActiveUser} setNotification={setNotification} onBack={() => navigate('admin')} />;
+            case 'climate-resilience': return <CaelusDashboard onBack={() => navigate('dashboard')} />;
             default: return <NotFoundPage onBack={() => navigate('dashboard')} />;
         }
     };

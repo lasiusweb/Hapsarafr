@@ -58,7 +58,7 @@ const VisitCard: React.FC<{
 const FieldServicePage: React.FC<FieldServicePageProps> = ({ onBack, currentUser }) => {
     const database = useDatabase();
     
-    const visitRequests = useQuery(useMemo(() => database.get<VisitRequestModel>('visit_requests').query(Q.sortBy('created_at', Q.desc)), [database]));
+    const visitRequests = useQuery(useMemo(() => database.get<VisitRequestModel>('visit_requests').query(Q.sortBy('priority_score', Q.desc), Q.sortBy('created_at', Q.desc)), [database]));
     const users = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database]));
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
 

@@ -67,6 +67,10 @@ export enum ActivityType {
     CROP_ASSIGNED = 'CROP_ASSIGNED',
     HARVEST_LOGGED = 'HARVEST_LOGGED',
     DATA_CONSENT_UPDATED = 'DATA_CONSENT_UPDATED',
+    // New activity types for Nexus
+    COLLECTION_APPOINTMENT_BOOKED = 'COLLECTION_APPOINTMENT_BOOKED',
+    COLLECTION_APPOINTMENT_COMPLETED = 'COLLECTION_APPOINTMENT_COMPLETED',
+    COLLECTION_APPOINTMENT_CANCELLED = 'COLLECTION_APPOINTMENT_CANCELLED',
 }
 
 export enum PaymentStage {
@@ -741,6 +745,7 @@ export interface VisitRequest {
     updatedAt: string;
     tenantId: string;
     syncStatus: 'synced' | 'pending';
+    priorityScore?: number;
 }
 
 // --- Community Forum Interfaces ---
@@ -899,4 +904,36 @@ export interface FreeTierUsage {
     service_name: BillableEvent;
     period: string; // e.g., "2024-07"
     usage_count: number;
+}
+
+// --- New Interfaces for Hapsara Nexus (Logistics) ---
+
+export interface ServicePoint {
+  id: string;
+  name: string;
+  type: 'Collection Center' | 'Field Hub';
+  locationGeojson?: string;
+  capacity: number;
+  operatingHours?: string;
+  tenantId: string;
+}
+
+export interface OfficerSchedule {
+  id: string;
+  officerId: string;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+}
+
+export interface CollectionAppointment {
+  id: string;
+  farmerId: string;
+  servicePointId: string;
+  startTime: string;
+  endTime: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  qrCodeData?: string;
+  syncStatus: 'synced' | 'pending';
+  createdAt: string;
 }

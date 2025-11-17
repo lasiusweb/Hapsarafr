@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 42,
+  version: 43,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -470,6 +470,7 @@ export const mySchema = appSchema({
         { name: 'updated_at', type: 'number' },
         { name: 'tenant_id', type: 'string', isIndexed: true },
         { name: 'sync_status', type: 'string' },
+        { name: 'priority_score', type: 'number', isOptional: true, isIndexed: true },
       ]
     }),
     // --- Marketplace Schemas ---
@@ -643,6 +644,40 @@ export const mySchema = appSchema({
         { name: 'usage_count', type: 'number' },
       ]
     }),
+    // --- New Hapsara Nexus Schemas ---
+    tableSchema({
+        name: 'service_points',
+        columns: [
+            { name: 'name', type: 'string' },
+            { name: 'type', type: 'string' }, // 'Collection Center', 'Field Hub'
+            { name: 'location_geojson', type: 'string', isOptional: true },
+            { name: 'capacity', type: 'number' },
+            { name: 'operating_hours', type: 'string', isOptional: true }, // e.g., "Mon-Fri 9am-5pm"
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+        ]
+    }),
+    tableSchema({
+        name: 'officer_schedules',
+        columns: [
+            { name: 'officer_id', type: 'string', isIndexed: true },
+            { name: 'start_time', type: 'number' },
+            { name: 'end_time', type: 'number' },
+            { name: 'is_available', type: 'boolean' },
+        ]
+    }),
+    tableSchema({
+        name: 'collection_appointments',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'service_point_id', type: 'string', isIndexed: true },
+            { name: 'start_time', type: 'number' },
+            { name: 'end_time', type: 'number' },
+            { name: 'status', type: 'string' }, // 'scheduled', 'completed', 'cancelled'
+            { name: 'qr_code_data', type: 'string', isOptional: true },
+            { name: 'sync_status', type: 'string' },
+            { name: 'created_at', type: 'number' },
+        ]
+    }),
   ]
 }));
 
@@ -714,6 +749,7 @@ export class FarmerModel extends Model {
         wallet: { type: 'has_many', foreignKey: 'farmer_id' },
         visit_requests: { type: 'has_many', foreignKey: 'farmer_id' },
         farm_plots: { type: 'has_many', foreignKey: 'farmer_id' },
+        collection_appointments: { type: 'has_many', foreignKey: 'farmer_id' },
     } as const;
     @text('hap_id') hapId!: string;
     @text('full_name') fullName!: string;
@@ -772,6 +808,7 @@ export class FarmerModel extends Model {
     @children('wallet') wallet!: any;
     @children('visit_requests') visitRequests!: any;
     @children('farm_plots') farmPlots!: any;
+    @children('collection_appointments') collectionAppointments!: any;
 }
 
 export class SubsidyPaymentModel extends Model {
@@ -803,12 +840,16 @@ export class ActivityLogModel extends Model {
 export class UserModel extends Model {
     static table = 'users';
     readonly id!: string;
+    static associations = {
+        officer_schedules: { type: 'has_many', foreignKey: 'officer_id' },
+    } as const;
     @text('name') name!: string;
     @text('email') email!: string;
     @text('group_id') groupId!: string;
     @text('avatar') avatar!: string;
     @text('tenant_id') tenantId!: string;
     @field('is_verified') isVerified!: boolean;
+    @children('officer_schedules') officerSchedules!: any;
 }
 
 export class GroupModel extends Model {
@@ -997,6 +1038,7 @@ export class VisitRequestModel extends Model {
     @readonly @date('updated_at') updatedAt!: Date;
     @text('tenant_id') tenantId!: string;
     @text('sync_status') syncStatusLocal!: string;
+    @field('priority_score') priorityScore?: number;
 
     @relation('farmers', 'farmer_id') farmer!: any;
 }
@@ -1244,6 +1286,48 @@ export class CreditLedgerEntryModel extends Model { static table = 'credit_ledge
 export class ServiceConsumptionLogModel extends Model { static table = 'service_consumption_logs'; readonly id!: string; @text('tenant_id') tenantId!: string; @text('service_name') serviceName!: string; @field('credit_cost') creditCost!: number; @readonly @date('event_timestamp') eventTimestamp!: Date; @text('metadata_json') metadataJson?: string; }
 export class FreeTierUsageModel extends Model { static table = 'free_tier_usages'; readonly id!: string; @text('tenant_id') tenantId!: string; @text('service_name') serviceName!: string; @text('period') period!: string; @field('usage_count') usageCount!: number; }
 
+// --- New Hapsara Nexus Models ---
+export class ServicePointModel extends Model {
+    static table = 'service_points';
+    readonly id!: string;
+    @text('name') name!: string;
+    @text('type') type!: string;
+    @text('location_geojson') locationGeojson?: string;
+    @field('capacity') capacity!: number;
+    @text('operating_hours') operatingHours?: string;
+    @text('tenant_id') tenantId!: string;
+}
+export class OfficerScheduleModel extends Model {
+    static table = 'officer_schedules';
+    readonly id!: string;
+    static associations = {
+        users: { type: 'belongs_to', key: 'officer_id' },
+    } as const;
+    @text('officer_id') officerId!: string;
+    @readonly @date('start_time') startTime!: Date;
+    @readonly @date('end_time') endTime!: Date;
+    @field('is_available') isAvailable!: boolean;
+    @relation('users', 'officer_id') officer!: any;
+}
+export class CollectionAppointmentModel extends Model {
+    static table = 'collection_appointments';
+    readonly id!: string;
+    static associations = {
+        farmers: { type: 'belongs_to', key: 'farmer_id' },
+        service_points: { type: 'belongs_to', key: 'service_point_id' },
+    } as const;
+    @text('farmer_id') farmerId!: string;
+    @text('service_point_id') servicePointId!: string;
+    @readonly @date('start_time') startTime!: Date;
+    @readonly @date('end_time') endTime!: Date;
+    @text('status') status!: string;
+    @text('qr_code_data') qrCodeData?: string;
+    @text('sync_status') syncStatusLocal!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @relation('farmers', 'farmer_id') farmer!: any;
+    @relation('service_points', 'service_point_id') servicePoint!: any;
+}
+
 
 // --- Database Setup ---
 const adapter = new SQLiteAdapter({
@@ -1268,6 +1352,8 @@ const database = new Database({
     CropModel, FarmPlotModel, CropAssignmentModel, HarvestLogModel, DataSharingConsentModel,
     // Hapsara Valorem Models
     CreditLedgerEntryModel, ServiceConsumptionLogModel, FreeTierUsageModel,
+    // Hapsara Nexus Models
+    ServicePointModel, OfficerScheduleModel, CollectionAppointmentModel,
   ],
 });
 
