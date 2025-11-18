@@ -1,15 +1,15 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import withObservables from '@nozbe/with-observables';
-import { User, Farmer, EntrySource, TransactionStatus, WithdrawalAccount, PaymentStage, Permission } from '../types';
+import { User, Farmer, EntrySource, TransactionStatus, WithdrawalAccount } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { FarmerModel, WalletModel, WalletTransactionModel, WithdrawalAccountModel, SubsidyPaymentModel } from '../db';
+import { FarmerModel, WalletModel, WalletTransactionModel, WithdrawalAccountModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import SendMoneyModal from './SendMoneyModal';
 import WithdrawMoneyModal from './WithdrawMoneyModal';
-import SubsidyDisbursementModal from './SubsidyDisbursementModal';
+import { formatCurrency } from '../lib/utils';
 
 interface FinancialsPageProps {
     allFarmers: Farmer[];
@@ -17,15 +17,7 @@ interface FinancialsPageProps {
     currentUser: User;
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
     onNavigate: (view: string, param?: string) => void;
-    permissions: Set<Permission>;
 }
-
-const formatCurrency = (value: number) => {
-    return value.toLocaleString('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-    });
-};
 
 const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: string }) => {
     const database = useDatabase();
@@ -119,12 +111,11 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
 });
 
 
-const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, currentUser, setNotification, onNavigate, permissions }) => {
+const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, currentUser, setNotification, onNavigate }) => {
     const isOnline = useOnlineStatus();
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
     const [isSendMoneyModalOpen, setIsSendMoneyModalOpen] = useState(false);
     const [isWithdrawMoneyModalOpen, setIsWithdrawMoneyModalOpen] = useState(false);
-    const [isDisburseModalOpen, setIsDisburseModalOpen] = useState(false);
     const database = useDatabase();
 
     const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hap_id || 'N/A'})` })), [allFarmers]);
@@ -227,31 +218,6 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
         }
     }, [database, senderWallet, plainWithdrawalAccounts, setNotification]);
     
-    const handleRecordSubsidy = useCallback(async ({ farmers, stage, amount, notes }: { farmers: Farmer[], stage: PaymentStage, amount: number, notes: string }) => {
-        try {
-            await database.write(async () => {
-                for (const farmer of farmers) {
-                    await database.get<SubsidyPaymentModel>('subsidy_payments').create(p => {
-                        p.farmerId = farmer.id;
-                        p.paymentDate = new Date().toISOString().split('T')[0];
-                        p.amount = amount;
-                        p.utrNumber = 'N/A (Recorded Externally)';
-                        p.paymentStage = stage;
-                        p.notes = notes || `External subsidy for ${stage} recorded`;
-                        p.createdBy = currentUser.id;
-                        p.tenantId = currentUser.tenantId;
-                        p.syncStatusLocal = 'pending';
-                    });
-                }
-            });
-            setNotification({ message: `Subsidy recorded for ${farmers.length} farmer(s).`, type: 'success' });
-            setIsDisburseModalOpen(false);
-        } catch (error) {
-            console.error("Failed to record subsidy:", error);
-            setNotification({ message: 'Failed to record subsidy.', type: 'error' });
-        }
-    }, [database, currentUser, setNotification]);
-
     if (!isOnline) {
          return (
             <div className="p-6 bg-gray-50 min-h-full">
@@ -280,11 +246,6 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     <div className="flex-grow">
                        <CustomSelect label="Select a Farmer" options={farmerOptions} value={selectedFarmerId} onChange={setSelectedFarmerId} placeholder="-- Choose a farmer to view their wallet --" />
                     </div>
-                    {permissions.has(Permission.CAN_EDIT_FARMER) && (
-                         <button onClick={() => setIsDisburseModalOpen(true)} className="ml-4 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm">
-                            Record Subsidy
-                        </button>
-                    )}
                 </div>
                 
                 {selectedFarmerId ? (
@@ -314,13 +275,6 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     walletBalance={senderWallet.balance}
                     withdrawalAccounts={plainWithdrawalAccounts}
                     onAddAccount={() => onNavigate('farmer-details', selectedFarmer.id)}
-                />
-            )}
-            {isDisburseModalOpen && (
-                <SubsidyDisbursementModal
-                    onClose={() => setIsDisburseModalOpen(false)}
-                    onSave={handleRecordSubsidy}
-                    allFarmers={allFarmers}
                 />
             )}
         </div>

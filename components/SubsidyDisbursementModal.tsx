@@ -101,7 +101,7 @@ const SubsidyDisbursementModal: React.FC<SubsidyDisbursementModalProps> = ({ onC
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-2xl w-full max-w-3xl flex flex-col max-h-full">
-                <div className="p-6 border-b"><h2 className="text-xl font-bold text-gray-800">Record External Subsidy</h2></div>
+                <div className="p-6 border-b"><h2 className="text-xl font-bold text-gray-800">Disburse Subsidy to Wallets</h2></div>
                 <div className="p-8 space-y-4 overflow-y-auto">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -142,7 +142,7 @@ const SubsidyDisbursementModal: React.FC<SubsidyDisbursementModalProps> = ({ onC
                 <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg flex-shrink-0">
                     <button type="button" onClick={onClose} disabled={isSubmitting} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
                     <button type="submit" disabled={isSubmitting || selectedFarmerIds.size === 0} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed">
-                        {isSubmitting ? 'Recording...' : `Record for ${selectedFarmerIds.size} Farmer(s)`}
+                        {isSubmitting ? 'Disbursing...' : `Disburse to ${selectedFarmerIds.size} Farmer(s)`}
                     </button>
                 </div>
             </form>

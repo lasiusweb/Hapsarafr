@@ -1,28 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Farmer } from '../types';
 import CustomSelect from './CustomSelect';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { FarmerModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
-
-// Mock Data for Phase 1
-const mockDroughtRisk = {
-    level: 'Medium',
-    score: 65, // out of 100
-    details: "Slightly below-average rainfall expected in the next 3 months. Soil moisture is currently adequate but may decline."
-};
-
-const mockRecommendations = [
-    { id: 'rec1', title: "Consider Mulching", description: "Apply mulch to your primary plot to conserve soil moisture. This could reduce water needs by up to 20%.", priority: 'High', relevantSubsidy: 'water-harvesting' },
-    { id: 'rec2', title: "Check Drip Irrigation Eligibility", description: "Your plot size and crop type may make you eligible for a government subsidy on drip irrigation systems.", priority: 'Medium', relevantSubsidy: 'drip-irrigation' },
-    { id: 'rec3', title: "Plan for Intercropping", description: "Planting drought-resistant ground cover can protect soil and provide a secondary income source.", priority: 'Low', relevantSubsidy: 'gestation-management' },
-];
-
-const mockPeerBenchmark = {
-    neighborsImplemented: 8,
-    yieldIncrease: '15-20%',
-};
+import { GoogleGenAI, Type } from '@google/genai';
 
 interface CaelusDashboardProps {
     onBack: () => void;
@@ -33,6 +16,125 @@ const CaelusDashboard: React.FC<CaelusDashboardProps> = ({ onBack }) => {
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
     const farmers = useQuery(React.useMemo(() => database.get<FarmerModel>('farmers').query(Q.sortBy('full_name', 'asc')), [database]));
     const farmerOptions = React.useMemo(() => farmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hapId || 'N/A'})`})), [farmers]);
+
+    const [riskData, setRiskData] = useState<{
+        droughtRisk: { level: string; score: number; details: string; };
+        recommendations: { id: string; title: string; description: string; priority: string; relevantSubsidy?: string; }[];
+        communityInsights: { summary: string; };
+    } | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedFarmerId) {
+            setRiskData(null);
+            setError(null);
+            return;
+        }
+
+        const selectedFarmer = farmers.find(f => f.id === selectedFarmerId);
+
+        if (!selectedFarmer) {
+            setError("Selected farmer not found.");
+            return;
+        }
+
+        const { latitude, longitude } = selectedFarmer;
+
+        if (!latitude || !longitude) {
+            setError("Selected farmer does not have location data. Please update the farmer's profile with GPS coordinates to enable this feature.");
+            setRiskData(null);
+            return;
+        }
+
+        const fetchResilienceData = async () => {
+            setIsLoading(true);
+            setError(null);
+            setRiskData(null);
+            
+            if (!process.env.API_KEY) {
+                setError("HapsaraAI (Gemini) API key is not configured. An administrator must set this to enable the dashboard.");
+                setIsLoading(false);
+                return;
+            }
+
+            try {
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                
+                const responseSchema = {
+                    type: Type.OBJECT,
+                    properties: {
+                        droughtRisk: {
+                            type: Type.OBJECT,
+                            properties: {
+                                level: { type: Type.STRING, enum: ['Low', 'Medium', 'High', 'Critical'] },
+                                score: { type: Type.NUMBER, description: "A risk score from 0 to 100." },
+                                details: { type: Type.STRING, description: "A 1-2 sentence summary of the forecast." }
+                            },
+                            required: ['level', 'score', 'details']
+                        },
+                        recommendations: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    title: { type: Type.STRING },
+                                    description: { type: Type.STRING },
+                                    priority: { type: Type.STRING, enum: ['High', 'Medium', 'Low'] },
+                                    relevantSubsidy: { type: Type.STRING, description: "An optional ID of a relevant government subsidy if applicable."}
+                                },
+                                required: ['title', 'description', 'priority']
+                            }
+                        },
+                        communityInsights: {
+                            type: Type.OBJECT,
+                            properties: {
+                                summary: { type: Type.STRING, description: "A short paragraph about common climate adaptation strategies being successfully used by other farmers in this region of India for similar crops." }
+                            },
+                            required: ['summary']
+                        }
+                    }
+                };
+
+                const prompt = `
+                    You are a world-class agricultural and climate scientist specializing in oil palm cultivation in India.
+                    Given the following coordinates for a farm:
+                    Latitude: ${latitude}
+                    Longitude: ${longitude}
+
+                    And the current date: ${new Date().toLocaleDateString()}
+
+                    Please provide a climate resilience report for the next 3 months. Structure your response as a JSON object matching the provided schema.
+                    The recommendations should be actionable for an oil palm farmer.
+                `;
+
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: {
+                        responseMimeType: 'application/json',
+                        responseSchema: responseSchema,
+                    },
+                });
+                
+                const data = JSON.parse(response.text);
+
+                // Add unique IDs to recommendations for React keys
+                data.recommendations = data.recommendations.map((rec: any, index: number) => ({...rec, id: `rec${index}`}));
+
+                setRiskData(data);
+
+            } catch (err: any) {
+                console.error("Gemini API error:", err);
+                setError("Failed to fetch climate resilience data. The AI model may be temporarily unavailable or there could be an issue with your API key configuration.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchResilienceData();
+    }, [selectedFarmerId, farmers]);
+
 
     const RiskMeter: React.FC<{ score: number, level: string }> = ({ score, level }) => {
         const colorStops: Record<string, string> = { 'Low': 'from-green-400 to-green-600', 'Medium': 'from-yellow-400 to-yellow-600', 'High': 'from-red-400 to-red-600', 'Critical': 'from-red-600 to-red-800' };
@@ -72,24 +174,39 @@ const CaelusDashboard: React.FC<CaelusDashboardProps> = ({ onBack }) => {
                     <CustomSelect label="Select a Farmer to View Dashboard" options={farmerOptions} value={selectedFarmerId} onChange={setSelectedFarmerId} placeholder="-- Choose a farmer --" />
                 </div>
                 
-                {selectedFarmerId ? (
+                {isLoading && (
+                    <div className="text-center py-20 text-gray-500 bg-white rounded-lg shadow-md">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500 mx-auto mb-4"></div>
+                        <h2 className="text-xl font-semibold">Generating AI-Powered Forecast...</h2>
+                        <p className="mt-2">Analyzing climate data for the selected location.</p>
+                    </div>
+                )}
+                
+                {error && (
+                     <div className="p-6 bg-red-50 border-l-4 border-red-500 rounded-r-lg shadow-md">
+                        <h3 className="font-bold text-red-800">An Error Occurred</h3>
+                        <p className="text-red-700">{error}</p>
+                    </div>
+                )}
+
+                {!isLoading && !error && selectedFarmerId && riskData && (
                     <div className="space-y-8">
                         {/* Climate Risk Profile */}
                         <div className="bg-white rounded-lg shadow-xl p-6 text-center">
                             <h2 className="text-xl font-bold text-gray-800 mb-4">3-Month Drought Risk Forecast</h2>
-                            <RiskMeter score={mockDroughtRisk.score} level={mockDroughtRisk.level} />
-                            <p className="mt-4 text-gray-600 max-w-lg mx-auto">{mockDroughtRisk.details}</p>
+                            <RiskMeter score={riskData.droughtRisk.score} level={riskData.droughtRisk.level} />
+                            <p className="mt-4 text-gray-600 max-w-lg mx-auto">{riskData.droughtRisk.details}</p>
                         </div>
                         
                         {/* Adaptation Recommendations */}
                         <div className="bg-white rounded-lg shadow-xl p-6">
                             <h2 className="text-xl font-bold text-gray-800 mb-4">Adaptation Recommendations</h2>
                             <div className="space-y-4">
-                                {mockRecommendations.map(rec => (
+                                {riskData.recommendations.map(rec => (
                                     <div key={rec.id} className={`p-4 rounded-lg border-l-4 ${rec.priority === 'High' ? 'border-red-500 bg-red-50' : rec.priority === 'Medium' ? 'border-yellow-500 bg-yellow-50' : 'border-blue-500 bg-blue-50'}`}>
                                         <h3 className="font-bold text-gray-900">{rec.title}</h3>
                                         <p className="text-sm text-gray-700 mt-1">{rec.description}</p>
-                                        <button onClick={() => alert(`Checking subsidy details for ${rec.relevantSubsidy}`)} className="mt-2 text-sm font-semibold text-green-600 hover:underline">Check Subsidy Eligibility &rarr;</button>
+                                        {rec.relevantSubsidy && <button onClick={() => alert(`Checking subsidy details for ${rec.relevantSubsidy}`)} className="mt-2 text-sm font-semibold text-green-600 hover:underline">Check Subsidy Eligibility &rarr;</button>}
                                     </div>
                                 ))}
                             </div>
@@ -98,14 +215,14 @@ const CaelusDashboard: React.FC<CaelusDashboardProps> = ({ onBack }) => {
                         {/* Peer Benchmarking */}
                          <div className="bg-white rounded-lg shadow-xl p-6">
                              <h2 className="text-xl font-bold text-gray-800 mb-4">Community Insights</h2>
-                             <div className="text-center bg-blue-50 p-6 rounded-lg border border-blue-200">
-                                <p className="text-3xl font-bold text-blue-800">{mockPeerBenchmark.neighborsImplemented}</p>
-                                <p className="font-semibold text-blue-700">farmers in your village have implemented similar water-saving measures.</p>
-                                <p className="mt-2 text-sm text-gray-600">They have reported an average yield increase of <span className="font-bold">{mockPeerBenchmark.yieldIncrease}</span> during dry spells.</p>
+                             <div className="text-left bg-blue-50 p-6 rounded-lg border border-blue-200">
+                                <p className="text-blue-800">{riskData.communityInsights.summary}</p>
                             </div>
                          </div>
                     </div>
-                ) : (
+                )}
+
+                {!isLoading && !selectedFarmerId && (
                     <div className="text-center py-20 text-gray-500 bg-white rounded-lg shadow-md">
                         <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                         <h2 className="text-xl font-semibold mt-4">Select a Farmer</h2>

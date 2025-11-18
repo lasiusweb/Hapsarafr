@@ -892,4 +892,126 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     };
 
     if (isEditing) {
-        return <Susp
+// FIX: Corrected typo from Susp to Suspense
+        return <Suspense fallback={<div className="p-6">Loading form...</div>}>
+            <RegistrationForm
+                mode="edit"
+                existingFarmer={plainFarmer}
+                onSubmit={handleUpdateFarmer}
+                onCancel={() => setIsEditing(false)}
+                existingFarmers={[]} // Not needed for edit mode's duplicate check
+                setNotification={setNotification}
+                currentUser={currentUser}
+            />
+        </Suspense>;
+    }
+
+    return (
+        <div className="p-6 bg-gray-50 min-h-full">
+            <div className="max-w-7xl mx-auto">
+                <button onClick={onBack} className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
+                    &larr; Back to Directory
+                </button>
+
+                 <div className="bg-white rounded-lg shadow-xl p-6 mb-6">
+                    <div className="flex flex-col md:flex-row gap-6">
+                        <div className="flex-shrink-0">
+                             {plainFarmer.photo ? (
+                                <img src={plainFarmer.photo} alt={plainFarmer.fullName} className="h-28 w-28 rounded-full object-cover border-4 border-white shadow-md" />
+                            ) : (
+                                <div className="h-28 w-28 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-4xl shadow-md">
+                                    {plainFarmer.fullName.charAt(0)}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1">
+                             <div className="flex justify-between items-start">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-gray-800">{plainFarmer.fullName}</h1>
+                                    <p className="text-gray-500 font-mono">{plainFarmer.hap_id || 'Pending Sync'}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                     {permissions.has(Permission.CAN_EDIT_FARMER) && <button onClick={handleEdit} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Edit</button>}
+                                     <button onClick={() => setShowLiveAssistant(true)} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">CoPilot</button>
+                                </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div><dt className="text-gray-500">Mobile</dt><dd className="font-semibold text-gray-800">{plainFarmer.mobileNumber}</dd></div>
+                                <div><dt className="text-gray-500">Location</dt><dd className="font-semibold text-gray-800">{getGeoName('village', plainFarmer)}</dd></div>
+                                <div><dt className="text-gray-500">Area</dt><dd className="font-semibold text-gray-800">{plainFarmer.approvedExtent || 0} Ac</dd></div>
+                                <div><dt className="text-gray-500">Status</dt><dd className="font-semibold text-gray-800">{plainFarmer.status}</dd></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mb-6 flex space-x-2 border-b">
+                    <TabButton tabName="details" label="Farmer Details" />
+                    <TabButton tabName="portfolio" label="Farm Portfolio" />
+                    <TabButton tabName="subsidy" label="Subsidy & Payments" />
+                    <TabButton tabName="assistance" label="Assistance Schemes" />
+                    <TabButton tabName="harvests" label="Harvest & Quality" />
+                    <TabButton tabName="services" label="Field Service" />
+                    <TabButton tabName="kyc" label="KYC & Wallet" />
+                    <TabButton tabName="consents" label="Service Providers" />
+                    <TabButton tabName="activity" label="Activity Log" />
+                </div>
+
+                <div className="bg-white rounded-lg shadow-xl p-8">
+                    {activeTab === 'details' && (
+                        <div>Details Tab Content...</div>
+                    )}
+                     {activeTab === 'portfolio' && <FarmPortfolioTab farmer={farmer} currentUser={currentUser} setNotification={setNotification} />}
+                     {activeTab === 'subsidy' && (
+                        <SubsidyStatusView farmer={plainFarmer} payments={subsidyPayments} onRecordPayment={handleRecordPaymentClick} />
+                    )}
+                     {activeTab === 'assistance' && <AssistanceTabContent farmer={farmer} currentUser={currentUser} setNotification={setNotification} />}
+                     {activeTab === 'harvests' && <HarvestsTabContent farmer={farmer} database={database} onRecord={() => setShowHarvestForm(true)} onDetails={(data) => setAssessmentDetails(data)} />}
+                     {activeTab === 'services' && <FieldServiceTab farmer={farmer} onOpenRequestModal={() => setShowRequestVisitModal(true)} onOpenDetailsModal={setVisitDetailsModal} users={users} />}
+                     {activeTab === 'kyc' && <KycTabContent farmer={farmer} onOpenModal={() => setShowKycModal(true)} />}
+                     {activeTab === 'consents' && <p>Consents tab coming soon.</p>}
+                     {activeTab === 'activity' && <p>Activity Log tab coming soon.</p>}
+                </div>
+            </div>
+            
+            {showPaymentForm && <SubsidyPaymentForm onClose={() => { setShowPaymentForm(false); setEditingPayment(null); }} onSubmit={handleSavePayment} existingPayment={editingPayment} initialStage={initialPaymentStage} />}
+            {paymentToDelete && <ConfirmationModal isOpen={!!paymentToDelete} title="Delete Payment?" message="Are you sure you want to delete this payment record? This action cannot be undone." onConfirm={handleDeletePayment} onCancel={() => setPaymentToDelete(null)} confirmText="Delete" confirmButtonVariant="destructive" />}
+            {showLiveAssistant && <Suspense fallback={null}><LiveAssistantModal farmer={plainFarmer} onClose={() => setShowLiveAssistant(false)} onExecuteAction={(action) => { if(action === 'SHOW_PROFIT_SIMULATOR') { setShowLiveAssistant(false); setShowProfitSimulator(true); } }} /></Suspense>}
+            {showKycModal && <Suspense fallback={null}><KycOnboardingModal farmer={plainFarmer} onClose={() => setShowKycModal(false)} setNotification={setNotification} /></Suspense>}
+
+        </div>
+    );
+};
+
+const enhance = withObservables(
+    ['farmerId'],
+    ({ farmerId, database }: { farmerId: string, database: Database }) => ({
+        farmer: database.get<FarmerModel>('farmers').findAndObserve(farmerId),
+        subsidyPayments: database.get<SubsidyPaymentModel>('subsidy_payments').query(Q.where('farmer_id', farmerId), Q.sortBy('payment_date', 'desc')).observe(),
+        activityLogs: database.get<ActivityLogModel>('activity_logs').query(Q.where('farmer_id', farmerId), Q.sortBy('created_at', 'desc')).observe(),
+        resourceDistributions: database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('farmer_id', farmerId), Q.sortBy('distribution_date', 'desc')).observe(),
+    })
+);
+
+const EnhancedFarmerDetailsPage = enhance(InnerFarmerDetailsPage);
+
+const FarmerDetailsPage: React.FC<Omit<FarmerDetailsPageProps, 'database'>> = (props) => {
+    const database = useDatabase();
+    // This is a simple way to handle the case where the farmer might not exist.
+    // A more robust solution might use a router that handles 404s.
+    const farmerExists = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('id', props.farmerId)), [database, props.farmerId]));
+    
+    if(farmerExists.length === 0) {
+        return (
+            <div className="p-6 text-center">
+                <h1 className="text-2xl font-bold">Farmer not found</h1>
+                <p>The requested farmer could not be found in the local database.</p>
+                <button onClick={props.onBack} className="mt-4 px-4 py-2 bg-green-600 text-white rounded-md">Go Back</button>
+            </div>
+        )
+    }
+
+    return <EnhancedFarmerDetailsPage {...props} database={database} />;
+};
+
+export default FarmerDetailsPage;
