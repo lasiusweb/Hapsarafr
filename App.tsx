@@ -166,6 +166,7 @@ const App: React.FC = () => {
             case 'climate-resilience': return <CaelusDashboard onBack={() => handleNavigate('dashboard')} />;
             case 'hapsara-nexus': return <HapsaraNexusPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
             case 'billing': return <BillingPage currentUser={currentUser} currentTenant={currentTenant} onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} setNotification={setNotification} />;
+            case 'financials': return <FinancialsPage allFarmers={allFarmers} onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} onNavigate={handleNavigate} />;
             default: return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
         }
     };

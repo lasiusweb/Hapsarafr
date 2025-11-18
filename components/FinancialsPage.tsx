@@ -10,6 +10,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import SendMoneyModal from './SendMoneyModal';
 import WithdrawMoneyModal from './WithdrawMoneyModal';
 import { formatCurrency } from '../lib/utils';
+import SubsidyDisbursementModal from './SubsidyDisbursementModal';
 
 interface FinancialsPageProps {
     allFarmers: Farmer[];
@@ -65,7 +66,7 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
     }
 
     const getTransactionIcon = (source: string) => {
-        if (source.includes('Subsidy')) return '🎁';
+        if (source.includes('Subsidy') || source.includes('Harvest')) return '🎁';
         if (source.includes('P2P')) return '👥';
         if (source.includes('Withdrawal')) return '🏦';
         if (source.includes('Marketplace')) return '🛒';
@@ -116,6 +117,7 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
     const [selectedFarmerId, setSelectedFarmerId] = useState<string>('');
     const [isSendMoneyModalOpen, setIsSendMoneyModalOpen] = useState(false);
     const [isWithdrawMoneyModalOpen, setIsWithdrawMoneyModalOpen] = useState(false);
+    const [isDisbursementModalOpen, setIsDisbursementModalOpen] = useState(false);
     const database = useDatabase();
 
     const farmerOptions = useMemo(() => allFarmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hap_id || 'N/A'})` })), [allFarmers]);
@@ -143,7 +145,6 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                 const recipientWallets = await database.get<WalletModel>('wallets').query(Q.where('farmer_id', recipientId)).fetch();
                 let recipientWallet = recipientWallets[0];
 
-                // 1. If recipient has no wallet, create one.
                 if (!recipientWallet) {
                     recipientWallet = await database.get<WalletModel>('wallets').create(w => {
                         w.farmerId = recipientId;
@@ -151,13 +152,9 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     });
                 }
                 
-                // 2. Update sender's balance
                 await senderWallet.update(w => { w.balance -= amount; });
-
-                // 3. Update recipient's balance
                 await recipientWallet.update(w => { w.balance += amount; });
                 
-                // 4. Create sender's transaction (debit)
                 await database.get<WalletTransactionModel>('wallet_transactions').create(t => {
                     t.walletId = senderWallet.id;
                     t.transactionType = 'debit';
@@ -168,7 +165,6 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     t.metadataJson = JSON.stringify({ recipientId: recipientId, recipientName: recipientFarmer.fullName });
                 });
                 
-                // 5. Create recipient's transaction (credit)
                 await database.get<WalletTransactionModel>('wallet_transactions').create(t => {
                     t.walletId = recipientWallet.id;
                     t.transactionType = 'credit';
@@ -196,17 +192,15 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
 
         try {
             await database.write(async () => {
-                // 1. Update wallet balance
                 await senderWallet.update(w => { w.balance -= amount; });
 
-                // 2. Create withdrawal transaction
                 await database.get<WalletTransactionModel>('wallet_transactions').create(t => {
                     t.walletId = senderWallet.id;
                     t.transactionType = 'debit';
                     t.amount = amount;
                     t.source = EntrySource.Withdrawal;
                     t.description = `Withdrawal to ${account.details}`;
-                    t.status = TransactionStatus.Pending; // Pending until processed by a payment gateway
+                    t.status = TransactionStatus.Pending;
                     t.metadataJson = JSON.stringify({ withdrawalAccountId: accountId });
                 });
             });
@@ -232,20 +226,21 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
     return (
         <div className="p-6 bg-gray-50 min-h-full">
             <div className="max-w-4xl mx-auto">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Farmer Finances</h1>
+                        <h1 className="text-3xl font-bold text-gray-800">Farmer Wallet Dashboard</h1>
                         <p className="text-gray-500">Manage farmer wallets, view transactions, and initiate payments.</p>
                     </div>
-                    <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        Back to Dashboard
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setIsDisbursementModalOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">Disburse Subsidy</button>
+                        <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
+                            Back
+                        </button>
+                    </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-md p-4 mb-6 flex justify-between items-end">
-                    <div className="flex-grow">
-                       <CustomSelect label="Select a Farmer" options={farmerOptions} value={selectedFarmerId} onChange={setSelectedFarmerId} placeholder="-- Choose a farmer to view their wallet --" />
-                    </div>
+                <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <CustomSelect label="Select a Farmer" options={farmerOptions} value={selectedFarmerId} onChange={setSelectedFarmerId} placeholder="-- Choose a farmer to view their wallet --" />
                 </div>
                 
                 {selectedFarmerId ? (
@@ -275,6 +270,13 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     walletBalance={senderWallet.balance}
                     withdrawalAccounts={plainWithdrawalAccounts}
                     onAddAccount={() => onNavigate('farmer-details', selectedFarmer.id)}
+                />
+            )}
+             {isDisbursementModalOpen && (
+                <SubsidyDisbursementModal
+                    onClose={() => setIsDisbursementModalOpen(false)}
+                    onSave={async () => {}} // This will be implemented in the modal
+                    allFarmers={allFarmers}
                 />
             )}
         </div>

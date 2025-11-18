@@ -621,6 +621,8 @@ export const mySchema = appSchema({
         { name: 'notes', type: 'string', isOptional: true },
         { name: 'created_by', type: 'string' },
         { name: 'created_at', type: 'number' },
+        { name: 'payment_status', type: 'string', isOptional: true },
+        { name: 'payment_amount', type: 'number', isOptional: true },
       ]
     }),
     tableSchema({
@@ -1235,6 +1237,8 @@ export class HarvestLogModel extends Model {
     @text('created_by') createdBy!: string;
     @readonly @date('created_at') createdAt!: Date;
     @relation('crop_assignments', 'crop_assignment_id') cropAssignment!: any;
+    @text('payment_status') paymentStatus?: 'Paid' | 'Pending';
+    @field('payment_amount') paymentAmount?: number;
 }
 
 export class DataSharingConsentModel extends Model {

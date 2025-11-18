@@ -857,23 +857,6 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     const [assessmentDetails, setAssessmentDetails] = useState<CombinedHarvestData | null>(null);
     const [showKycModal, setShowKycModal] = useState(false);
     const [consentModal, setConsentModal] = useState<{isOpen: boolean, tenant?: { id: string, name: string }, consentRecord?: FarmerDealerConsentModel | null}>({isOpen: false});
-
-    const [plots, setPlots] = useState<FarmPlot[]>([]);
-    const [isLoadingPlots, setIsLoadingPlots] = useState(true);
-
-    useEffect(() => {
-        let isMounted = true;
-        if (farmer) {
-            setIsLoadingPlots(true);
-            farmer.farmPlots.fetch().then((plotModels: any[]) => {
-                if (isMounted) {
-                    setPlots(plotModels.map(p => farmPlotModelToPlain(p)!));
-                    setIsLoadingPlots(false);
-                }
-            });
-        }
-        return () => { isMounted = false; };
-    }, [farmer]);
     
     // Voice note state
     const [isRecording, setIsRecording] = useState(false);

@@ -135,18 +135,34 @@ const Sidebar: React.FC<SidebarProps> = ({ view, onNavigate, currentUser, curren
                     })}
                 </nav>
                 <div className="p-3 border-t border-gray-700">
-                    <button onClick={() => onNavigate('billing')} className={`w-full p-3 rounded-lg text-left transition-colors ${isCollapsed ? 'justify-center' : ''} ${view === 'billing' ? activeItemClasses : inactiveItemClasses}`}>
-                         <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 8h6m-5 4h.01M4.88 8.11A5.986 5.986 0 014 11c0 3.314 2.686 6 6 6s6-2.686 6-6c0-1.22-.363-2.344-.986-3.29M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>
-                            <div className={`ml-4 flex-1 sidebar-item-text ${isCollapsed ? 'hidden' : ''}`}>
-                                <p className="font-semibold">Credits</p>
-                                <p className="text-xs text-gray-400">{currentTenant?.credit_balance.toLocaleString() || 0} remaining</p>
-                            </div>
-                         </div>
-                    </button>
+                     {!isCollapsed && currentTenant?.credit_balance !== undefined && (
+                        <div className="p-3 mb-2 text-center bg-gray-900 rounded-lg">
+                            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Credit Balance</p>
+                            <p className="text-xl font-bold text-green-400">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(currentTenant.credit_balance)}</p>
+                        </div>
+                    )}
+                    {currentUser && (
+                        <div className="relative group">
+                             <button
+                                onClick={() => onNavigate('profile')}
+                                className={`w-full p-2 rounded-lg text-left transition-colors flex items-center ${view === 'profile' ? 'bg-gray-700' : 'hover:bg-gray-700'}`}
+                            >
+                                <img src={currentUser.avatar} alt="User Avatar" className="w-10 h-10 rounded-full flex-shrink-0" />
+                                <div className={`ml-3 flex-1 overflow-hidden sidebar-item-text ${isCollapsed ? 'hidden' : ''}`}>
+                                    <p className="font-semibold text-sm text-white truncate">{currentUser.name}</p>
+                                    <p className="text-xs text-gray-400">View Profile</p>
+                                </div>
+                            </button>
+                        </div>
+                    )}
                 </div>
                  {/* ... Modals and other elements */}
             </div>
+            <SupabaseSettingsModal isOpen={isSupabaseModalOpen} onClose={() => setIsSupabaseModalOpen(false)} onConnect={handleSetSupabase} />
+            <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} appContent={null} />
+            <PrivacyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} appContent={null} />
+            <FeedbackModal isOpen={isFeedbackModalOpen} onClose={() => setIsFeedbackModalOpen(false)} />
+            <ChangelogModal isOpen={isChangelogModalOpen} onClose={() => setIsChangelogModalOpen(false)} />
         </>
     );
 };

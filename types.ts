@@ -867,6 +867,8 @@ export interface HarvestLog {
     notes?: string;
     created_by: string;
     created_at: string;
+    payment_status: 'Paid' | 'Pending';
+    payment_amount?: number;
 }
 
 export interface DataSharingConsent {
