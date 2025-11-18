@@ -5,6 +5,7 @@ import { Database, Q } from '@nozbe/watermelondb';
 const SYNC_TABLE_ORDER = [
   'farmers',
   'farm_plots',
+  'agronomic_inputs',
   'assistance_applications',
   'subsidy_payments',
   'resource_distributions',

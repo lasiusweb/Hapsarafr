@@ -69,6 +69,7 @@ export enum ActivityType {
     DATA_CONSENT_UPDATED = 'DATA_CONSENT_UPDATED',
     // FIX: Add missing COLLECTION_APPOINTMENT_BOOKED to ActivityType enum.
     COLLECTION_APPOINTMENT_BOOKED = 'COLLECTION_APPOINTMENT_BOOKED',
+    AGRONOMIC_INPUT_LOGGED = 'AGRONOMIC_INPUT_LOGGED',
 }
 
 export enum PaymentStage {
@@ -248,6 +249,13 @@ export enum LedgerTransactionType {
     CONSUMPTION = 'consumption',
     REFUND = 'refund',
     ADJUSTMENT = 'adjustment',
+}
+
+export enum InputType {
+    Fertilizer = 'FERTILIZER',
+    Pesticide = 'PESTICIDE',
+    Irrigation = 'IRRIGATION',
+    Other = 'OTHER',
 }
 
 
@@ -908,4 +916,20 @@ export interface FreeTierUsage {
     service_name: BillableEvent;
     period: string; // e.g., "2024-07"
     usage_count: number;
+}
+
+export interface AgronomicInput {
+    id: string;
+    farm_plot_id: string;
+    input_date: string;
+    input_type: InputType;
+    name: string;
+    quantity: number;
+    unit: string;
+    npk_values_json?: string;
+    notes?: string;
+    created_by: string;
+    created_at: string;
+    sync_status: 'synced' | 'pending';
+    tenant_id: string;
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef, Suspense } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
-import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, FarmPlotModel, AssistanceApplicationModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, WithdrawalAccountModel, TenantModel, TerritoryTransferRequestModel, FarmerDealerConsentModel, TerritoryModel, VisitRequestModel, CropAssignmentModel, CropModel, HarvestLogModel, DataSharingConsentModel } from '../db';
+import { FarmerModel, SubsidyPaymentModel, ActivityLogModel, ResourceDistributionModel, ResourceModel, FarmPlotModel, AssistanceApplicationModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, WithdrawalAccountModel, TenantModel, TerritoryTransferRequestModel, FarmerDealerConsentModel, TerritoryModel, VisitRequestModel, CropAssignmentModel, CropModel, HarvestLogModel, DataSharingConsentModel, AgronomicInputModel } from '../db';
 import { User, Permission, FarmerStatus, SubsidyPayment, Farmer, ActivityType, PaymentStage, FarmPlot, SoilType, PlantationMethod, PlantType, AssistanceApplicationStatus, AssistanceScheme, PlantingRecord, Harvest, QualityAssessment, AppealStatus, OverallGrade, WithdrawalAccount, TerritoryTransferStatus, FarmerDealerConsent, VisitRequestStatus, CropAssignment, HarvestLog } from '../types';
 import SubsidyPaymentForm from './SubsidyPaymentForm';
 import DistributionForm from './DistributionForm';
@@ -28,6 +28,7 @@ const KycOnboardingModal = lazy(() => import('./KycOnboardingModal'));
 const GranularConsentModal = lazy(() => import('./GranularConsentModal'));
 const CropAssignmentModal = lazy(() => import('./CropAssignmentModal'));
 const HarvestLogger = lazy(() => import('./HarvestLogger'));
+const AgronomicInputModal = lazy(() => import('./AgronomicInputModal'));
 
 
 declare var QRCode: any;
@@ -698,12 +699,15 @@ const PlotTimeline = withObservables(
     ['plot'],
     ({ plot }: { plot: FarmPlotModel }) => ({
         assignments: plot.cropAssignments.observe(Q.sortBy('year', Q.desc)),
+        agronomicInputs: plot.agronomicInputs.observe(Q.sortBy('input_date', 'desc')),
     })
-)(({ plot, assignments, onAssignCrop, onLogHarvest }: {
+)(({ plot, assignments, agronomicInputs, onAssignCrop, onLogHarvest, onLogInput }: {
     plot: FarmPlotModel;
     assignments: CropAssignmentModel[];
+    agronomicInputs: AgronomicInputModel[];
     onAssignCrop: (plot: FarmPlotModel) => void;
     onLogHarvest: (assignment: CropAssignmentModel) => void;
+    onLogInput: (plot: FarmPlotModel) => void;
 }) => {
     return (
         <Card>
@@ -712,12 +716,15 @@ const PlotTimeline = withObservables(
                     <h4 className="font-bold text-lg">{plot.name}</h4>
                     <p className="text-sm text-gray-600">{plot.acreage} Acres</p>
                 </div>
-                <button
-                    onClick={() => onAssignCrop(plot)}
-                    className="px-4 py-2 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 font-semibold"
-                >
-                    Assign Crop
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => onLogInput(plot)} className="px-3 py-1.5 bg-gray-200 text-gray-800 text-xs font-semibold rounded-md hover:bg-gray-300 transition">Log Input</button>
+                    <button
+                        onClick={() => onAssignCrop(plot)}
+                        className="px-4 py-2 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 font-semibold"
+                    >
+                        Assign Crop
+                    </button>
+                </div>
             </CardHeader>
             <CardContent>
                 {assignments.length > 0 ? (
@@ -732,6 +739,24 @@ const PlotTimeline = withObservables(
                     </div>
                 ) : (
                     <p className="text-sm text-gray-500 text-center py-4">No crops have been assigned to this plot yet.</p>
+                )}
+                 {agronomicInputs.length > 0 && (
+                    <div className="mt-4 pt-4 border-t">
+                        <h6 className="text-xs font-bold text-gray-600 mb-2">Recent Inputs:</h6>
+                        <ul className="space-y-2 text-xs text-gray-600">
+                            {agronomicInputs.slice(0, 3).map(input => (
+                                <li key={input.id} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                                    <div>
+                                        <span className="font-semibold text-gray-800">{input.name}</span> ({input.inputType})
+                                    </div>
+                                    <div className="text-right">
+                                        <p>{new Date(input.inputDate).toLocaleDateString()}</p>
+                                        <p className="font-mono">{input.quantity} {input.unit}</p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 )}
             </CardContent>
         </Card>
@@ -748,6 +773,7 @@ const FarmPortfolioTab = withObservables(
     const database = useDatabase();
     const [plotToAssign, setPlotToAssign] = useState<FarmPlotModel | null>(null);
     const [assignmentToLog, setAssignmentToLog] = useState<CropAssignmentModel | null>(null);
+    const [plotForInput, setPlotForInput] = useState<FarmPlotModel | null>(null);
 
     const handleAddPlot = async () => {
         const acreageStr = prompt("Enter acreage for the new plot:");
@@ -771,6 +797,35 @@ const FarmPortfolioTab = withObservables(
             });
         }
     };
+
+    const handleLogInput = async (data: any) => {
+        if (!plotForInput) return;
+        try {
+            await database.write(async () => {
+                await database.get<AgronomicInputModel>('agronomic_inputs').create(input => {
+                    input.farmPlotId = plotForInput.id;
+                    Object.assign(input, data);
+                    input.createdBy = currentUser.id;
+                    input.tenantId = currentUser.tenantId;
+                    input.syncStatusLocal = 'pending';
+                });
+
+                const farmPlot = await database.get<FarmPlotModel>('farm_plots').find(plotForInput.id);
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = farmPlot.farmerId;
+                    log.activityType = ActivityType.AGRONOMIC_INPUT_LOGGED;
+                    log.description = `Logged ${data.quantity} ${data.unit} of ${data.name} for ${farmPlot.name}.`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = currentUser.tenantId;
+                });
+            });
+            setNotification({ message: 'Agronomic input logged successfully.', type: 'success' });
+            setPlotForInput(null);
+        } catch (error) {
+            console.error(error);
+            setNotification({ message: 'Failed to log input.', type: 'error' });
+        }
+    };
     
     return (
         <div>
@@ -788,6 +843,7 @@ const FarmPortfolioTab = withObservables(
                             plot={plot}
                             onAssignCrop={setPlotToAssign}
                             onLogHarvest={setAssignmentToLog}
+                            onLogInput={setPlotForInput}
                         />
                     ))}
                  </div>
@@ -816,6 +872,15 @@ const FarmPortfolioTab = withObservables(
                         onClose={() => setAssignmentToLog(null)}
                         currentUser={currentUser}
                         setNotification={setNotification}
+                    />
+                </Suspense>
+            )}
+
+            {plotForInput && (
+                <Suspense fallback={null}>
+                    <AgronomicInputModal 
+                        onClose={() => setPlotForInput(null)} 
+                        onSubmit={handleLogInput}
                     />
                 </Suspense>
             )}

@@ -1,6 +1,8 @@
 import { GEO_DATA } from '../data/geoData';
-import { Farmer, FarmPlot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, EquipmentLease, PlantingRecord } from '../types';
-import { FarmerModel, FarmPlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, EquipmentLeaseModel, PlantingRecordModel } from '../db';
+// FIX: Import AgronomicInput type
+import { Farmer, FarmPlot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, EquipmentLease, PlantingRecord, AgronomicInput } from '../types';
+// FIX: Import AgronomicInputModel type
+import { FarmerModel, FarmPlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, EquipmentLeaseModel, PlantingRecordModel, AgronomicInputModel } from '../db';
 import DOMPurify from 'dompurify';
 
 
@@ -52,6 +54,8 @@ export const processingStepModelToPlain = (model: ProcessingStepModel | null): P
 export const equipmentModelToPlain = (model: EquipmentModel | null): Equipment | null => model ? modelToPlain<Equipment>(model) : null;
 export const manualLedgerEntryModelToPlain = (model: ManualLedgerEntryModel | null): ManualLedgerEntry | null => model ? modelToPlain<ManualLedgerEntry>(model) : null;
 export const equipmentLeaseModelToPlain = (model: EquipmentLeaseModel | null): EquipmentLease | null => model ? modelToPlain<EquipmentLease>(model) : null;
+// FIX: Add missing export for agronomicInputModelToPlain.
+export const agronomicInputModelToPlain = (model: AgronomicInputModel | null): AgronomicInput | null => model ? modelToPlain<AgronomicInput>(model) : null;
 
 
 export const getGeoName = (type: 'district' | 'mandal' | 'village', farmer: { district: string, mandal?: string, village?: string }): string => {

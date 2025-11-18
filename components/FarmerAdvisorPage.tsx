@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { User, Farmer, AgronomicAlert, AlertType } from '../types';
+import { User, Farmer, AgronomicAlert, AlertType, AgronomicInput, InputType } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { FarmerModel, AgronomicAlertModel } from '../db';
+import { FarmerModel, AgronomicAlertModel, FarmPlotModel, AgronomicInputModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
+import { farmPlotModelToPlain, agronomicInputModelToPlain } from '../lib/utils';
 
 interface FarmerAdvisorPageProps {
     onBack: () => void;
@@ -12,35 +13,10 @@ interface FarmerAdvisorPageProps {
     onNavigate: (view: string, param?: string) => void;
 }
 
-// Mock data for phase 1 - this will be replaced by real data from the DB
-const mockAlerts: Omit<AgronomicAlert, 'id' | 'farmerId' | 'tenantId'>[] = [
-    {
-        alertType: AlertType.NutrientDeficiency,
-        severity: 'Medium',
-        message: 'Early signs of Nitrogen deficiency detected in Plot #2.',
-        recommendation: 'Apply 12kg of urea per acre in the next 3 days. Consider conducting a soil test for confirmation.',
-        is_read: false,
-        createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), // 2 days ago
-    },
-    {
-        alertType: AlertType.PestWarning,
-        severity: 'High',
-        message: 'High probability of Rhinoceros Beetle infestation in your area based on regional reports.',
-        recommendation: 'Inspect young palms for damage to spear leaves. Consider setting up pheromone traps as a preventive measure.',
-        is_read: false,
-        createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), // 5 days ago
-    },
-    {
-        alertType: AlertType.IrrigationAlert,
-        severity: 'Low',
-        message: 'No rainfall recorded in 5 days. Soil moisture may be low.',
-        recommendation: 'Check soil moisture levels and consider running irrigation for 2 hours if dry.',
-        is_read: true,
-        createdAt: new Date(Date.now() - 6 * 86400000).toISOString(), // 6 days ago
-    }
-];
+const PLANT_DENSITY_PER_ACRE = 57;
+const DENSITY_TOLERANCE = 0.15; // 15% tolerance
 
-const AlertCard: React.FC<{ alert: Omit<AgronomicAlert, 'id'|'farmerId'|'tenantId'> }> = ({ alert }) => {
+const AlertCard: React.FC<{ alert: Omit<AgronomicAlert, 'id' | 'farmerId' | 'tenantId'> }> = ({ alert }) => {
     const severityClasses: Record<string, { bg: string, border: string, text: string, icon: React.ReactNode }> = {
         'High': { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg> },
         'Medium': { bg: 'bg-yellow-50', border: 'border-yellow-300', text: 'text-yellow-800', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.636-1.214 2.863-1.214 3.5 0l5.415 10.322a1.875 1.875 0 01-1.666 2.829H4.508a1.875 1.875 0 01-1.666-2.829L8.257 3.099zM9 12a1 1 0 112 0 1 1 0 01-2 0zm1-4a1 1 0 00-1 1v2a1 1 0 102 0V9a1 1 0 00-1-1z" clipRule="evenodd" /></svg> },
@@ -71,6 +47,88 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
 
     const farmerOptions = useMemo(() => farmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hapId || 'N/A'})`})), [farmers]);
 
+    // Data fetching for selected farmer
+    const farmPlotsModels = useQuery(useMemo(() => 
+        selectedFarmerId ? database.get<FarmPlotModel>('farm_plots').query(Q.where('farmer_id', selectedFarmerId)) : database.get<FarmPlotModel>('farm_plots').query(Q.where('id', 'null')),
+    [database, selectedFarmerId]));
+    
+    const allInputModels = useQuery(useMemo(() => database.get<AgronomicInputModel>('agronomic_inputs').query(), [database]));
+
+    const generatedAlerts = useMemo(() => {
+        if (!selectedFarmerId) return [];
+
+        const farmPlots = farmPlotsModels.map(p => farmPlotModelToPlain(p)!);
+        if (farmPlots.length === 0) return [];
+
+        const allInputs = allInputModels.map(i => agronomicInputModelToPlain(i)!);
+        
+        const alerts: Omit<AgronomicAlert, 'id' | 'farmerId' | 'tenantId'>[] = [];
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        farmPlots.forEach(plot => {
+            // Rule 1: Plant Density
+            // @ts-ignore
+            if (plot.acreage > 0 && plot.number_of_plants > 0) {
+                // @ts-ignore
+                const density = plot.number_of_plants / plot.acreage;
+                const lowerBound = PLANT_DENSITY_PER_ACRE * (1 - DENSITY_TOLERANCE);
+                const upperBound = PLANT_DENSITY_PER_ACRE * (1 + DENSITY_TOLERANCE);
+                if (density < lowerBound || density > upperBound) {
+                    alerts.push({
+                        // @ts-ignore
+                        plotId: plot.id,
+                        alertType: AlertType.YieldForecast, // Re-using an existing type
+                        severity: 'Medium',
+                        // @ts-ignore
+                        message: `Unusual plant density detected in ${plot.name}.`,
+                        recommendation: `The plot has ${Math.round(density)} plants/acre. The recommended range is ${Math.round(lowerBound)}-${Math.round(upperBound)}. Please verify the plant count and acreage data.`,
+                        is_read: false,
+                        createdAt: new Date().toISOString(),
+                    });
+                }
+            }
+            
+            // Rule 2: Missing Plantation Date
+            // @ts-ignore
+            if (plot.number_of_plants > 0 && !plot.plantation_date) {
+                 alerts.push({
+                    // @ts-ignore
+                    plotId: plot.id,
+                    alertType: AlertType.YieldForecast,
+                    severity: 'Low',
+                    // @ts-ignore
+                    message: `Missing plantation date for ${plot.name}.`,
+                    recommendation: `Please record the plantation date for this plot to enable accurate subsidy eligibility tracking and yield predictions.`,
+                    is_read: false,
+                    createdAt: new Date().toISOString(),
+                });
+            }
+
+            // Rule 3: Irrigation Reminder
+            const plotInputs = allInputs.filter(i => i.farm_plot_id === plot.id);
+            const lastIrrigation = plotInputs
+                .filter(i => i.input_type === InputType.Irrigation)
+                .sort((a, b) => new Date(b.input_date).getTime() - new Date(a.input_date).getTime())[0];
+                
+            if (!lastIrrigation || new Date(lastIrrigation.input_date) < sevenDaysAgo) {
+                 alerts.push({
+                    // @ts-ignore
+                    plotId: plot.id,
+                    alertType: AlertType.IrrigationAlert,
+                    severity: 'Low',
+                    // @ts-ignore
+                    message: `No recent irrigation logged for ${plot.name}.`,
+                    recommendation: `The last irrigation was logged over a week ago. Please check soil moisture levels and irrigate if necessary.`,
+                    is_read: false,
+                    createdAt: new Date().toISOString(),
+                });
+            }
+        });
+
+        return alerts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    }, [selectedFarmerId, farmPlotsModels, allInputModels]);
+
     return (
         <div className="p-6 bg-gray-50 min-h-full">
             <div className="max-w-4xl mx-auto">
@@ -95,20 +153,26 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
                             <p className="text-gray-500 text-sm mt-1">Proactive recommendations from Hapsara Scientia.</p>
                             
                             <div className="mt-6 space-y-4">
-                                {mockAlerts.map((alert, index) => <AlertCard key={index} alert={alert} />)}
+                                {generatedAlerts.length > 0 ? (
+                                    generatedAlerts.map((alert, index) => <AlertCard key={index} alert={alert} />)
+                                ) : (
+                                    <div className="text-center py-10 text-gray-500">
+                                        <p className="font-semibold">No alerts for this farmer. Data looks good!</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <div className="bg-white p-6 rounded-lg shadow-md text-center">
                                 <h3 className="font-bold text-gray-700">Yield Prediction</h3>
-                                <p className="text-4xl font-bold text-green-600 my-4">7-9% <span className="text-lg">Increase</span></p>
-                                <p className="text-sm text-gray-500">Potential yield increase by following current recommendations.</p>
+                                <p className="text-4xl font-bold text-gray-400 my-4">N/A</p>
+                                <p className="text-sm text-gray-500">Yield prediction model coming in a future update.</p>
                             </div>
                              <div className="bg-white p-6 rounded-lg shadow-md text-center">
                                 <h3 className="font-bold text-gray-700">Log New Data</h3>
                                 <p className="text-sm text-gray-500 my-4">Improve prediction accuracy by providing up-to-date information for this farmer.</p>
-                                <button disabled className="px-4 py-2 bg-gray-300 text-gray-500 rounded-md font-semibold text-sm cursor-not-allowed" title="Coming Soon">Log Inputs</button>
+                                <button onClick={() => onNavigate('farmer-details', selectedFarmerId)} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm">Go to Profile</button>
                             </div>
                         </div>
                     </div>

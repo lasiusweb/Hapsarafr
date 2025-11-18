@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 45,
+  version: 46,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -701,6 +701,23 @@ export const mySchema = appSchema({
             { name: 'created_at', type: 'number' },
         ]
     }),
+    tableSchema({
+      name: 'agronomic_inputs',
+      columns: [
+        { name: 'farm_plot_id', type: 'string', isIndexed: true },
+        { name: 'input_date', type: 'string' },
+        { name: 'input_type', type: 'string' },
+        { name: 'name', type: 'string' },
+        { name: 'quantity', type: 'number' },
+        { name: 'unit', type: 'string' },
+        { name: 'npk_values_json', type: 'string', isOptional: true },
+        { name: 'notes', type: 'string', isOptional: true },
+        { name: 'created_by', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'sync_status', type: 'string' },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+      ]
+    }),
   ]
 }));
 
@@ -1180,6 +1197,7 @@ export class FarmPlotModel extends Model {
         farmers: { type: 'belongs_to', key: 'farmer_id' },
         crop_assignments: { type: 'has_many', foreignKey: 'farm_plot_id' },
         planting_records: { type: 'has_many', foreignKey: 'farm_plot_id' },
+        agronomic_inputs: { type: 'has_many', foreignKey: 'farm_plot_id' },
     } as const;
     @text('farmer_id') farmerId!: string;
     @field('acreage') acreage!: number;
@@ -1190,6 +1208,7 @@ export class FarmPlotModel extends Model {
     @relation('farmers', 'farmer_id') farmer!: any;
     @children('crop_assignments') cropAssignments!: any;
     @children('planting_records') plantingRecords!: any;
+    @children('agronomic_inputs') agronomicInputs!: any;
     
     // Merged fields
     @text('soil_type') soilType?: string;
@@ -1396,6 +1415,27 @@ export class CollectionAppointmentModel extends Model {
 export class ProcessingBatchModel extends Model { static table = 'processing_batches'; readonly id!: string; @text('harvest_id') harvestId!: string; @text('batch_code') batchCode!: string; @text('start_date') startDate!: string; @text('status') status!: any; @text('notes') notes?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
 export class ProcessingStepModel extends Model { static table = 'processing_steps'; readonly id!: string; @text('batch_id') batchId!: string; @text('step_name') stepName!: string; @text('start_date') startDate!: string; @text('operator_id') operatorId!: string; @text('equipment_id') equipmentId?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
 
+export class AgronomicInputModel extends Model {
+    static table = 'agronomic_inputs';
+    readonly id!: string;
+    static associations = {
+        farm_plots: { type: 'belongs_to', key: 'farm_plot_id' },
+    } as const;
+    @text('farm_plot_id') farmPlotId!: string;
+    @text('input_date') inputDate!: string;
+    @text('input_type') inputType!: string;
+    @text('name') name!: string;
+    @field('quantity') quantity!: number;
+    @text('unit') unit!: string;
+    @text('npk_values_json') npkValuesJson?: string;
+    @text('notes') notes?: string;
+    @text('created_by') createdBy!: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @text('sync_status') syncStatusLocal!: string;
+    @text('tenant_id') tenantId!: string;
+    @relation('farm_plots', 'farm_plot_id') farmPlot!: any;
+}
+
 
 // --- Database Setup ---
 const adapter = new SQLiteAdapter({
@@ -1421,7 +1461,7 @@ const database = new Database({
     // Hapsara Valorem Models
     CreditLedgerEntryModel, ServiceConsumptionLogModel, FreeTierUsageModel,
     // Hapsara Nexus Models
-    ServicePointModel, OfficerScheduleModel, CollectionAppointmentModel,
+    ServicePointModel, OfficerScheduleModel, CollectionAppointmentModel, AgronomicInputModel,
     // Models for Processing
     ProcessingBatchModel, ProcessingStepModel,
   ],
