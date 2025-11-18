@@ -28,7 +28,7 @@ const KycOnboardingModal = lazy(() => import('./KycOnboardingModal'));
 const GranularConsentModal = lazy(() => import('./GranularConsentModal'));
 const CropAssignmentModal = lazy(() => import('./CropAssignmentModal'));
 const HarvestLogger = lazy(() => import('./HarvestLogger'));
-const AgronomicInputModal = lazy(() => import('./AgronomicInputModal'));
+const AgronomicInputModal = lazy(() => import('./components/AgronomicInputModal'));
 
 
 declare var QRCode: any;
@@ -1091,7 +1091,6 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
 
 
     if (isEditing) {
-// FIX: Corrected typo from Susp to Suspense
         return <Suspense fallback={<div className="p-6">Loading form...</div>}>
             <RegistrationForm
                 mode="edit"

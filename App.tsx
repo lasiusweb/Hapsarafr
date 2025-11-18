@@ -115,8 +115,9 @@ const App: React.FC = () => {
     // Data hooks
     const allUsers = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database])).map(model => userModelToPlain(model)!);
     const allGroups = useQuery(useMemo(() => database.get<GroupModel>('groups').query(), [database])).map(model => groupModelToPlain(model)!);
-    const allTenants = useQuery(useMemo(() => database.get<TenantModel>('tenants').query(), [database])).map(model => tenantModelToPlain(model)!);
+    const allTenants = useQuery(useMemo(() => database.get<TenantModel>('tenants').query(), [database]));
     const allFarmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('sync_status', Q.notEq('pending_delete'))), [database])).map(model => farmerModelToPlain(model)!);
+    const allTerritories = useQuery(useMemo(() => database.get<TerritoryModel>('territories').query(), [database]));
     
     // User context
     const { currentUser, currentTenant, userPermissions } = useMemo(() => {
@@ -125,7 +126,7 @@ const App: React.FC = () => {
         const tenant = allTenants.find(t => t?.id === user?.tenantId);
         return {
             currentUser: user,
-            currentTenant: tenant,
+            currentTenant: tenant ? tenantModelToPlain(tenant) : undefined,
             userPermissions: new Set(group?.permissions || []),
         };
     }, [session, allUsers, allGroups, allTenants]);
@@ -162,7 +163,10 @@ const App: React.FC = () => {
 
         switch (view) {
             case 'dashboard': return <Dashboard farmers={allFarmers} onNavigateWithFilter={(v, f) => {}} />;
-            case 'farmer-directory': return <FarmerDirectoryPage users={allUsers} tenants={allTenants} currentUser={currentUser} permissions={userPermissions} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onNavigate={handleNavigate} setNotification={setNotification} />;
+            case 'farmer-directory': return <FarmerDirectoryPage users={allUsers} tenants={allTenants.map(t => tenantModelToPlain(t)!)} currentUser={currentUser} permissions={userPermissions} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onNavigate={handleNavigate} setNotification={setNotification} />;
+            case 'farmer-details':
+                if (!viewParam) return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
+                return <FarmerDetailsPage farmerId={viewParam} users={allUsers} currentUser={currentUser} onBack={() => handleNavigate('farmer-directory')} permissions={userPermissions} setNotification={setNotification} allTenants={allTenants} allTerritories={allTerritories} />;
             case 'climate-resilience': return <CaelusDashboard onBack={() => handleNavigate('dashboard')} />;
             case 'hapsara-nexus': return <HapsaraNexusPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
             case 'billing': return <BillingPage currentUser={currentUser} currentTenant={currentTenant} onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} setNotification={setNotification} />;
