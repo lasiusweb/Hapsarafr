@@ -219,6 +219,8 @@ export enum DirectiveStatus {
 // FIX: Add missing DirectiveTaskType enum.
 export enum DirectiveTaskType {
     PestScouting = 'Pest Scouting',
+    PlotVerification = 'Plot Verification',
+    TrainingAnnouncement = 'Training Announcement',
 }
 
 export enum Season {
@@ -437,6 +439,9 @@ export interface Task {
     createdAt: string;
     updatedAt: string;
     tenantId: string;
+    directive_assignment_id?: string;
+    source: 'INTERNAL' | 'GOVERNMENT';
+    completion_evidence_json?: string;
 }
 
 export interface Harvest {
@@ -932,4 +937,30 @@ export interface AgronomicInput {
     created_at: string;
     sync_status: 'synced' | 'pending';
     tenant_id: string;
+}
+
+// --- New Interfaces for Government Directives ---
+export interface Directive {
+    id: string;
+    created_by_gov_user_id: string;
+    administrative_code: string;
+    task_type: DirectiveTaskType;
+    priority: TaskPriority;
+    details_json: string;
+    is_mandatory: boolean;
+    due_date?: string;
+    status: 'Open' | 'Completed';
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DirectiveAssignment {
+    id: string;
+    directive_id: string;
+    tenant_id: string;
+    status: 'Pending' | 'Claimed' | 'Completed';
+    claimed_at?: string;
+    completion_details_json?: string;
+    created_at: string;
+    updated_at: string;
 }

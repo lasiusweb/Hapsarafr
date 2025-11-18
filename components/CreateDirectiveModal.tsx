@@ -1,23 +1,25 @@
 import React, { useState, useMemo } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { DistrictModel, MandalModel, DirectiveModel } from '../db';
-import { DirectiveTaskType, TaskPriority, DirectiveStatus, User } from '../types';
+import { DistrictModel, MandalModel, DirectiveModel, TerritoryModel, DirectiveAssignmentModel, TaskModel } from '../db';
+// FIX: Add missing 'TaskStatus' to the import from '../types'.
+import { DirectiveTaskType, TaskPriority, User, TaskStatus } from '../types';
 import CustomSelect from './CustomSelect';
 import { Q } from '@nozbe/watermelondb';
 
 interface CreateDirectiveModalProps {
     onClose: () => void;
     currentUser: User;
+    allTerritories: TerritoryModel[];
 }
 
-const CreateDirectiveModal: React.FC<CreateDirectiveModalProps> = ({ onClose, currentUser }) => {
+const CreateDirectiveModal: React.FC<CreateDirectiveModalProps> = ({ onClose, currentUser, allTerritories }) => {
     const database = useDatabase();
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Form state
     const [taskType, setTaskType] = useState<DirectiveTaskType>(DirectiveTaskType.PestScouting);
-    const [priority, setPriority] = useState<TaskPriority>(TaskPriority.Medium);
+    const [isMandatory, setIsMandatory] = useState(false);
     const [districtCode, setDistrictCode] = useState('');
     const [mandalCode, setMandalCode] = useState('');
     const [details, setDetails] = useState('');
@@ -44,23 +46,55 @@ const CreateDirectiveModal: React.FC<CreateDirectiveModalProps> = ({ onClose, cu
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!mandalCode) {
+        const administrativeCode = `${districtCode}-${mandalCode}`;
+        if (!mandalCode || !districtCode) {
             alert("Please select a district and mandal.");
             return;
         }
         setIsSubmitting(true);
         try {
             await database.write(async () => {
-                await database.get<DirectiveModel>('directives').create(d => {
+                // 1. Create the main Directive
+                const newDirective = await database.get<DirectiveModel>('directives').create(d => {
                     d.createdByGovUserId = currentUser.id;
-                    d.administrativeCode = `${districtCode}-${mandalCode}`;
+                    d.administrativeCode = administrativeCode;
                     d.taskType = taskType;
-                    d.priority = priority;
+                    d.priority = isMandatory ? TaskPriority.High : TaskPriority.Medium;
                     d.detailsJson = JSON.stringify({ instructions: details });
+                    d.isMandatory = isMandatory;
                     d.dueDate = dueDate || undefined;
-                    d.status = DirectiveStatus.Open;
+                    d.status = 'Open';
                     d.syncStatusLocal = 'pending';
                 });
+
+                // 2. Find all tenants covering this area
+                const tenantIdsInArea = new Set(allTerritories
+                    .filter(t => t.administrativeCode === administrativeCode)
+                    .map(t => t.tenantId)
+                );
+                
+                // 3. Create an assignment and a task for each tenant
+                for (const tenantId of tenantIdsInArea) {
+                    const newAssignment = await database.get<DirectiveAssignmentModel>('directive_assignments').create(a => {
+                        a.directiveId = newDirective.id;
+                        a.tenantId = tenantId;
+                        a.status = 'Pending';
+                        a.syncStatusLocal = 'pending';
+                    });
+
+                    await database.get<TaskModel>('tasks').create(task => {
+                        task.title = `${taskType}: ${administrativeCode}`;
+                        task.description = details;
+                        task.status = TaskStatus.ToDo;
+                        task.priority = newDirective.priority as TaskPriority;
+                        task.dueDate = newDirective.dueDate;
+                        task.createdBy = currentUser.id; // Government user ID
+                        task.tenantId = tenantId; // Task belongs to the assigned tenant
+                        task.source = 'GOVERNMENT';
+                        task.directiveAssignmentId = newAssignment.id;
+                        task.syncStatusLocal = 'pending';
+                    });
+                }
             });
             onClose();
         } catch (error) {
@@ -83,9 +117,8 @@ const CreateDirectiveModal: React.FC<CreateDirectiveModalProps> = ({ onClose, cu
                         <CustomSelect 
                             value={taskType}
                             onChange={v => setTaskType(v as DirectiveTaskType)}
-                            options={[{ value: DirectiveTaskType.PestScouting, label: 'Pest Scouting' }]}
+                            options={Object.values(DirectiveTaskType).map(t => ({ value: t, label: t }))}
                         />
-                         <p className="text-xs text-gray-500 mt-1">More task types will be available soon.</p>
                     </div>
 
                     <div>
@@ -96,14 +129,14 @@ const CreateDirectiveModal: React.FC<CreateDirectiveModalProps> = ({ onClose, cu
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                             <label className="block text-sm font-medium text-gray-700">Priority</label>
-                             <CustomSelect value={priority} onChange={v => setPriority(v as TaskPriority)} options={Object.values(TaskPriority).map(p => ({value: p, label: p}))} />
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                          <div>
                             <label className="block text-sm font-medium text-gray-700">Due Date (Optional)</label>
                             <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="mt-1 w-full p-2.5 border border-gray-300 rounded-lg text-sm" />
+                        </div>
+                        <div className="flex items-center pt-6">
+                            <input id="isMandatory" type="checkbox" checked={isMandatory} onChange={e => setIsMandatory(e.target.checked)} className="h-4 w-4 text-green-600 border-gray-300 rounded" />
+                            <label htmlFor="isMandatory" className="ml-2 block text-sm font-medium text-gray-700">Mark as Mandatory (sets High priority)</label>
                         </div>
                     </div>
 

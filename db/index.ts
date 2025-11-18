@@ -226,7 +226,7 @@ export const mySchema = appSchema({
             { name: 'updated_at', type: 'number' },
             { name: 'sync_status', type: 'string' },
             { name: 'tenant_id', type: 'string', isIndexed: true },
-            { name: 'directive_id', type: 'string', isOptional: true, isIndexed: true },
+            { name: 'directive_assignment_id', type: 'string', isOptional: true, isIndexed: true },
             { name: 'source', type: 'string' },
             { name: 'completion_evidence_json', type: 'string', isOptional: true },
         ]
@@ -239,14 +239,26 @@ export const mySchema = appSchema({
         { name: 'task_type', type: 'string' },
         { name: 'priority', type: 'string' },
         { name: 'details_json', type: 'string' },
+        { name: 'is_mandatory', type: 'boolean' },
         { name: 'due_date', type: 'string', isOptional: true },
         { name: 'status', type: 'string', isIndexed: true },
-        { name: 'claimed_by_tenant_id', type: 'string', isOptional: true, isIndexed: true },
-        { name: 'claimed_at', type: 'number', isOptional: true },
-        { name: 'completion_details_json', type: 'string', isOptional: true },
         { name: 'sync_status', type: 'string' },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
+      ]
+    }),
+// FIX: Add missing 'directive_assignments' table schema.
+    tableSchema({
+      name: 'directive_assignments',
+      columns: [
+        { name: 'directive_id', type: 'string', isIndexed: true },
+        { name: 'tenant_id', type: 'string', isIndexed: true },
+        { name: 'status', type: 'string' },
+        { name: 'claimed_at', type: 'number', isOptional: true },
+        { name: 'completion_details_json', type: 'string', isOptional: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+        { name: 'sync_status', type: 'string' },
       ]
     }),
     tableSchema({
@@ -1274,21 +1286,36 @@ export class DataSharingConsentModel extends Model {
 
 export class DirectiveModel extends Model {
     static table = 'directives';
-    // FIX: Add missing 'id' property to DirectiveModel to resolve type error.
     readonly id!: string;
     @text('created_by_gov_user_id') createdByGovUserId!: string;
     @text('administrative_code') administrativeCode!: string;
     @text('task_type') taskType!: string;
     @text('priority') priority!: string;
     @text('details_json') detailsJson!: string;
+    @field('is_mandatory') isMandatory!: boolean;
     @text('due_date') dueDate?: string;
     @text('status') status!: string;
-    @text('claimed_by_tenant_id') claimedByTenantId?: string;
-    @field('claimed_at') claimedAt?: number;
-    @text('completion_details_json') completionDetailsJson?: string;
     @text('sync_status') syncStatusLocal!: string;
     @readonly @date('created_at') createdAt!: Date;
     @readonly @date('updated_at') updatedAt!: Date;
+}
+
+// FIX: Add missing 'DirectiveAssignmentModel' class definition.
+export class DirectiveAssignmentModel extends Model {
+    static table = 'directive_assignments';
+    readonly id!: string;
+    static associations = {
+        directives: { type: 'belongs_to', key: 'directive_id' },
+    } as const;
+    @text('directive_id') directiveId!: string;
+    @text('tenant_id') tenantId!: string;
+    @text('status') status!: 'Pending' | 'Claimed' | 'Completed';
+    @date('claimed_at') claimedAt?: Date;
+    @text('completion_details_json') completionDetailsJson?: string;
+    @readonly @date('created_at') createdAt!: Date;
+    @readonly @date('updated_at') updatedAt!: Date;
+    @text('sync_status') syncStatusLocal!: string;
+    @relation('directives', 'directive_id') directive!: any;
 }
 
 export class TaskModel extends Model { 
@@ -1306,7 +1333,7 @@ export class TaskModel extends Model {
     @readonly @date('updated_at') updatedAt!: Date; 
     @text('sync_status') syncStatusLocal!: string; 
     @text('tenant_id') tenantId!: string; 
-    @text('directive_id') directiveId?: string;
+    @text('directive_assignment_id') directiveAssignmentId?: string;
     @text('source') source!: 'INTERNAL' | 'GOVERNMENT';
     @text('completion_evidence_json') completionEvidenceJson?: string;
 }
@@ -1454,6 +1481,8 @@ const database = new Database({
     TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel,
     ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel,
     WalletModel, WalletTransactionModel, VisitRequestModel, DirectiveModel,
+    // FIX: Add missing 'DirectiveAssignmentModel' to the database model classes.
+    DirectiveAssignmentModel,
     // Marketplace Models
     ProductCategoryModel, ProductModel, VendorModel, VendorProductModel, OrderModel, OrderItemModel,
     // Multi-crop Models

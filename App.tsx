@@ -7,7 +7,7 @@ import { useDatabase } from './DatabaseContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { initializeSupabase, getSupabase } from './lib/supabase';
 import { synchronize } from './lib/sync';
-import { FarmerModel, UserModel, GroupModel, TenantModel, TerritoryModel, FarmerDealerConsentModel, FarmPlotModel, DirectiveModel, TaskModel } from './db';
+import { FarmerModel, UserModel, GroupModel, TenantModel, TerritoryModel, FarmerDealerConsentModel, FarmPlotModel, DirectiveModel, TaskModel, DirectiveAssignmentModel } from './db';
 import { Farmer, User, Group, Permission, Tenant } from './types';
 import { farmerModelToPlain, userModelToPlain, groupModelToPlain, tenantModelToPlain } from './lib/utils';
 import { useQuery } from './hooks/useQuery';
@@ -118,6 +118,8 @@ const App: React.FC = () => {
     const allTenants = useQuery(useMemo(() => database.get<TenantModel>('tenants').query(), [database]));
     const allFarmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('sync_status', Q.notEq('pending_delete'))), [database])).map(model => farmerModelToPlain(model)!);
     const allTerritories = useQuery(useMemo(() => database.get<TerritoryModel>('territories').query(), [database]));
+    const allDirectives = useQuery(useMemo(() => database.get<DirectiveModel>('directives').query(), [database]));
+    const allDirectiveAssignments = useQuery(useMemo(() => database.get<DirectiveAssignmentModel>('directive_assignments').query(), [database]));
     
     // User context
     const { currentUser, currentTenant, userPermissions } = useMemo(() => {
@@ -171,6 +173,7 @@ const App: React.FC = () => {
             case 'hapsara-nexus': return <HapsaraNexusPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
             case 'billing': return <BillingPage currentUser={currentUser} currentTenant={currentTenant} onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} setNotification={setNotification} />;
             case 'financials': return <FinancialsPage allFarmers={allFarmers} onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} onNavigate={handleNavigate} />;
+            case 'statecraft-dashboard': return <StateCraftDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} allDirectives={allDirectives} allTenants={allTenants} allUsers={allUsers.map(u => ({...u, _raw: u})) as any} allTerritories={allTerritories} allDirectiveAssignments={allDirectiveAssignments} />;
             default: return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
         }
     };

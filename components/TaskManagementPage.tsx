@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { TaskModel, UserModel, FarmerModel, DirectiveModel, TenantModel, TerritoryModel } from '../db';
+import { TaskModel, UserModel, FarmerModel, DirectiveModel, TenantModel, TerritoryModel, DirectiveAssignmentModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import { Task, TaskStatus, TaskPriority, User, DirectiveStatus, DirectiveTaskType } from '../types';
 import CustomSelect from './CustomSelect';
@@ -38,7 +38,7 @@ const TaskCard: React.FC<{
             onDragStart={(e) => {
                 e.dataTransfer.setData('taskId', task.id);
             }}
-            className={`cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow mb-4 border-l-4 ${isHighPriority ? 'border-red-500' : 'border-transparent'}`}
+            className={`cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow mb-4 border-l-4 ${isGovtTask ? 'border-blue-500' : isHighPriority ? 'border-red-500' : 'border-transparent'}`}
         >
             <CardContent className="p-4">
                 <div className="flex justify-between items-start">
@@ -88,6 +88,14 @@ const TaskModal: React.FC<{
 
     useEffect(() => {
         if (task) {
+             let evidence = { completionNotes: '', completionPhoto: '' };
+            if (task.completionEvidenceJson) {
+                try {
+                    const parsed = JSON.parse(task.completionEvidenceJson);
+                    evidence.completionNotes = parsed.notes || '';
+                    evidence.completionPhoto = parsed.photoUrl || '';
+                } catch(e) {}
+            }
             setFormState({
                 title: task.title,
                 description: task.description || '',
@@ -96,7 +104,7 @@ const TaskModal: React.FC<{
                 dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
                 assigneeId: task.assigneeId || '',
                 farmerId: task.farmerId || '',
-                completionNotes: '', completionPhoto: '',
+                ...evidence,
             });
         } else {
             setFormState({ title: '', description: '', status: TaskStatus.ToDo, priority: TaskPriority.Medium, dueDate: '', assigneeId: '', farmerId: '', completionNotes: '', completionPhoto: '' });
@@ -127,10 +135,10 @@ const TaskModal: React.FC<{
             createdBy: task?.createdBy || currentUser.id,
             tenantId: task?.tenantId || currentUser.tenantId,
             source: task?.source || 'INTERNAL',
-            directiveId: task?.directiveId,
+            directive_assignment_id: task?.directiveAssignmentId,
         };
         if (isGovtTask) {
-            dataToSave.completionEvidenceJson = JSON.stringify({ notes: formState.completionNotes, photoUrl: formState.completionPhoto });
+            dataToSave.completion_evidence_json = JSON.stringify({ notes: formState.completionNotes, photoUrl: formState.completionPhoto });
         }
         await onSave(dataToSave, isEditMode ? 'edit' : 'create');
     };
@@ -164,7 +172,7 @@ const TaskModal: React.FC<{
                     </div>
                     <CustomSelect label="Assign To" value={formState.assigneeId} onChange={v => setFormState(s => ({...s, assigneeId: v}))} options={[{value: '', label: 'Unassigned'}, ...userOptions]} placeholder="Select a user" />
                     
-                    {isGovtTask && formState.status === TaskStatus.Done && (
+                    {isGovtTask && (formState.status === TaskStatus.Done || task?.completionEvidenceJson) && (
                         <div className="p-4 bg-blue-50 border-l-4 border-blue-500 space-y-4">
                             <h4 className="font-bold text-blue-800">Completion Evidence (Required)</h4>
                              <textarea name="completionNotes" value={formState.completionNotes} onChange={handleChange} rows={3} className="w-full p-2 border border-gray-300 rounded-md" placeholder="Add completion notes..."></textarea>
@@ -184,45 +192,34 @@ const TaskModal: React.FC<{
 };
 
 // --- Main Page Component ---
-const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, currentUser, allDirectives, allTenants, allTerritories }) => {
+const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, currentUser, allTenants, allTerritories }) => {
     const database = useDatabase();
     
     const tasks = useQuery(useMemo(() => database.get<TaskModel>('tasks').query(Q.sortBy('created_at', Q.desc)), [database]));
     const users = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database]));
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
+    const allDirectives = useQuery(useMemo(() => database.get<DirectiveModel>('directives').query(), [database]));
 
     const [modalState, setModalState] = useState<{ isOpen: boolean; task?: TaskModel | null }>({ isOpen: false });
 
     // --- Directives Logic ---
     const myTerritoryCodes = useMemo(() => allTerritories.filter(t => t.tenantId === currentUser.tenantId).map(t => t.administrativeCode), [allTerritories, currentUser]);
-    const openDirectives = useMemo(() => allDirectives.filter(d => d.status === DirectiveStatus.Open && myTerritoryCodes.includes(d.administrativeCode)), [allDirectives, myTerritoryCodes]);
+    const myPendingAssignments = useQuery(useMemo(() => database.get<DirectiveAssignmentModel>('directive_assignments').query(Q.where('tenant_id', currentUser.tenantId), Q.where('status', 'Pending')), [database, currentUser.tenantId]));
+    const openDirectives = useMemo(() => allDirectives.filter(d => myPendingAssignments.some(a => a.directiveId === d.id)), [allDirectives, myPendingAssignments]);
     const tenantMap = useMemo(() => new Map(allTenants.map(t => [t.id, t.name])), [allTenants]);
 
     const handleClaimDirective = useCallback(async (directive: DirectiveModel) => {
-        await database.write(async () => {
-            const details = JSON.parse(directive.detailsJson);
-            await database.get<TaskModel>('tasks').create(task => {
-                task.title = `${directive.taskType}: ${directive.administrativeCode}`;
-                task.description = details.instructions;
-                task.status = TaskStatus.ToDo;
-                task.priority = directive.priority as TaskPriority;
-                task.dueDate = directive.dueDate;
-                task.createdBy = currentUser.id;
-                task.tenantId = currentUser.tenantId;
-                task.source = 'GOVERNMENT';
-                task.directiveId = directive.id;
-                task.syncStatusLocal = 'pending';
-            });
+        const assignment = myPendingAssignments.find(a => a.directiveId === directive.id);
+        if (!assignment) return;
 
-            // FIX: Cast 'directive' to 'any' to resolve issue with update method not being found on the type.
-            await (directive as any).update(d => {
-                d.status = DirectiveStatus.Claimed;
-                d.claimedByTenantId = currentUser.tenantId;
-                d.claimedAt = Date.now();
-                d.syncStatusLocal = 'pending';
+        await database.write(async () => {
+            await assignment.update(a => {
+                a.status = 'Claimed';
+                a.claimedAt = new Date();
+                a.syncStatusLocal = 'pending';
             });
         });
-    }, [database, currentUser]);
+    }, [database, myPendingAssignments]);
 
 
     const handleSaveTask = useCallback(async (taskData: Omit<Task, 'createdAt' | 'updatedAt' | 'syncStatus'>, mode: 'create' | 'edit') => {
@@ -238,9 +235,38 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
                     Object.assign(task, { ...taskData, source: 'INTERNAL', syncStatusLocal: 'pending' });
                 });
             }
+    
+            // --- NEW LOGIC for closing the loop on directives ---
+            if (taskData.status === TaskStatus.Done && taskData.directive_assignment_id) {
+                // 1. Update the assignment
+                const assignment = await database.get<DirectiveAssignmentModel>('directive_assignments').find(taskData.directive_assignment_id);
+                await assignment.update(a => {
+                    a.status = 'Completed';
+                    a.completionDetailsJson = taskData.completion_evidence_json;
+                    a.syncStatusLocal = 'pending';
+                });
+                
+                // 2. Check if all assignments for the parent directive are complete
+                const parentDirective = await assignment.directive.fetch();
+                if (parentDirective) {
+                    const allAssignmentsForDirective = await database.get<DirectiveAssignmentModel>('directive_assignments').query(
+                        Q.where('directive_id', parentDirective.id)
+                    ).fetch();
+    
+                    const areAllComplete = allAssignmentsForDirective.every(a => a.status === 'Completed');
+    
+                    // 3. Update the parent directive's status if all are complete
+                    if (areAllComplete) {
+                        await parentDirective.update(d => {
+                            d.status = 'Completed';
+                            d.syncStatusLocal = 'pending';
+                        });
+                    }
+                }
+            }
         });
         setModalState({ isOpen: false });
-    }, [database]);
+    }, [database, currentUser.id, currentUser.tenantId]);
     
     const handleDeleteTask = useCallback(async (taskId: string) => {
         await database.write(async () => {
@@ -317,7 +343,7 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
                                         <p className="font-semibold">{d.taskType} ({d.priority})</p>
                                         <p className="text-sm text-gray-600">Area: {d.administrativeCode}</p>
                                     </div>
-                                    <button onClick={() => handleClaimDirective(d)} className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-semibold">Claim</button>
+                                    <button onClick={() => handleClaimDirective(d)} className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-semibold">Accept</button>
                                 </div>
                             ))}
                         </div>
