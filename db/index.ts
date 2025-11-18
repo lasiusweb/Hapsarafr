@@ -8,7 +8,7 @@ import { field, text, readonly, date, writer, relation, children } from '@nozbe/
 
 // --- Schema Definition ---
 export const mySchema = appSchema({
-  version: 44,
+  version: 45,
   tables: [
     tableSchema({
       name: 'farmers',
@@ -672,8 +672,8 @@ export const mySchema = appSchema({
             { name: 'name', type: 'string' },
             { name: 'type', type: 'string' }, // 'Collection Center', 'Field Hub'
             { name: 'location_geojson', type: 'string', isOptional: true },
-            { name: 'capacity', type: 'number' },
-            { name: 'operating_hours', type: 'string', isOptional: true }, // e.g., "Mon-Fri 9am-5pm"
+            { name: 'capacity_per_hour', type: 'number' },
+            { name: 'operating_hours_json', type: 'string', isOptional: true },
             { name: 'tenant_id', type: 'string', isIndexed: true },
         ]
     }),
@@ -1347,12 +1347,16 @@ export class FreeTierUsageModel extends Model { static table = 'free_tier_usages
 export class ServicePointModel extends Model {
     static table = 'service_points';
     readonly id!: string;
+    static associations = {
+        collection_appointments: { type: 'has_many', foreignKey: 'service_point_id' },
+    } as const;
     @text('name') name!: string;
     @text('type') type!: string;
     @text('location_geojson') locationGeojson?: string;
-    @field('capacity') capacity!: number;
-    @text('operating_hours') operatingHours?: string;
+    @field('capacity_per_hour') capacityPerHour!: number;
+    @text('operating_hours_json') operatingHoursJson?: string;
     @text('tenant_id') tenantId!: string;
+    @children('collection_appointments') collectionAppointments!: any;
 }
 export class OfficerScheduleModel extends Model {
     static table = 'officer_schedules';
@@ -1385,6 +1389,9 @@ export class CollectionAppointmentModel extends Model {
     @relation('service_points', 'service_point_id') servicePoint!: any;
 }
 
+export class ProcessingBatchModel extends Model { static table = 'processing_batches'; readonly id!: string; @text('harvest_id') harvestId!: string; @text('batch_code') batchCode!: string; @text('start_date') startDate!: string; @text('status') status!: any; @text('notes') notes?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
+export class ProcessingStepModel extends Model { static table = 'processing_steps'; readonly id!: string; @text('batch_id') batchId!: string; @text('step_name') stepName!: string; @text('start_date') startDate!: string; @text('operator_id') operatorId!: string; @text('equipment_id') equipmentId?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
+
 
 // --- Database Setup ---
 const adapter = new SQLiteAdapter({
@@ -1411,13 +1418,13 @@ const database = new Database({
     CreditLedgerEntryModel, ServiceConsumptionLogModel, FreeTierUsageModel,
     // Hapsara Nexus Models
     ServicePointModel, OfficerScheduleModel, CollectionAppointmentModel,
+    // Models for Processing
+    ProcessingBatchModel, ProcessingStepModel,
   ],
 });
 
 export default database;
 
 // Models not fully implemented yet but schema exists
-export class ProcessingBatchModel extends Model { static table = 'processing_batches'; readonly id!: string; @text('harvest_id') harvestId!: string; @text('batch_code') batchCode!: string; @text('start_date') startDate!: string; @text('status') status!: any; @text('notes') notes?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
-export class ProcessingStepModel extends Model { static table = 'processing_steps'; readonly id!: string; @text('batch_id') batchId!: string; @text('step_name') stepName!: string; @text('start_date') startDate!: string; @text('operator_id') operatorId!: string; @text('equipment_id') equipmentId?: string; @text('sync_status') syncStatusLocal!: string; @text('tenant_id') tenantId!: string;}
 export class EquipmentLeaseModel extends Model { static table = 'equipment_leases'; readonly id!: string; @text('equipment_id') equipmentId!: string; @text('farmer_id') farmerId!: string; @text('start_date') startDate!: string; @text('end_date') endDate!: string; @field('cost') cost!: number; @text('payment_status') paymentStatus!: 'Paid' | 'Unpaid'; }
 export class ManualLedgerEntryModel extends Model { static table = 'manual_ledger_entries'; readonly id!: string; }

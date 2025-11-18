@@ -62,7 +62,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, onNavigate, currentUser, curren
         {
             category: 'Community', items: [
                 { view: 'community', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2V10a2 2 0 012-2h8z" /></svg>, label: 'Q&A Forum' },
-                { view: 'mentorship', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm-9 5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>, label: 'Mentorship', premium: true },
+                { view: 'mentorship', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm-9 5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>, label: 'Mentorship', premium: true },
             ]
         },
         {
@@ -80,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, onNavigate, currentUser, curren
          {
             category: 'Organization', items: [
                  { view: 'territory-management', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" /></svg>, label: 'Territory Expansion' },
-                 { view: 'billing', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 8h6m-5 4h.01M4.88 8.11A5.986 5.986 0 014 11c0 3.314 2.686 6 6 6s6-2.686 6-6c0-1.22-.363-2.344-.986-3.29M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>, label: 'Billing' },
+                 { view: 'billing', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>, label: 'Billing' },
             ]
         },
     ], [permissions, isPremium]);
@@ -137,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, onNavigate, currentUser, curren
                 <div className="p-3 border-t border-gray-700">
                     <button onClick={() => onNavigate('billing')} className={`w-full p-3 rounded-lg text-left transition-colors ${isCollapsed ? 'justify-center' : ''} ${view === 'billing' ? activeItemClasses : inactiveItemClasses}`}>
                          <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 8h6m-5 4h.01M4.88 8.11A5.986 5.986 0 014 11c0 3.314 2.686 6 6 6s6-2.686 6-6c0-1.22-.363-2.344-.986-3.29M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>
                             <div className={`ml-4 flex-1 sidebar-item-text ${isCollapsed ? 'hidden' : ''}`}>
                                 <p className="font-semibold">Credits</p>
                                 <p className="text-xs text-gray-400">{currentTenant?.credit_balance.toLocaleString() || 0} remaining</p>

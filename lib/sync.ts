@@ -5,16 +5,21 @@ import { Database, Q } from '@nozbe/watermelondb';
 const SYNC_TABLE_ORDER = [
   'farmers',
   'farm_plots',
+  'assistance_applications',
   'subsidy_payments',
   'resource_distributions',
   'planting_records',
   'harvests',
   'quality_assessments',
+  'processing_batches',
+  'processing_steps',
   'tasks',
   'agronomic_alerts',
   'visit_requests',
   'orders',
+  'service_points',
   'collection_appointments',
+  'officer_schedules',
   'farmer_dealer_consents',
   'territory_transfer_requests',
   'territory_disputes',
@@ -23,6 +28,9 @@ const SYNC_TABLE_ORDER = [
   'equipment_maintenance_logs',
   'events',
   'event_rsvps',
+  'service_consumption_logs',
+  'credit_ledger',
+  'free_tier_usages',
 ];
 
 
@@ -92,7 +100,7 @@ export const synchronize = async (database: Database, supabase: any): Promise<{ 
     await database.write(async () => {
         for (const tableName in syncResults) {
             for (const record of syncResults[tableName].toSync) {
-                await record.update((rec: any) => { rec.syncStatus = 'synced'; });
+                await record.update((rec: any) => { rec.syncStatusLocal = 'synced'; });
             }
             const deletions = syncResults[tableName].toDelete.map(record => record.prepareDestroyPermanently());
             if (deletions.length > 0) {

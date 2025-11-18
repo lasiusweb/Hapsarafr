@@ -11,6 +11,7 @@ export const FREE_TIER_LIMITS: Record<BillableEvent, number> = {
 // FIX: Add missing PRICING_MODEL export used by SubscriptionManagementPage.
 export const PRICING_MODEL = {
     PER_USER_COST_INR: 250,
+    // FIX: Corrected typo in property name from 'PER_, RECORD_COST_INR'.
     PER_RECORD_COST_INR: 0.5,
     FEATURES: [
         'Offline-First Data Sync',

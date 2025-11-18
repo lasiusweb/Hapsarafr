@@ -21,7 +21,7 @@ const AppointmentScheduler: React.FC<{ currentUser: User }> = ({ currentUser }) 
     const farmerOptions = useMemo(() => farmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hapId || 'N/A'})`})), [farmers]);
     const servicePointOptions = useMemo(() => servicePoints.map(sp => ({ value: sp.id, label: sp.name })), [servicePoints]);
 
-    // This simulates the backend's "Weighted Hybrid Model" for the UI
+    // This simulates the backend's "Weighted Scoring Model" for the UI
     const timeSlots = useMemo(() => {
         // In a real app, this would be an API call based on date and service point
         return [
@@ -43,7 +43,7 @@ const AppointmentScheduler: React.FC<{ currentUser: User }> = ({ currentUser }) 
             await database.write(async () => {
                 const [hour, minute] = selectedSlot.split(':').map(Number);
                 const startTime = new Date(selectedDate);
-                startTime.setHours(hour, minute, 0, 0);
+                startTime.setUTCHours(hour, minute, 0, 0);
                 const endTime = new Date(startTime.getTime() + 30 * 60000); // 30 min slot
 
                 await database.get<CollectionAppointmentModel>('collection_appointments').create(app => {

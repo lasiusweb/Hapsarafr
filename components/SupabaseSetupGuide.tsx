@@ -26,19 +26,25 @@ interface SupabaseSetupGuideProps {
 }
 
 const SupabaseSetupGuide: React.FC<SupabaseSetupGuideProps> = ({ onClose }) => {
-    const [activeTab, setActiveTab] = useState<'auth' | 'audit' | 'rls' | 'subsidy' | 'geo'>('auth');
+    const [activeTab, setActiveTab] = useState<'auth' | 'helpers' | 'core_rls' | 'general_rls' | 'advanced_rls' | 'audit'>('auth');
     
     const authFunctionCode = `
+-- 1. Add tenant_id to profiles table (run this once)
+-- This ensures each user profile is linked to a tenant for security policies.
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS tenant_id uuid;
+
+-- 2. Update the function to include tenant_id on new user creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, avatar_url, group_id)
+  INSERT INTO public.profiles (id, full_name, avatar_url, group_id, tenant_id)
   VALUES (
     NEW.id,
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'avatar_url',
     -- Use group_id from metadata if present (from invitation), otherwise default
-    COALESCE(NEW.raw_user_meta_data->>'group_id', 'group-data-entry')
+    COALESCE(NEW.raw_user_meta_data->>'group_id', 'group-data-entry'),
+    (NEW.raw_user_meta_data->>'tenant_id')::uuid
   );
   RETURN NEW;
 END;
@@ -46,6 +52,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
     `;
 
     const authTriggerCode = `
+-- After creating the function above, create the trigger to run it.
+-- This automatically creates a public profile when a new user signs up in Supabase Auth.
+
 -- First, drop the old trigger if it exists to avoid errors
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
@@ -133,12 +142,32 @@ FROM public.audit_log al
 LEFT JOIN public.profiles p ON al.user_id = p.id;
     `;
 
-    const rlsHelperFunction = `
+    const rlsHelperFunctions = `
+-- Helper function to get the current user's tenant_id from their profile
+-- This is the foundation for all our security policies.
+CREATE OR REPLACE FUNCTION public.get_current_tenant_id()
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  user_tenant_id uuid;
+BEGIN
+  SELECT tenant_id INTO user_tenant_id
+  FROM public.profiles
+  WHERE id = auth.uid();
+  RETURN user_tenant_id;
+END;
+$$;
+
+
 -- Helper function to get the current user's permissions from their group
 CREATE OR REPLACE FUNCTION public.get_user_permissions()
 RETURNS text[]
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   user_group_id text;
@@ -159,103 +188,139 @@ END;
 $$;
     `;
 
-    const rlsFarmersPolicies = `
--- 1. Enable RLS on the farmers table
-ALTER TABLE public.farmers ENABLE ROW LEVEL SECURITY;
--- 2. Force RLS for table owners (recommended)
-ALTER TABLE public.farmers FORCE ROW LEVEL SECURITY;
-
--- 3. Drop existing policies to be safe
-DROP POLICY IF EXISTS "Allow all read access" ON public.farmers;
-DROP POLICY IF EXISTS "Allow insert for authorized users" ON public.farmers;
-DROP POLICY IF EXISTS "Allow update for authorized users" ON public.farmers;
-DROP POLICY IF EXISTS "Allow delete for authorized users" ON public.farmers;
-
--- 4. Create new policies
-CREATE POLICY "Allow all read access"
-ON public.farmers FOR SELECT
-USING (true);
-
-CREATE POLICY "Allow insert for authorized users"
-ON public.farmers FOR INSERT
-WITH CHECK ('CAN_REGISTER_FARMER' = ANY(public.get_user_permissions()));
-
-CREATE POLICY "Allow update for authorized users"
-ON public.farmers FOR UPDATE
-USING ('CAN_EDIT_FARMER' = ANY(public.get_user_permissions()));
-
-CREATE POLICY "Allow delete for authorized users"
-ON public.farmers FOR DELETE
-USING ('CAN_DELETE_FARMER' = ANY(public.get_user_permissions()));
-    `;
-
-    const rlsProfilesPolicies = `
--- 1. Enable RLS on the profiles table
+    const coreRlsPolicies = `
+--- PROFILES TABLE ---
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
--- 2. Force RLS for table owners
 ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
 
--- 3. Drop existing policies
-DROP POLICY IF EXISTS "Allow all read access" ON public.profiles;
+DROP POLICY IF EXISTS "Allow tenant-scoped read access" ON public.profiles;
 DROP POLICY IF EXISTS "Allow users to update their own profile" ON public.profiles;
 
--- 4. Create new policies
-CREATE POLICY "Allow all read access"
+-- Users can see other users within their own tenant
+CREATE POLICY "Allow tenant-scoped read access"
 ON public.profiles FOR SELECT
-USING (true);
+USING (tenant_id = public.get_current_tenant_id());
 
+-- Users can update their own profile
 CREATE POLICY "Allow users to update their own profile"
 ON public.profiles FOR UPDATE
 USING (auth.uid() = id)
 WITH CHECK (auth.uid() = id);
-    `;
 
-    const subsidyTableCode = `
--- 1. Create the table to store subsidy payments
-CREATE TABLE public.subsidy_payments (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  farmer_id text NOT NULL REFERENCES public.farmers(id) ON DELETE CASCADE,
-  payment_date date NOT NULL,
-  amount numeric NOT NULL,
-  utr_number text,
-  payment_stage text NOT NULL,
-  notes text,
-  syncStatus text DEFAULT 'synced'::text,
-  created_by uuid REFERENCES public.profiles(id),
-  created_at timestamptz DEFAULT now() NOT NULL
-);
 
--- 2. Add comments for clarity
-COMMENT ON TABLE public.subsidy_payments IS 'Stores records of subsidy payments made to farmers.';
-    `;
+--- FARMERS TABLE ---
+ALTER TABLE public.farmers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.farmers FORCE ROW LEVEL SECURITY;
 
-    const subsidyRlsPolicies = `
--- 1. Enable RLS on the new table
+DROP POLICY IF EXISTS "Allow tenant-scoped read access" ON public.farmers;
+DROP POLICY IF EXISTS "Allow insert for authorized users" ON public.farmers;
+DROP POLICY IF EXISTS "Allow update for authorized users" ON public.farmers;
+DROP POLICY IF EXISTS "Allow delete for authorized users" ON public.farmers;
+
+CREATE POLICY "Allow tenant-scoped read access" ON public.farmers FOR SELECT
+USING (tenant_id = public.get_current_tenant_id());
+
+CREATE POLICY "Allow insert for authorized users" ON public.farmers FOR INSERT
+WITH CHECK (tenant_id = public.get_current_tenant_id() AND 'CAN_REGISTER_FARMER' = ANY(public.get_user_permissions()));
+
+CREATE POLICY "Allow update for authorized users" ON public.farmers FOR UPDATE
+USING (tenant_id = public.get_current_tenant_id() AND 'CAN_EDIT_FARMER' = ANY(public.get_user_permissions()));
+
+CREATE POLICY "Allow delete for authorized users" ON public.farmers FOR DELETE
+USING (tenant_id = public.get_current_tenant_id() AND 'CAN_DELETE_FARMER' = ANY(public.get_user_permissions()));
+
+
+--- SUBSIDY PAYMENTS TABLE ---
 ALTER TABLE public.subsidy_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subsidy_payments FORCE ROW LEVEL SECURITY;
 
--- 2. Drop existing policies to be safe
-DROP POLICY IF EXISTS "Allow all read access" ON public.subsidy_payments;
+DROP POLICY IF EXISTS "Allow tenant-scoped read access" ON public.subsidy_payments;
 DROP POLICY IF EXISTS "Allow insert for authorized users" ON public.subsidy_payments;
+DROP POLICY IF EXISTS "Allow update for authorized users" ON public.subsidy_payments;
 
--- 3. Create policies
--- Authenticated users can see all payments (could be restricted further if needed)
-CREATE POLICY "Allow all read access"
-ON public.subsidy_payments FOR SELECT
-USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow tenant-scoped read access" ON public.subsidy_payments FOR SELECT
+USING (tenant_id = public.get_current_tenant_id());
 
--- Users with CAN_EDIT_FARMER permission can add new payments
-CREATE POLICY "Allow insert for authorized users"
-ON public.subsidy_payments FOR INSERT
-WITH CHECK ('CAN_EDIT_FARMER' = ANY(public.get_user_permissions()));
+CREATE POLICY "Allow insert for authorized users" ON public.subsidy_payments FOR INSERT
+WITH CHECK (tenant_id = public.get_current_tenant_id() AND 'CAN_EDIT_FARMER' = ANY(public.get_user_permissions()));
+
+-- Allow updates as well for editing functionality
+CREATE POLICY "Allow update for authorized users" ON public.subsidy_payments FOR UPDATE
+USING (tenant_id = public.get_current_tenant_id() AND 'CAN_EDIT_FARMER' = ANY(public.get_user_permissions()));
     `;
 
-    const geoFieldsCode = `
--- Add latitude and longitude columns to the farmers table
-ALTER TABLE public.farmers
-ADD COLUMN IF NOT EXISTS latitude numeric,
-ADD COLUMN IF NOT EXISTS longitude numeric;
-`;
+    const generalTenantPolicies = `
+-- This script applies a standard tenant isolation policy to multiple tables.
+-- It ensures that users can only view or modify data that belongs to their own tenant.
+DO $$
+DECLARE
+    table_name TEXT;
+BEGIN
+    FOREACH table_name IN ARRAY ARRAY[
+        'activity_logs', 'agronomic_alerts', 'assistance_applications', 
+        'equipment', 'equipment_maintenance_logs', 'events', 'farm_plots', 
+        'groups', 'harvests', 'planting_records', 'product_categories', 'products', 
+        'quality_assessments', 'resources', 'resource_distributions', 
+        'service_points', 'tasks', 'territories', 'vendors', 'visit_requests'
+    ]
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', table_name);
+        EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY;', table_name);
+        EXECUTE format('DROP POLICY IF EXISTS "Tenant Isolation Policy" ON public.%I;', table_name);
+        EXECUTE format('
+            CREATE POLICY "Tenant Isolation Policy" ON public.%I
+            FOR ALL
+            USING (tenant_id = public.get_current_tenant_id())
+            WITH CHECK (tenant_id = public.get_current_tenant_id());
+        ', table_name);
+    END LOOP;
+END $$;
+    `;
+    
+    const advancedRlsPolicies = `
+--- FARMER DEALER CONSENTS ---
+-- This policy allows access if the user's tenant is the one granting consent (the farmer's tenant)
+-- or the one receiving consent (the dealer's tenant).
+ALTER TABLE public.farmer_dealer_consents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.farmer_dealer_consents FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow involved tenants to access consents" ON public.farmer_dealer_consents;
+
+CREATE POLICY "Allow involved tenants to access consents" ON public.farmer_dealer_consents
+FOR ALL
+USING (
+    tenant_id = public.get_current_tenant_id() OR
+    EXISTS (
+        SELECT 1 FROM public.farmers f 
+        WHERE f.id = farmer_dealer_consents.farmer_id 
+        AND f.tenant_id = public.get_current_tenant_id()
+    )
+);
+
+--- TERRITORY TRANSFER REQUESTS ---
+ALTER TABLE public.territory_transfer_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.territory_transfer_requests FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow involved tenants to access transfer requests" ON public.territory_transfer_requests;
+
+CREATE POLICY "Allow involved tenants to access transfer requests" ON public.territory_transfer_requests
+FOR ALL
+USING (
+    from_tenant_id = public.get_current_tenant_id() OR 
+    to_tenant_id = public.get_current_tenant_id()
+);
+
+
+--- TERRITORY DISPUTES ---
+ALTER TABLE public.territory_disputes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.territory_disputes FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow involved tenants to access disputes" ON public.territory_disputes;
+
+CREATE POLICY "Allow involved tenants to access disputes" ON public.territory_disputes
+FOR ALL
+USING (
+    requesting_tenant_id = public.get_current_tenant_id() OR 
+    contested_tenant_id = public.get_current_tenant_id()
+);
+    `;
 
 
     return (
@@ -270,22 +335,52 @@ ADD COLUMN IF NOT EXISTS longitude numeric;
 
                 <div className="flex-1 flex overflow-hidden">
                     <div className="w-1/4 border-r border-gray-700 p-4 space-y-2 overflow-y-auto">
-                        <button onClick={() => setActiveTab('auth')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'auth' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>1. Auth Trigger</button>
-                        <button onClick={() => setActiveTab('audit')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'audit' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>2. Audit Trail</button>
-                        <button onClick={() => setActiveTab('rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>3. Security Policies (RLS)</button>
-                        <button onClick={() => setActiveTab('subsidy')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'subsidy' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>4. Subsidy Payments</button>
-                        <button onClick={() => setActiveTab('geo')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'geo' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>5. Geolocation Fields</button>
+                        <button onClick={() => setActiveTab('auth')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'auth' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>1. Auth & Profiles</button>
+                        <button onClick={() => setActiveTab('helpers')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'helpers' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>2. RLS Helper Functions</button>
+                        <button onClick={() => setActiveTab('core_rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'core_rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>3. Core RLS Policies</button>
+                        <button onClick={() => setActiveTab('general_rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'general_rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>4. General Tenant Policies</button>
+                        <button onClick={() => setActiveTab('advanced_rls')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'advanced_rls' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>5. Advanced RLS Policies</button>
+                        <button onClick={() => setActiveTab('audit')} className={`w-full text-left p-3 rounded-md font-semibold text-sm transition-colors ${activeTab === 'audit' ? 'bg-green-600/20 text-green-300' : 'hover:bg-gray-700'}`}>6. Audit Trail</button>
                     </div>
 
                     <div className="w-3/4 p-6 overflow-y-auto">
                         {activeTab === 'auth' && (
                             <div className="space-y-4">
-                                <h3 className="text-lg font-bold text-white">User Profile Trigger</h3>
-                                <p>This automatically creates a public profile when a new user signs up. Run these two scripts in order in the Supabase <strong className="text-gray-200">SQL Editor</strong>.</p>
-                                <p className="font-semibold">Step 1: Create the function.</p>
+                                <h3 className="text-lg font-bold text-white">Auth & User Profiles Setup</h3>
+                                <p>This ensures new users are correctly linked to their organization (tenant). Run these two scripts in order in the Supabase <strong className="text-gray-200">SQL Editor</strong>.</p>
+                                <p className="font-semibold">Step 1: Update profiles table and create user creation function.</p>
                                 <CodeBlock code={authFunctionCode} />
                                 <p className="font-semibold">Step 2: Create the trigger.</p>
                                 <CodeBlock code={authTriggerCode} />
+                            </div>
+                        )}
+                         {activeTab === 'helpers' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">RLS Helper Functions</h3>
+                                <p>These SQL functions are required for the security policies to work. They securely identify the current user's organization and permissions.</p>
+                                <CodeBlock code={rlsHelperFunctions} />
+                            </div>
+                        )}
+                        {activeTab === 'core_rls' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">Core Security Policies (RLS)</h3>
+                                <p className="text-red-400 font-bold">This is a critical security step.</p>
+                                <p>These policies control who can access and modify data on the most important tables. This script fixes major security holes from the previous version.</p>
+                                <CodeBlock code={coreRlsPolicies} />
+                            </div>
+                        )}
+                         {activeTab === 'general_rls' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">General Tenant Isolation Policies</h3>
+                                <p>This script applies a standard, secure RLS policy to over 20 tables that have a `tenant_id` column. It ensures users can only access data from their own organization.</p>
+                                <CodeBlock code={generalTenantPolicies} />
+                            </div>
+                        )}
+                         {activeTab === 'advanced_rls' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-white">Advanced RLS Policies</h3>
+                                <p>These policies handle more complex cases where multiple tenants might need access to a single record, such as territory transfers or disputes.</p>
+                                <CodeBlock code={advancedRlsPolicies} />
                             </div>
                         )}
                         {activeTab === 'audit' && (
@@ -302,42 +397,11 @@ ADD COLUMN IF NOT EXISTS longitude numeric;
                                 <CodeBlock code={auditViewCode} />
                             </div>
                         )}
-                        {activeTab === 'rls' && (
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-bold text-white">Row Level Security (RLS) Policies</h3>
-                                <p className="text-red-400 font-bold">This is a critical security step.</p>
-                                <p>These policies control who can access and modify data. Run these scripts in order.</p>
-                                <p className="font-semibold">Step 1: Create the helper function to check user permissions.</p>
-                                <CodeBlock code={rlsHelperFunction} />
-                                <p className="font-semibold">Step 2: Apply RLS policies to the `farmers` table.</p>
-                                <CodeBlock code={rlsFarmersPolicies} />
-                                <p className="font-semibold">Step 3: Apply RLS policies to the `profiles` table.</p>
-                                <CodeBlock code={rlsProfilesPolicies} />
-                            </div>
-                        )}
-                        {activeTab === 'subsidy' && (
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-bold text-white">Subsidy Payments Table & Security</h3>
-                                <p>This table stores individual payment records for each farmer. Run these scripts in order.</p>
-                                <p className="font-semibold">Step 1: Create the `subsidy_payments` table.</p>
-                                <CodeBlock code={subsidyTableCode} />
-                                <p className="font-semibold">Step 2: Apply RLS policies to the new table.</p>
-                                <CodeBlock code={subsidyRlsPolicies} />
-                            </div>
-                        )}
-                        {activeTab === 'geo' && (
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-bold text-white">Geolocation Fields</h3>
-                                <p>This script adds the necessary columns to your `farmers` table to store GPS coordinates.</p>
-                                <CodeBlock code={geoFieldsCode} />
-                            </div>
-                        )}
                     </div>
                 </div>
 
                 <div className="bg-gray-900 p-4 flex justify-end gap-4 rounded-b-lg flex-shrink-0">
                     <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition">Close</button>
-
                 </div>
             </div>
         </div>

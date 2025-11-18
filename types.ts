@@ -67,10 +67,8 @@ export enum ActivityType {
     CROP_ASSIGNED = 'CROP_ASSIGNED',
     HARVEST_LOGGED = 'HARVEST_LOGGED',
     DATA_CONSENT_UPDATED = 'DATA_CONSENT_UPDATED',
-    // New activity types for Nexus
+    // FIX: Add missing COLLECTION_APPOINTMENT_BOOKED to ActivityType enum.
     COLLECTION_APPOINTMENT_BOOKED = 'COLLECTION_APPOINTMENT_BOOKED',
-    COLLECTION_APPOINTMENT_COMPLETED = 'COLLECTION_APPOINTMENT_COMPLETED',
-    COLLECTION_APPOINTMENT_CANCELLED = 'COLLECTION_APPOINTMENT_CANCELLED',
 }
 
 export enum PaymentStage {
@@ -208,6 +206,20 @@ export enum VisitRequestStatus {
     Cancelled = 'Cancelled',
 }
 
+// FIX: Add missing DirectiveStatus enum.
+export enum DirectiveStatus {
+    Open = 'Open',
+    Claimed = 'Claimed',
+    InProgress = 'In Progress',
+    Completed = 'Completed',
+    Cancelled = 'Cancelled',
+}
+
+// FIX: Add missing DirectiveTaskType enum.
+export enum DirectiveTaskType {
+    PestScouting = 'Pest Scouting',
+}
+
 export enum Season {
     Kharif = 'Kharif',
     Rabi = 'Rabi',
@@ -236,20 +248,6 @@ export enum LedgerTransactionType {
     CONSUMPTION = 'consumption',
     REFUND = 'refund',
     ADJUSTMENT = 'adjustment',
-}
-
-export enum DirectiveStatus {
-    Open = 'OPEN',
-    Claimed = 'CLAIMED',
-    InProgress = 'IN_PROGRESS',
-    Completed = 'COMPLETED',
-    Cancelled = 'CANCELLED',
-}
-
-export enum DirectiveTaskType {
-    PestScouting = 'Pest Scouting',
-    PlotVerification = 'Plot Verification',
-    TrainingAnnouncement = 'Training Announcement',
 }
 
 
@@ -431,25 +429,6 @@ export interface Task {
     createdAt: string;
     updatedAt: string;
     tenantId: string;
-    directiveId?: string;
-    source: 'INTERNAL' | 'GOVERNMENT';
-    completionEvidenceJson?: string;
-}
-
-export interface Directive {
-    id: string;
-    createdByGovUserId: string;
-    administrativeCode: string; // e.g., 'H-01'
-    taskType: DirectiveTaskType;
-    priority: TaskPriority;
-    detailsJson: string; // JSON with instructions, etc.
-    dueDate?: string;
-    status: DirectiveStatus;
-    claimedByTenantId?: string;
-    claimedAt?: number;
-    completionDetailsJson?: string; // Evidence from the completed task
-    createdAt: string;
-    updatedAt: string;
 }
 
 export interface Harvest {
@@ -757,7 +736,7 @@ export interface FarmerDealerConsent {
     grantedAt: string;
     isActive: boolean;
     expiresAt?: string;
-    permissions?: any; // For JSON field
+    permissionsJson?: string;
     grantedBy: 'FARMER' | 'OFFICER';
     createdAt: string;
     syncStatus: 'synced' | 'pending';
@@ -778,7 +757,6 @@ export interface VisitRequest {
     updatedAt: string;
     tenantId: string;
     syncStatus: 'synced' | 'pending';
-    priorityScore?: number;
 }
 
 // --- Community Forum Interfaces ---
@@ -866,15 +844,6 @@ export interface FarmPlot {
     geojson?: string;
     created_at: string;
     updated_at: string;
-    // Merged fields
-    soil_type?: SoilType | string;
-    plantation_date?: string;
-    number_of_plants: number;
-    method_of_plantation: PlantationMethod;
-    plant_type: PlantType;
-    mlrd_plants: number;
-    full_cost_plants: number;
-    is_replanting: boolean;
     sync_status: 'synced' | 'pending';
     tenant_id: string;
 }
@@ -937,36 +906,4 @@ export interface FreeTierUsage {
     service_name: BillableEvent;
     period: string; // e.g., "2024-07"
     usage_count: number;
-}
-
-// --- New Interfaces for Hapsara Nexus (Logistics) ---
-
-export interface ServicePoint {
-  id: string;
-  name: string;
-  type: 'Collection Center' | 'Field Hub';
-  locationGeojson?: string;
-  capacity: number;
-  operatingHours?: string;
-  tenantId: string;
-}
-
-export interface OfficerSchedule {
-  id: string;
-  officerId: string;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
-}
-
-export interface CollectionAppointment {
-  id: string;
-  farmerId: string;
-  servicePointId: string;
-  startTime: string;
-  endTime: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
-  qrCodeData?: string;
-  syncStatus: 'synced' | 'pending';
-  createdAt: string;
 }

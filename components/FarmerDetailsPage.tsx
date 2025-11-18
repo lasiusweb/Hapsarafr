@@ -655,10 +655,93 @@ const FieldServiceTab = withObservables(
 });
 
 // --- New Farm Portfolio Tab ---
+const EnrichedCropAssignment = withObservables(
+    ['assignment'],
+    ({ assignment }: { assignment: CropAssignmentModel }) => ({
+        crop: assignment.crop.observe(),
+        harvests: assignment.harvestLogs.observe(Q.sortBy('harvest_date', Q.desc)),
+    })
+)(({ assignment, crop, harvests, onLogHarvest }: { assignment: CropAssignmentModel; crop: CropModel; harvests: HarvestLogModel[]; onLogHarvest: (assignment: CropAssignmentModel) => void }) => {
+    if (!crop) return null; // Crop might still be loading
+    return (
+        <div className="bg-white p-3 rounded-lg border shadow-sm">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h5 className="font-bold text-gray-800">{crop.name}</h5>
+                    <p className="text-xs font-semibold text-gray-500">{assignment.season} {assignment.year}</p>
+                </div>
+                <button
+                    onClick={() => onLogHarvest(assignment)}
+                    className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-md hover:bg-green-200 transition"
+                >
+                    + Log Harvest
+                </button>
+            </div>
+            {harvests.length > 0 && (
+                <div className="mt-3 pt-3 border-t">
+                    <h6 className="text-xs font-bold text-gray-600 mb-1">Logged Harvests:</h6>
+                    <ul className="space-y-1 text-xs text-gray-500">
+                        {harvests.map(h => (
+                            <li key={h.id} className="flex justify-between">
+                                <span>{new Date(h.harvestDate).toLocaleDateString()}</span>
+                                <span className="font-medium">{h.quantity} {h.unit}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+});
+
+const PlotTimeline = withObservables(
+    ['plot'],
+    ({ plot }: { plot: FarmPlotModel }) => ({
+        assignments: plot.cropAssignments.observe(Q.sortBy('year', Q.desc)),
+    })
+)(({ plot, assignments, onAssignCrop, onLogHarvest }: {
+    plot: FarmPlotModel;
+    assignments: CropAssignmentModel[];
+    onAssignCrop: (plot: FarmPlotModel) => void;
+    onLogHarvest: (assignment: CropAssignmentModel) => void;
+}) => {
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between !pb-4">
+                <div>
+                    <h4 className="font-bold text-lg">{plot.name}</h4>
+                    <p className="text-sm text-gray-600">{plot.acreage} Acres</p>
+                </div>
+                <button
+                    onClick={() => onAssignCrop(plot)}
+                    className="px-4 py-2 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 font-semibold"
+                >
+                    Assign Crop
+                </button>
+            </CardHeader>
+            <CardContent>
+                {assignments.length > 0 ? (
+                    <div className="space-y-3">
+                        {assignments.map(assignment => (
+                            <EnrichedCropAssignment
+                                key={assignment.id}
+                                assignment={assignment}
+                                onLogHarvest={onLogHarvest}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No crops have been assigned to this plot yet.</p>
+                )}
+            </CardContent>
+        </Card>
+    );
+});
+
 const FarmPortfolioTab = withObservables(
     ['farmer'],
     ({ farmer }: { farmer: FarmerModel }) => ({
-        farmPlots: farmer.farmPlots.observe(),
+        farmPlots: farmer.farmPlots.observe(Q.sortBy('created_at', 'asc')),
     })
 )(({ farmPlots, farmer, currentUser, setNotification }: { farmPlots: FarmPlotModel[], farmer: FarmerModel, currentUser: User, setNotification: (n: any) => void }) => {
 
@@ -671,17 +754,19 @@ const FarmPortfolioTab = withObservables(
         const acreage = parseFloat(acreageStr || '0');
         if (acreage > 0) {
             await database.write(async () => {
-                await database.get<FarmPlotModel>('farm_plots').create(p => {
+                const newPlot = await database.get<FarmPlotModel>('farm_plots').create(p => {
                     p.farmerId = farmer.id;
                     p.acreage = acreage;
                     p.name = `Plot ${farmPlots.length + 1}`;
+                    p.tenantId = currentUser.tenantId; // Set tenantId
+                    p.syncStatusLocal = 'pending';
                 });
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
                     log.farmerId = farmer.id;
                     log.activityType = ActivityType.FARM_PLOT_CREATED;
-                    log.description = `Created a new plot of ${acreage} acres.`;
+                    log.description = `Created a new plot '${newPlot.name}' of ${acreage} acres.`;
                     log.createdBy = currentUser.id;
-                    log.tenantId = farmer.tenantId;
+                    log.tenantId = currentUser.tenantId;
                 });
             });
         }
@@ -689,8 +774,8 @@ const FarmPortfolioTab = withObservables(
     
     return (
         <div>
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Farm Plots & Crops</h3>
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-800">Farm Plots & Crop History</h3>
                 <button onClick={handleAddPlot} className="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 font-semibold">
                     + Add New Farm Plot
                 </button>
@@ -698,15 +783,18 @@ const FarmPortfolioTab = withObservables(
             {farmPlots.length > 0 ? (
                  <div className="space-y-6">
                     {farmPlots.map(plot => (
-                        <div key={plot.id} className="p-4 border rounded-lg bg-gray-50">
-                            <h4 className="font-bold">{plot.name} - {plot.acreage} Acres</h4>
-                             <button onClick={() => setPlotToAssign(plot)} className="text-blue-600 text-sm font-semibold hover:underline">Assign Crop</button>
-                        </div>
+                        <PlotTimeline
+                            key={plot.id}
+                            plot={plot}
+                            onAssignCrop={setPlotToAssign}
+                            onLogHarvest={setAssignmentToLog}
+                        />
                     ))}
                  </div>
             ) : (
-                <div className="text-center py-16 border-2 border-dashed rounded-lg">
+                <div className="text-center py-16 border-2 border-dashed rounded-lg bg-gray-50">
                     <p className="font-semibold text-gray-600">No farm plots registered.</p>
+                    <p className="text-sm text-gray-500 mt-2">Click "Add New Farm Plot" to get started.</p>
                 </div>
             )}
             
@@ -721,7 +809,6 @@ const FarmPortfolioTab = withObservables(
                 </Suspense>
             )}
 
-            {/* Placeholder for Harvest Logger */}
             {assignmentToLog && (
                 <Suspense fallback={null}>
                     <HarvestLogger 
@@ -732,7 +819,6 @@ const FarmPortfolioTab = withObservables(
                     />
                 </Suspense>
             )}
-
         </div>
     );
 });
@@ -890,6 +976,71 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
         setInitialPaymentStage(stage);
         setShowPaymentForm(true);
     };
+    
+    const handleSaveConsent = useCallback(async (consentData: any) => {
+        const { tenant, consentRecord } = consentModal;
+        if (!tenant) return;
+
+        try {
+            await database.write(async () => {
+                if (consentRecord) {
+                    await (consentRecord as any).update((c: FarmerDealerConsentModel) => {
+                        c.isActive = true;
+                        c.permissionsJson = JSON.stringify(consentData);
+                        c.grantedBy = 'OFFICER';
+                        c.syncStatusLocal = 'pending';
+                    });
+                } else {
+                    await database.get<FarmerDealerConsentModel>('farmer_dealer_consents').create(c => {
+                        c.farmerId = farmer.id;
+                        c.tenantId = tenant.id;
+                        c.isActive = true;
+                        c.permissionsJson = JSON.stringify(consentData);
+                        c.grantedBy = 'OFFICER';
+                        c.syncStatusLocal = 'pending';
+                    });
+                }
+                
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = farmer.id;
+                    log.activityType = ActivityType.DATA_CONSENT_UPDATED;
+                    log.description = `Data sharing consent updated for ${tenant.name}.`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = farmer.tenantId;
+                });
+            });
+            setNotification({ message: 'Consent updated.', type: 'success'});
+            setConsentModal({isOpen: false});
+        } catch(e) {
+            setNotification({ message: 'Failed to update consent.', type: 'error'});
+        }
+
+    }, [consentModal, database, farmer, currentUser, setNotification]);
+
+    const handleRevokeConsent = useCallback(async (consentRecord: FarmerDealerConsentModel) => {
+        const partnerTenant = allTenants.find(t => t.id === consentRecord.tenantId);
+        if(window.confirm(`Are you sure you want to revoke data sharing consent for ${partnerTenant?.name || 'this partner'}?`)) {
+            try {
+                await database.write(async () => {
+                    await (consentRecord as any).update((c: FarmerDealerConsentModel) => {
+                        c.isActive = false;
+                        c.syncStatusLocal = 'pending';
+                    });
+                    await database.get<ActivityLogModel>('activity_logs').create(log => {
+                        log.farmerId = farmer.id;
+                        log.activityType = ActivityType.DEALER_CONSENT_REVOKED;
+                        log.description = `Data sharing consent revoked for ${partnerTenant?.name || 'partner'}.`;
+                        log.createdBy = currentUser.id;
+                        log.tenantId = farmer.tenantId;
+                    });
+                });
+                setNotification({ message: 'Consent revoked.', type: 'success'});
+            } catch(e) {
+                 setNotification({ message: 'Failed to revoke consent.', type: 'error'});
+            }
+        }
+    }, [database, setNotification, farmer, currentUser, allTenants]);
+
 
     if (isEditing) {
 // FIX: Corrected typo from Susp to Suspense
@@ -969,7 +1120,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                      {activeTab === 'harvests' && <HarvestsTabContent farmer={farmer} database={database} onRecord={() => setShowHarvestForm(true)} onDetails={(data) => setAssessmentDetails(data)} />}
                      {activeTab === 'services' && <FieldServiceTab farmer={farmer} onOpenRequestModal={() => setShowRequestVisitModal(true)} onOpenDetailsModal={setVisitDetailsModal} users={users} />}
                      {activeTab === 'kyc' && <KycTabContent farmer={farmer} onOpenModal={() => setShowKycModal(true)} />}
-                     {activeTab === 'consents' && <p>Consents tab coming soon.</p>}
+                     {activeTab === 'consents' && <ServiceProvidersTab farmer={farmer} allTenants={allTenants} allTerritories={allTerritories} currentUser={currentUser} onOpenConsentModal={(tenant, consentRecord) => setConsentModal({isOpen: true, tenant, consentRecord})} onRevokeConsent={handleRevokeConsent} />}
                      {activeTab === 'activity' && <p>Activity Log tab coming soon.</p>}
                 </div>
             </div>
@@ -978,6 +1129,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
             {paymentToDelete && <ConfirmationModal isOpen={!!paymentToDelete} title="Delete Payment?" message="Are you sure you want to delete this payment record? This action cannot be undone." onConfirm={handleDeletePayment} onCancel={() => setPaymentToDelete(null)} confirmText="Delete" confirmButtonVariant="destructive" />}
             {showLiveAssistant && <Suspense fallback={null}><LiveAssistantModal farmer={plainFarmer} onClose={() => setShowLiveAssistant(false)} onExecuteAction={(action) => { if(action === 'SHOW_PROFIT_SIMULATOR') { setShowLiveAssistant(false); setShowProfitSimulator(true); } }} /></Suspense>}
             {showKycModal && <Suspense fallback={null}><KycOnboardingModal farmer={plainFarmer} onClose={() => setShowKycModal(false)} setNotification={setNotification} /></Suspense>}
+            {consentModal.isOpen && <Suspense fallback={null}><GranularConsentModal isOpen={consentModal.isOpen} onClose={() => setConsentModal({isOpen: false})} onSave={handleSaveConsent} farmer={plainFarmer} tenant={consentModal.tenant!} existingConsent={consentModal.consentRecord ? JSON.parse(consentModal.consentRecord.permissionsJson || '{}') : {}} /></Suspense>}
 
         </div>
     );
