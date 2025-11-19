@@ -7,7 +7,7 @@ import { field, text, readonly, date, relation, children, writer, json } from '@
 
 // --- Schema Definition ---
 const schema = appSchema({
-  version: 2, // Incremented for Samridhi
+  version: 3, // Incremented for Caelus
   tables: [
     tableSchema({
       name: 'farmers',
@@ -882,12 +882,11 @@ const schema = appSchema({
             { name: 'tenant_id', type: 'string', isIndexed: true },
         ]
     }),
-    // --- SAMRIDHI SCHEMA EXTENSIONS ---
     tableSchema({
       name: 'dealer_insights',
       columns: [
         { name: 'dealer_id', type: 'string', isIndexed: true },
-        { name: 'metric_key', type: 'string' }, // e.g., 'churn_risk_score'
+        { name: 'metric_key', type: 'string' },
         { name: 'metric_value', type: 'number' },
         { name: 'generated_at', type: 'number' },
       ]
@@ -895,11 +894,48 @@ const schema = appSchema({
     tableSchema({
       name: 'market_trends',
       columns: [
-        { name: 'region_code', type: 'string', isIndexed: true }, // e.g., 'mandal_id'
-        { name: 'trend_type', type: 'string' }, // 'crop_price', 'demand_forecast'
+        { name: 'region_code', type: 'string', isIndexed: true },
+        { name: 'trend_type', type: 'string' },
         { name: 'payload_json', type: 'string' },
         { name: 'valid_until', type: 'number' },
       ]
+    }),
+    // Caelus - Climate Resilience
+    tableSchema({
+        name: 'climate_risk_cache',
+        columns: [
+            { name: 'region_code', type: 'string', isIndexed: true },
+            { name: 'date', type: 'string' },
+            { name: 'temperature_max', type: 'number' },
+            { name: 'rainfall_mm', type: 'number' },
+            { name: 'ndvi_index', type: 'number', isOptional: true },
+            { name: 'risk_score', type: 'number' },
+            { name: 'metadata_json', type: 'string', isOptional: true },
+            { name: 'created_at', type: 'number' },
+        ]
+    }),
+    tableSchema({
+        name: 'sustainability_actions',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'action_type', type: 'string' },
+            { name: 'status', type: 'string' },
+            { name: 'verification_photo_url', type: 'string', isOptional: true },
+            { name: 'geo_coords', type: 'string', isOptional: true },
+            { name: 'submitted_at', type: 'number' },
+            { name: 'verified_at', type: 'number', isOptional: true },
+        ]
+    }),
+    tableSchema({
+        name: 'sustainability_credentials',
+        columns: [
+            { name: 'farmer_id', type: 'string', isIndexed: true },
+            { name: 'grade', type: 'string' },
+            { name: 'issued_at', type: 'number' },
+            { name: 'valid_until', type: 'number' },
+            { name: 'hash', type: 'string' },
+            { name: 'metadata_json', type: 'string', isOptional: true },
+        ]
     }),
   ]
 });
@@ -921,6 +957,8 @@ export class FarmerModel extends Model {
     visit_requests: { type: 'has_many', foreignKey: 'farmer_id' },
     khata_records: { type: 'has_many', foreignKey: 'farmer_id' },
     recommendations: { type: 'has_many', foreignKey: 'farmer_id' },
+    sustainability_actions: { type: 'has_many', foreignKey: 'farmer_id' },
+    sustainability_credentials: { type: 'has_many', foreignKey: 'farmer_id' },
   } as const;
 
   @text('hap_id') hapId!: string;
@@ -969,6 +1007,8 @@ export class FarmerModel extends Model {
   @children('visit_requests') visitRequests!: any;
   @children('khata_records') khataRecords!: any;
   @children('agronomic_recommendations') recommendations!: any;
+  @children('sustainability_actions') sustainabilityActions!: any;
+  @children('sustainability_credentials') sustainabilityCredentials!: any;
 }
 
 export class FarmPlotModel extends Model {
@@ -1917,6 +1957,46 @@ export class MarketTrendsModel extends Model {
   @field('valid_until') validUntil!: number;
 }
 
+// --- CAELUS MODELS ---
+export class ClimateRiskCacheModel extends Model {
+  static table = 'climate_risk_cache';
+  @text('region_code') regionCode!: string;
+  @text('date') date!: string;
+  @field('temperature_max') temperatureMax!: number;
+  @field('rainfall_mm') rainfallMm!: number;
+  @field('ndvi_index') ndviIndex?: number;
+  @field('risk_score') riskScore!: number;
+  @text('metadata_json') metadataJson?: string;
+  @readonly @date('created_at') createdAt!: Date;
+}
+
+export class SustainabilityActionModel extends Model {
+  static table = 'sustainability_actions';
+  static associations = {
+    farmers: { type: 'belongs_to', key: 'farmer_id' },
+  } as const;
+  @text('farmer_id') farmerId!: string;
+  @text('action_type') actionType!: string;
+  @text('status') status!: string;
+  @text('verification_photo_url') verificationPhotoUrl?: string;
+  @text('geo_coords') geoCoords?: string;
+  @date('submitted_at') submittedAt!: Date;
+  @date('verified_at') verifiedAt?: Date;
+}
+
+export class SustainabilityCredentialModel extends Model {
+  static table = 'sustainability_credentials';
+  static associations = {
+    farmers: { type: 'belongs_to', key: 'farmer_id' },
+  } as const;
+  @text('farmer_id') farmerId!: string;
+  @text('grade') grade!: string;
+  @date('issued_at') issuedAt!: Date;
+  @date('valid_until') validUntil!: Date;
+  @text('hash') hash!: string;
+  @text('metadata_json') metadataJson?: string;
+}
+
 const adapter = new SQLiteAdapter({
   schema,
   jsi: true, // Enable JSI for better performance if available
@@ -1928,7 +2008,7 @@ const adapter = new SQLiteAdapter({
 const database = new Database({
   adapter,
   modelClasses: [
-    FarmerModel, FarmPlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel, TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel, ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel, WalletModel, WalletTransactionModel, VisitRequestModel, DirectiveModel, DirectiveAssignmentModel, ProductCategoryModel, ProductModel, VendorModel, VendorProductModel, OrderModel, OrderItemModel, CropModel, CropAssignmentModel, HarvestLogModel, DataSharingConsentModel, CreditLedgerEntryModel, ServiceConsumptionLogModel, FreeTierUsageModel, ServicePointModel, OfficerScheduleModel, CollectionAppointmentModel, AgronomicInputModel, ProcessingBatchModel, ProcessingStepModel, ProtectionProductModel, ProtectionSubscriptionModel, ProtectionClaimModel, FamilyUnitModel, LegacyProfileModel, LandListingModel, LandValuationHistoryModel, EquipmentLeaseModel, ManualLedgerEntryModel, DealerModel, DealerInventorySignalModel, KhataRecordModel, DealerFarmerConnectionModel, AgronomicRecommendationModel, DealerInsightsModel, MarketTrendsModel
+    FarmerModel, FarmPlotModel, SubsidyPaymentModel, ActivityLogModel, UserModel, GroupModel, TenantModel, DistrictModel, MandalModel, VillageModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, PlantingRecordModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, UserProfileModel, MentorshipModel, AssistanceApplicationModel, EquipmentModel, EquipmentMaintenanceLogModel, WithdrawalAccountModel, TrainingModuleModel, TrainingCompletionModel, EventModel, EventRsvpModel, TerritoryModel, TerritoryTransferRequestModel, TerritoryDisputeModel, FarmerDealerConsentModel, ForumPostModel, ForumAnswerModel, ForumAnswerVoteModel, ForumContentFlagModel, AgronomicAlertModel, WalletModel, WalletTransactionModel, VisitRequestModel, DirectiveModel, DirectiveAssignmentModel, ProductCategoryModel, ProductModel, VendorModel, VendorProductModel, OrderModel, OrderItemModel, CropModel, CropAssignmentModel, HarvestLogModel, DataSharingConsentModel, CreditLedgerEntryModel, ServiceConsumptionLogModel, FreeTierUsageModel, ServicePointModel, OfficerScheduleModel, CollectionAppointmentModel, AgronomicInputModel, ProcessingBatchModel, ProcessingStepModel, ProtectionProductModel, ProtectionSubscriptionModel, ProtectionClaimModel, FamilyUnitModel, LegacyProfileModel, LandListingModel, LandValuationHistoryModel, EquipmentLeaseModel, ManualLedgerEntryModel, DealerModel, DealerInventorySignalModel, KhataRecordModel, DealerFarmerConnectionModel, AgronomicRecommendationModel, DealerInsightsModel, MarketTrendsModel, ClimateRiskCacheModel, SustainabilityActionModel, SustainabilityCredentialModel
   ],
 });
 
