@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod } from '../types';
 import { GEO_DATA } from '../data/geoData';
@@ -157,8 +158,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
     }, [filteredFarmers]);
 
     const statusDistribution = useMemo(() => {
-        const counts = Object.values(FarmerStatus).reduce((acc, status) => ({ ...acc, [status]: 0 }), {} as Record<FarmerStatus, number>);
+        const counts = Object.values(FarmerStatus).reduce((acc, status) => {
+            acc[status] = 0;
+            return acc;
+        }, {} as Record<FarmerStatus, number>);
+        
         filteredFarmers.forEach(f => { counts[f.status as FarmerStatus]++; });
+        
         const colors = {
             [FarmerStatus.Registered]: '#3b82f6', [FarmerStatus.Sanctioned]: '#f97316',
             [FarmerStatus.Planted]: '#22c55e', [FarmerStatus.PaymentDone]: '#a855f7',
@@ -168,16 +174,23 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
 
     const methodDistribution = useMemo(() => {
         const counts = { [PlantationMethod.Square]: 0, [PlantationMethod.Triangle]: 0 };
-        filteredFarmers.forEach(f => { counts[f.methodOfPlantation]++; });
+        filteredFarmers.forEach(f => { 
+            if (f.methodOfPlantation === PlantationMethod.Square) counts[PlantationMethod.Square]++;
+            if (f.methodOfPlantation === PlantationMethod.Triangle) counts[PlantationMethod.Triangle]++;
+        });
         return [
-            { label: 'Square', value: counts.Square, color: '#34d399' },
-            { label: 'Triangle', value: counts.Triangle, color: '#fbbf24' },
+            { label: 'Square', value: counts[PlantationMethod.Square], color: '#34d399' },
+            { label: 'Triangle', value: counts[PlantationMethod.Triangle], color: '#fbbf24' },
         ];
     }, [filteredFarmers]);
     
     const genderDistribution = useMemo(() => {
         const counts = { 'Male': 0, 'Female': 0, 'Other': 0 };
-        filteredFarmers.forEach(f => { counts[f.gender]++; });
+        filteredFarmers.forEach(f => { 
+            if (f.gender === 'Male') counts.Male++;
+            else if (f.gender === 'Female') counts.Female++;
+            else counts.Other++;
+        });
         return [
             { label: 'Male', value: counts.Male, color: '#60a5fa' },
             { label: 'Female', value: counts.Female, color: '#f472b6' },
@@ -307,7 +320,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                         <p className="text-gray-500">Visualize farmer data and gain insights.</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         Back to Dashboard
                     </button>
                 </div>

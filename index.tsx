@@ -1,6 +1,6 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Corrected import path for App component.
 import App from './App';
 import { DatabaseProvider } from './DatabaseContext';
 import { CartProvider } from './CartContext';

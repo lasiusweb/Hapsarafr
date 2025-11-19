@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import { GEO_DATA } from '../data/geoData';
@@ -14,7 +15,7 @@ interface BulkImportModalProps {
 }
 
 // --- Internal Types ---
-type NewRecord = Farmer & { tempIndex: number; rowNum: number; rawData: any; };
+type NewRecord = Farmer & { tempIndex: number; rowNum: number; rawData: any; asoId?: string; primary_crop?: string; };
 interface DuplicatePair {
     newRecord: NewRecord;
     existingRecord: Farmer;
@@ -145,8 +146,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         methodOfPlantation: (Object.values(PlantationMethod).includes(row.methodOfPlantation) ? row.methodOfPlantation : PlantationMethod.Square) as PlantationMethod,
                         plantType: (Object.values(PlantType).includes(row.plantType) ? row.plantType : PlantType.Imported) as PlantType,
                         plantationDate: row.plantationDate ? new Date(row.plantationDate).toISOString().split('T')[0] : '',
-                        mlrdPlants: Number(row.mlrdPlants) || 0,
-                        fullCostPlants: Number(row.fullCostPlants) || 0,
+                        // mlrdPlants and fullCostPlants removed as they are not in Farmer type
                         latitude: row.latitude ? parseFloat(row.latitude) : undefined,
                         longitude: row.longitude ? parseFloat(row.longitude) : undefined,
                         gov_application_id: String(row.gov_application_id || '').trim(),
@@ -154,7 +154,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         asoId,
                         proposedYear: '2024-25',
                         registrationDate: now.split('T')[0],
-                        paymentUtrDd: '',
                         status: FarmerStatus.Registered,
                         district: districtCode,
                         mandal: mandalCode,
@@ -325,8 +324,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         </div>
                         <div className="mt-4 flex justify-end items-center gap-4">
                             <span className="text-sm font-semibold text-gray-300">Action:</span>
-                            <button onClick={() => handleDecisionChange(index, 'import')} className={`px-3 py-1 text-sm rounded ${pair.decision === 'import' ? 'bg-green-600 text-white' : 'bg-gray-600 hover:bg-gray-500'}`}>Import Anyway</button>
-                            <button onClick={() => handleDecisionChange(index, 'skip')} className={`px-3 py-1 text-sm rounded ${pair.decision === 'skip' ? 'bg-red-600 text-white' : 'bg-gray-600 hover:bg-gray-500'}`}>Skip Record</button>
+                            <button onClick={() => handleDecisionChange(index, 'import')} className={`px-3 py-1 text-sm rounded ${pair.decision === 'import' ? 'bg-green-600 text-white' : 'bg-gray-600 hover:bg-gray-50'}`}>Import Anyway</button>
+                            <button onClick={() => handleDecisionChange(index, 'skip')} className={`px-3 py-1 text-sm rounded ${pair.decision === 'skip' ? 'bg-red-600 text-white' : 'bg-gray-600 hover:bg-gray-50'}`}>Skip Record</button>
                         </div>
                     </div>
                 ))}

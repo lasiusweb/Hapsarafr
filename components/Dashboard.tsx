@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Farmer, FarmerStatus, Filters } from '../types';
 import { GEO_DATA } from '../data/geoData';
@@ -161,8 +162,13 @@ const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) 
     }, [filteredFarmersByDate]);
     
     const statusData = useMemo(() => {
-        const counts = Object.values(FarmerStatus).reduce((acc, status) => ({ ...acc, [status]: 0 }), {} as Record<FarmerStatus, number>);
-        filteredFarmersByDate.forEach(f => { counts[f.status]++; });
+        const counts = Object.values(FarmerStatus).reduce((acc, status) => {
+            acc[status] = 0;
+            return acc;
+        }, {} as Record<FarmerStatus, number>);
+        
+        filteredFarmersByDate.forEach(f => { counts[f.status as FarmerStatus]++; });
+        
         const colors: Record<FarmerStatus, string> = {
             [FarmerStatus.Registered]: '#3b82f6',
             [FarmerStatus.Sanctioned]: '#f97316',

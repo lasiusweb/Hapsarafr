@@ -1,218 +1,239 @@
-// This file was regenerated to create the main App component.
 
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
-import withObservables from '@nozbe/with-observables';
-import { Q } from '@nozbe/watermelondb';
-import { useDatabase } from './DatabaseContext';
-import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { initializeSupabase, getSupabase } from './lib/supabase';
-import { synchronize } from './lib/sync';
-import { FarmerModel, UserModel, GroupModel, TenantModel, TerritoryModel, FarmerDealerConsentModel, FarmPlotModel, DirectiveModel, TaskModel, DirectiveAssignmentModel } from './db';
-import { Farmer, User, Group, Permission, Tenant } from './types';
-import { farmerModelToPlain, userModelToPlain, groupModelToPlain, tenantModelToPlain } from './lib/utils';
-import { useQuery } from './hooks/useQuery';
-
-// Components
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
-import Notification from './components/Notification';
+import { Farmer, User, Tenant, Permission } from './types';
+import { useDatabase } from './DatabaseContext';
+import { FarmerModel, UserModel, TenantModel, GroupModel } from './db';
+import { Q } from '@nozbe/watermelondb';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { getSupabase } from './lib/supabase';
 import LoginScreen from './components/LoginScreen';
-import LandingPage from './components/LandingPage';
-import PrintView from './components/PrintView';
-import NotFoundPage from './components/NotFoundPage';
+import Notification from './components/Notification';
+import HelpModal from './components/HelpModal';
+import PrivacyModal from './components/PrivacyModal';
+import FeedbackModal from './components/FeedbackModal';
+import SupabaseSettingsModal from './components/SupabaseSettingsModal';
+import InvitationModal from './components/InvitationModal';
+import AcceptInvitation from './components/AcceptInvitation';
 
-// Lazy-loaded components for different views
+// Lazy loaded components
 const FarmerDirectoryPage = lazy(() => import('./components/FarmerDirectoryPage'));
-const RegistrationForm = lazy(() => import('./components/RegistrationForm'));
 const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
-const AdminPage = lazy(() => import('./components/AdminPage'));
-const ProfilePage = lazy(() => import('./components/ProfilePage'));
-const FarmerAdvisorPage = lazy(() => import('./components/FarmerAdvisorPage'));
-const ReportsPage = lazy(() => import('./components/ReportsPage'));
-const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
-const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const MarketplacePage = lazy(() => import('./components/MarketplacePage'));
-const ProductListPage = lazy(() => import('./components/ProductListPage'));
-const CheckoutPage = lazy(() => import('./components/CheckoutPage'));
-const OrderConfirmationPage = lazy(() => import('./components/OrderConfirmationPage'));
-const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
-const ResourceLibraryPage = lazy(() => import('./components/ResourceLibraryPage'));
-const EventsPage = lazy(() => import('./components/EventsPage'));
-const CommunityForumPage = lazy(() => import('./components/CommunityForumPage'));
-const MentorshipPage = lazy(() => import('./components/MentorshipPage'));
-const FinancialsPage = lazy(() => import('./components/FinancialsPage'));
-const BillingPage = lazy(() => import('./components/BillingPage'));
-const SubscriptionManagementPage = lazy(() => import('./components/SubscriptionManagementPage'));
-const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
+const SettingsPage = lazy(() => import('./components/AdminPage')); // Reusing AdminPage for settings/admin
+const ReportsPage = lazy(() => import('./components/ReportsPage'));
+const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
+const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
 const GeoManagementPage = lazy(() => import('./components/GeoManagementPage'));
 const SchemaManagerPage = lazy(() => import('./components/SchemaManagerPage'));
 const TenantManagementPage = lazy(() => import('./components/TenantManagementPage'));
-const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
-const TerritoryManagementPage = lazy(() => import('./components/TerritoryManagementPage'));
-const VendorManagementPage = lazy(() => import('./components/VendorManagementPage'));
-const TaskManagementPage = lazy(() => import('./components/TaskManagementPage'));
+const ProfilePage = lazy(() => import('./components/ProfilePage'));
+const UsageAnalyticsPage = lazy(() => import('./components/UsageAnalyticsPage'));
+const BillingPage = lazy(() => import('./components/BillingPage'));
+const SubscriptionManagementPage = lazy(() => import('./components/SubscriptionManagementPage'));
+const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
+const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
 const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerPage'));
 const YieldPredictionPage = lazy(() => import('./components/YieldPredictionPage'));
+const FinancialLedgerPage = lazy(() => import('./components/FinancialLedgerPage'));
 const SatelliteAnalysisPage = lazy(() => import('./components/SatelliteAnalysisPage'));
+const SustainabilityDashboard = lazy(() => import('./components/SustainabilityDashboard'));
+const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
+const TaskManagementPage = lazy(() => import('./components/TaskManagementPage'));
+const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
+const DistributionReportPage = lazy(() => import('./components/DistributionReportPage'));
+const TrainingHubPage = lazy(() => import('./components/TrainingHubPage')); // Alias for ResourceLibraryPage
+const ResourceLibraryPage = lazy(() => import('./components/ResourceLibraryPage'));
+const EventsPage = lazy(() => import('./components/EventsPage'));
+const TerritoryManagementPage = lazy(() => import('./components/TerritoryManagementPage'));
+const FarmerAdvisorPage = lazy(() => import('./components/FarmerAdvisorPage'));
+const FinancialsPage = lazy(() => import('./components/FinancialsPage')); // Wallet
+const FieldServicePage = lazy(() => import('./components/FieldServicePage'));
+const AssistanceSchemesPage = lazy(() => import('./components/AssistanceSchemesPage'));
 const QualityAssessmentPage = lazy(() => import('./components/QualityAssessmentPage'));
 const ProcessingPage = lazy(() => import('./components/ProcessingPage'));
 const EquipmentManagementPage = lazy(() => import('./components/EquipmentManagementPage'));
+const EquipmentAccessProgramPage = lazy(() => import('./components/EquipmentAccessProgramPage'));
+const CommunityForumPage = lazy(() => import('./components/CommunityForumPage'));
+const MentorshipPage = lazy(() => import('./components/MentorshipPage'));
+const MarketplacePage = lazy(() => import('./components/MarketplacePage'));
+const ProductListPage = lazy(() => import('./components/ProductListPage'));
+const VendorManagementPage = lazy(() => import('./components/VendorManagementPage'));
+const CheckoutPage = lazy(() => import('./components/CheckoutPage'));
+const OrderConfirmationPage = lazy(() => import('./components/OrderConfirmationPage'));
+const AgriStorePage = lazy(() => import('./components/AgriStorePage'));
 const CaelusDashboard = lazy(() => import('./components/CaelusDashboard'));
 const HapsaraNexusPage = lazy(() => import('./components/HapsaraNexusPage'));
 const StateCraftDashboard = lazy(() => import('./components/StateCraftDashboard'));
+const FamilyShield = lazy(() => import('./components/FamilyShield'));
+const RealtyPage = lazy(() => import('./components/RealtyPage'));
+const MitraDashboard = lazy(() => import('./components/MitraDashboard'));
+const SamridhiDashboard = lazy(() => import('./components/SamridhiDashboard'));
 
-
-const App: React.FC = () => {
+function App() {
     const database = useDatabase();
     const isOnline = useOnlineStatus();
-    const [supabase, setSupabase] = useState(() => initializeSupabase());
-    const [session, setSession] = useState<any | null>(null);
-    const [authLoading, setAuthLoading] = useState(true);
-    const [view, setView] = useState('dashboard');
-    const [viewParam, setViewParam] = useState<string | null>(null);
-    const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
+    const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
+    const [currentView, setCurrentView] = useState('dashboard');
+    const [viewParam, setViewParam] = useState<string | undefined>(undefined);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [lastSync, setLastSync] = useState<Date | null>(null);
+    const [users, setUsers] = useState<User[]>([]);
+    const [tenants, setTenants] = useState<Tenant[]>([]);
     const [printQueue, setPrintQueue] = useState<string[]>([]);
-    
-    // Auth
+    const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
+
+    // Modals
+    const [isSupabaseSettingsOpen, setIsSupabaseSettingsOpen] = useState(false);
+    const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+    const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+    const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+    const [isInvitationModalOpen, setIsInvitationModalOpen] = useState(false);
+    const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
+    const [appContent, setAppContent] = useState<any>(null);
+
+    // Initialize Auth & Data
     useEffect(() => {
-        if (!supabase) return;
-        setAuthLoading(true);
-        supabase.auth.getSession().then(({ data: { session } }: any) => {
-            setSession(session);
-            setAuthLoading(false);
-        });
+        const checkAuth = async () => {
+            // Mock Auth for MVP
+            // In real app, check Supabase session or local storage token
+            const usersCollection = database.get<UserModel>('users');
+            const allUsers = await usersCollection.query().fetch();
+            const plainUsers = allUsers.map(u => ({ ...u._raw } as unknown as User));
+            setUsers(plainUsers);
+            
+            const tenantsCollection = database.get<TenantModel>('tenants');
+            const allTenants = await tenantsCollection.query().fetch();
+            const plainTenants = allTenants.map(t => ({ ...t._raw } as unknown as Tenant));
+            setTenants(plainTenants);
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-            setSession(session);
-            if (_event === 'SIGNED_IN') {
-                window.location.hash = 'dashboard';
-            }
-        });
+            // Auto-login first user found (for dev) or show login screen
+             if (plainUsers.length > 0) {
+                 const user = plainUsers[0];
+                 setCurrentUser(user);
+                 const tenant = plainTenants.find(t => t.id === user.tenantId) || null;
+                 setCurrentTenant(tenant);
 
-        return () => subscription.unsubscribe();
-    }, [supabase]);
-
-    // Routing
-    useEffect(() => {
-        const handleHashChange = () => {
-            const hash = window.location.hash.replace('#', '');
-            const [path, param] = hash.split('/');
-            setView(path || 'dashboard');
-            setViewParam(param || null);
+                 const group = await database.get<GroupModel>('groups').find(user.groupId);
+                 setPermissions(new Set(JSON.parse(group.permissionsStr || '[]')));
+             }
         };
-        window.addEventListener('hashchange', handleHashChange, false);
-        handleHashChange(); // Initial load
-        return () => window.removeEventListener('hashchange', handleHashChange, false);
-    }, []);
+        checkAuth();
+    }, [database]);
 
-    const handleNavigate = (path: string, param?: string) => {
-        window.location.hash = param ? `${path}/${param}` : path;
+    // Navigation Handler
+    const handleNavigate = (view: string, param?: string) => {
+        setCurrentView(view);
+        setViewParam(param);
     };
     
-    // Data hooks
-    const allUsers = useQuery(useMemo(() => database.get<UserModel>('users').query(), [database])).map(model => userModelToPlain(model)!);
-    const allGroups = useQuery(useMemo(() => database.get<GroupModel>('groups').query(), [database])).map(model => groupModelToPlain(model)!);
-    const allTenants = useQuery(useMemo(() => database.get<TenantModel>('tenants').query(), [database]));
-    const allFarmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('sync_status', Q.notEq('pending_delete'))), [database])).map(model => farmerModelToPlain(model)!);
-    const allTerritories = useQuery(useMemo(() => database.get<TerritoryModel>('territories').query(), [database]));
-    const allDirectives = useQuery(useMemo(() => database.get<DirectiveModel>('directives').query(), [database]));
-    const allDirectiveAssignments = useQuery(useMemo(() => database.get<DirectiveAssignmentModel>('directive_assignments').query(), [database]));
-    
-    // User context
-    const { currentUser, currentTenant, userPermissions } = useMemo(() => {
-        const user = allUsers.find(u => u?.id === session?.user?.id);
-        const group = allGroups.find(g => g?.id === user?.groupId);
-        const tenant = allTenants.find(t => t?.id === user?.tenantId);
-        return {
-            currentUser: user,
-            currentTenant: tenant ? tenantModelToPlain(tenant) : undefined,
-            userPermissions: new Set(group?.permissions || []),
-        };
-    }, [session, allUsers, allGroups, allTenants]);
-    
-    const handleSync = useCallback(async () => {
-        if (!isOnline) {
-            setNotification({ message: 'Sync failed: You are offline.', type: 'error' });
-            return;
-        }
-        if (!supabase) {
-            setNotification({ message: 'Sync failed: Not connected to the cloud.', type: 'error' });
-            return;
-        }
+    const handleLogout = () => {
+        setCurrentUser(null);
+        setCurrentTenant(null);
+        setPermissions(new Set());
+        setCurrentView('dashboard');
+    };
 
-        setIsSyncing(true);
-        try {
-            const { pushed, deleted } = await synchronize(database, supabase);
-            setLastSync(new Date());
-            if (pushed > 0 || deleted > 0) {
-                setNotification({ message: `Sync successful! Pushed ${pushed} and deleted ${deleted} record(s).`, type: 'success' });
-            } else {
-                setNotification({ message: 'Already up-to-date.', type: 'info' });
-            }
-        } catch (error: any) {
-            console.error("Sync failed:", error);
-            setNotification({ message: `Sync failed: ${error.message}`, type: 'error' });
-        } finally {
-            setIsSyncing(false);
+    // Render
+    if (!currentUser) {
+        if (pendingInvitation) {
+            return <AcceptInvitation invitationCode={pendingInvitation} onAccept={() => setPendingInvitation(null)} />;
         }
-    }, [isOnline, database, supabase]);
+        return <LoginScreen supabase={getSupabase()} />;
+    }
+
+    // Special Dealer Layout Override
+    if (currentView === 'mitra') {
+        return (
+            <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading Hapsara Mitra...</div>}>
+                <MitraDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />
+            </Suspense>
+        );
+    }
 
     const renderView = () => {
-        if (!currentUser || !currentTenant) return <div className="p-6">Loading user data...</div>;
-
-        switch (view) {
-            case 'dashboard': return <Dashboard farmers={allFarmers} onNavigateWithFilter={(v, f) => {}} />;
-            case 'farmer-directory': return <FarmerDirectoryPage users={allUsers} tenants={allTenants.map(t => tenantModelToPlain(t)!)} currentUser={currentUser} permissions={userPermissions} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onNavigate={handleNavigate} setNotification={setNotification} />;
-            case 'farmer-details':
-                if (!viewParam) return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
-                return <FarmerDetailsPage farmerId={viewParam} users={allUsers} currentUser={currentUser} onBack={() => handleNavigate('farmer-directory')} permissions={userPermissions} setNotification={setNotification} allTenants={allTenants} allTerritories={allTerritories} />;
+        switch (currentView) {
+            case 'dashboard': return <Dashboard farmers={[]} onNavigateWithFilter={(v, f) => { console.log(f); handleNavigate(v); }} />; // Passing empty array for now, Dashboard fetches its own data or needs refactor
+            case 'farmer-directory': return <FarmerDirectoryPage users={users} tenants={tenants} currentUser={currentUser} permissions={permissions} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onNavigate={handleNavigate} setNotification={setNotification} />;
+            case 'farmer-details': return <FarmerDetailsPage farmerId={viewParam!} users={users} currentUser={currentUser} onBack={() => handleNavigate('farmer-directory')} permissions={permissions} setNotification={setNotification} allTenants={tenants as any} allTerritories={[]} />;
+            case 'settings': return <SettingsPage users={users} groups={[]} currentUser={currentUser} onSaveUsers={async () => {}} onSaveGroups={async () => {}} onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} setNotification={setNotification} />;
+            case 'reports': return <ReportsPage allFarmers={[]} onBack={() => handleNavigate('dashboard')} />;
+            case 'id-verification': return <IdVerificationPage allFarmers={[]} onBack={() => handleNavigate('dashboard')} />;
+            case 'data-health': return <DataHealthPage allFarmers={[]} onNavigate={handleNavigate} onBack={() => handleNavigate('dashboard')} />;
+            case 'geo-management': return <GeoManagementPage onBack={() => handleNavigate('settings')} />;
+            case 'schema-manager': return <SchemaManagerPage onBack={() => handleNavigate('settings')} />;
+            case 'tenant-management': return <TenantManagementPage onBack={() => handleNavigate('settings')} />;
+            case 'profile': return <ProfilePage currentUser={currentUser} groups={[]} onSave={async () => {}} onBack={() => handleNavigate('dashboard')} setNotification={setNotification} />;
+            case 'usage-analytics': return <UsageAnalyticsPage currentUser={currentUser} onBack={() => handleNavigate('dashboard')} supabase={getSupabase()} />;
+            case 'billing': return <BillingPage currentUser={currentUser} currentTenant={currentTenant!} onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} setNotification={setNotification} />;
+            case 'subscription-management': return <SubscriptionManagementPage currentUser={currentUser} onBack={() => handleNavigate('billing')} />;
+            case 'print-queue': return <PrintQueuePage queuedFarmerIds={printQueue} users={users} onRemove={() => {}} onClear={() => setPrintQueue([])} onBack={() => handleNavigate('dashboard')} />;
+            case 'content-manager': return <ContentManagerPage supabase={getSupabase()} currentContent={appContent} onContentSave={() => {}} onBack={() => handleNavigate('settings')} />;
+            case 'crop-health': return <CropHealthScannerPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'yield-prediction': return <YieldPredictionPage allFarmers={[]} onBack={() => handleNavigate('dashboard')} />;
+            case 'financial-ledger': return <FinancialLedgerPage allFarmers={[]} onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'satellite-analysis': return <SatelliteAnalysisPage onBack={() => handleNavigate('dashboard')} />;
+            case 'sustainability': return <SustainabilityDashboard onBack={() => handleNavigate('dashboard')} />;
+            case 'tasks': return <TaskManagementPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} allDirectives={[]} allTenants={tenants as any} allTerritories={[]} />;
+            case 'resource-management': return <ResourceManagementPage onBack={() => handleNavigate('settings')} />;
+            case 'distribution-report': return <DistributionReportPage onBack={() => handleNavigate('dashboard')} />;
+            case 'resource-library': return <ResourceLibraryPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'events': return <EventsPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'territory-management': return <TerritoryManagementPage onBack={() => handleNavigate('settings')} currentUser={currentUser} />;
+            case 'farmer-advisor': return <FarmerAdvisorPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} onNavigate={handleNavigate} />;
+            case 'financials': return <FinancialsPage allFarmers={[]} onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} onNavigate={handleNavigate} />;
+            case 'field-service': return <FieldServicePage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'assistance-schemes': return <AssistanceSchemesPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'quality-assessment': return <QualityAssessmentPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} allFarmers={[]} setNotification={setNotification} />;
+            case 'processing': return <ProcessingPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'equipment-management': return <EquipmentManagementPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'equipment-access': return <EquipmentAccessProgramPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'community-forum': return <CommunityForumPage currentUser={currentUser} onBack={() => handleNavigate('dashboard')} setNotification={setNotification} />;
+            case 'mentorship': return <MentorshipPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'marketplace': return <MarketplacePage onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} currentUser={currentUser} />;
+            case 'product-list': return <ProductListPage categoryId={viewParam!} onBack={() => handleNavigate('marketplace')} />;
+            case 'vendor-management': return <VendorManagementPage onBack={() => handleNavigate('settings')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'checkout': return <CheckoutPage onBack={() => handleNavigate('marketplace')} onOrderPlaced={() => handleNavigate('order-confirmation')} />;
+            case 'order-confirmation': return <OrderConfirmationPage orderId={viewParam || ''} onNavigate={handleNavigate as any} />;
+            case 'agri-store': return <AgriStorePage onBack={() => handleNavigate('dashboard')} />;
             case 'climate-resilience': return <CaelusDashboard onBack={() => handleNavigate('dashboard')} />;
             case 'hapsara-nexus': return <HapsaraNexusPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
-            case 'billing': return <BillingPage currentUser={currentUser} currentTenant={currentTenant} onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} setNotification={setNotification} />;
-            case 'financials': return <FinancialsPage allFarmers={allFarmers} onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} onNavigate={handleNavigate} />;
-            case 'statecraft-dashboard': return <StateCraftDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} allDirectives={allDirectives} allTenants={allTenants} allUsers={allUsers.map(u => ({...u, _raw: u})) as any} allTerritories={allTerritories} allDirectiveAssignments={allDirectiveAssignments} />;
+            case 'family-shield': return <FamilyShield onBack={() => handleNavigate('dashboard')} currentUser={currentUser} setNotification={setNotification} />;
+            case 'realty': return <RealtyPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'state-craft': return <StateCraftDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} allDirectives={[]} allDirectiveAssignments={[]} allTenants={tenants as any} allUsers={users as any} allTerritories={[]} />;
+            case 'samridhi': return <SamridhiDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
             default: return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
         }
     };
 
-    if (authLoading) {
-        return <div className="flex items-center justify-center h-screen">Loading...</div>;
-    }
-
-    if (!session) {
-        return supabase ? <LoginScreen supabase={supabase} /> : <LandingPage onLaunch={() => window.location.reload()} appContent={null} />;
-    }
-
     return (
-        <div className="flex h-screen bg-gray-100">
-            <Sidebar
-                view={view}
-                onNavigate={handleNavigate}
-                currentUser={currentUser}
-                currentTenant={currentTenant}
-                permissions={userPermissions}
-                onSync={handleSync}
-                isSyncing={isSyncing}
-                lastSync={lastSync}
+        <div className="flex h-screen bg-gray-100 font-sans">
+             <Sidebar 
+                activeView={currentView} 
+                onNavigate={handleNavigate} 
+                currentUser={currentUser} 
+                permissions={permissions}
                 isOnline={isOnline}
+                printQueueLength={printQueue.length}
+                onLogout={handleLogout}
+                onOpenHelp={() => setIsHelpModalOpen(true)}
             />
-             <main className="flex-1 overflow-y-auto">
-                <Suspense fallback={<div className="p-6">Loading...</div>}>
+            <main className="flex-1 overflow-y-auto relative">
+                 {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
+                 <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
                     {renderView()}
-                </Suspense>
+                 </Suspense>
             </main>
-             {notification && (
-                <Notification
-                    message={notification.message}
-                    type={notification.type}
-                    onDismiss={() => setNotification(null)}
-                />
-            )}
+
+            {/* Global Modals */}
+            <SupabaseSettingsModal isOpen={isSupabaseSettingsOpen} onClose={() => setIsSupabaseSettingsOpen(false)} onConnect={() => {}} />
+            <HelpModal onClose={() => setIsHelpModalOpen(false)} appContent={appContent} />
+            <PrivacyModal onClose={() => setIsPrivacyModalOpen(false)} appContent={appContent} />
+            <FeedbackModal onClose={() => setIsFeedbackModalOpen(false)} />
+            {isInvitationModalOpen && <InvitationModal currentUser={currentUser} onClose={() => setIsInvitationModalOpen(false)} />}
         </div>
     );
-};
+}
 
 export default App;
