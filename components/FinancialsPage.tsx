@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import withObservables from '@nozbe/with-observables';
 import { User, Farmer, EntrySource, TransactionStatus, WithdrawalAccount } from '../types';
@@ -37,7 +38,7 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
     const database = useDatabase();
     
     const transactions = useQuery(useMemo(() => 
-        wallet ? database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('wallet_id', wallet.id), Q.sortBy('created_at', 'desc')) : database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('id', 'null')),
+        wallet ? database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('wallet_id', (wallet as any).id), Q.sortBy('created_at', 'desc')) : database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('id', 'null')),
     [database, wallet]));
 
     const handleCreateWallet = async () => {
@@ -156,7 +157,7 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                 await recipientWallet.update(w => { w.balance += amount; });
                 
                 await database.get<WalletTransactionModel>('wallet_transactions').create(t => {
-                    t.walletId = senderWallet.id;
+                    t.walletId = (senderWallet as any).id;
                     t.transactionType = 'debit';
                     t.amount = amount;
                     t.source = EntrySource.P2PTransferOut;
@@ -166,7 +167,7 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                 });
                 
                 await database.get<WalletTransactionModel>('wallet_transactions').create(t => {
-                    t.walletId = recipientWallet.id;
+                    t.walletId = (recipientWallet as any).id;
                     t.transactionType = 'credit';
                     t.amount = amount;
                     t.source = EntrySource.P2PTransferIn;
@@ -195,7 +196,7 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                 await senderWallet.update(w => { w.balance -= amount; });
 
                 await database.get<WalletTransactionModel>('wallet_transactions').create(t => {
-                    t.walletId = senderWallet.id;
+                    t.walletId = (senderWallet as any).id;
                     t.transactionType = 'debit';
                     t.amount = amount;
                     t.source = EntrySource.Withdrawal;

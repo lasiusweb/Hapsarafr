@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { useCart } from '../CartContext';
 import { useDatabase } from '../DatabaseContext';
@@ -54,7 +55,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
 
                 const orderItemsPromises = items.map(item => 
                     database.get<OrderItemModel>('order_items').create(orderItem => {
-                        orderItem.orderId = newOrder!.id;
+                        orderItem.orderId = (newOrder as any).id;
                         orderItem.vendorProductId = item.vendorProduct.id;
                         orderItem.quantity = item.quantity;
                         orderItem.pricePerUnit = item.vendorProduct.price;
@@ -64,7 +65,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
             });
             clearCart();
             if (newOrder) {
-                onOrderPlaced(newOrder.id);
+                onOrderPlaced((newOrder as any).id);
             }
         } catch (error) {
             console.error('Failed to place order:', error);

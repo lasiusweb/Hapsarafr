@@ -53,7 +53,7 @@ export const getInventoryPredictions = (
         const demand = Math.round((gestationAcreage * 50) + (matureAcreage * 100)); // Mature trees need more
         if (demand > 0) {
             predictions.push({
-                productId: ureaProduct.id,
+                productId: (ureaProduct as any).id,
                 productName: ureaProduct.name,
                 category: 'Fertilizer',
                 predictedQuantity: demand,
@@ -70,7 +70,7 @@ export const getInventoryPredictions = (
     if (toolProduct && matureAcreage > 0) {
         const demand = Math.ceil(matureAcreage / 10);
         predictions.push({
-            productId: toolProduct.id,
+            productId: (toolProduct as any).id,
             productName: toolProduct.name,
             category: 'Tools',
             predictedQuantity: demand,
@@ -86,7 +86,7 @@ export const getInventoryPredictions = (
     if (boronProduct && gestationAcreage > 0) {
         const demand = Math.round(gestationAcreage * 5); // 5kg/acre estimate
          predictions.push({
-            productId: boronProduct.id,
+            productId: (boronProduct as any).id,
             productName: boronProduct.name,
             category: 'Fertilizer',
             predictedQuantity: demand,

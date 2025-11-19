@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef, Suspense } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
@@ -146,7 +147,7 @@ const SubsidyTimelineCard: React.FC<{
         const currentStyle = styles[status];
         return (
              <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 ${currentStyle.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={currentStyle.icon} />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={currentStyle.icon} />
              </svg>
         );
     };
@@ -330,7 +331,7 @@ const AssistanceTabContent = withObservables(
                         });
                     } else {
                         await database.get<AssistanceApplicationModel>('assistance_applications').create(app => {
-                            app.farmerId = farmer.id;
+                            app.farmerId = (farmer as any).id;
                             app.schemeId = scheme.id;
                             app.status = newStatus;
                             app.syncStatusLocal = 'pending';
@@ -338,7 +339,7 @@ const AssistanceTabContent = withObservables(
                         });
                     }
                     await database.get<ActivityLogModel>('activity_logs').create(log => {
-                        log.farmerId = farmer.id;
+                        log.farmerId = (farmer as any).id;
                         log.activityType = ActivityType.ASSISTANCE_STATUS_CHANGE;
                         log.description = `Status for "${scheme.title}" changed to ${newStatus}.`;
                         log.createdBy = currentUser.id;
@@ -401,7 +402,7 @@ const HarvestsTabContent = withObservables(
     ['farmer', 'database'],
     ({ farmer, database }: { farmer: FarmerModel; database: Database }) => ({
         harvests: farmer.harvests.observe(),
-        assessments: database.get<QualityAssessmentModel>('quality_assessments').query(Q.on('harvests', Q.where('farmer_id', farmer.id))).observe()
+        assessments: database.get<QualityAssessmentModel>('quality_assessments').query(Q.on('harvests', Q.where('farmer_id', (farmer as any).id))).observe()
     })
 )(({ harvests, assessments, onRecord, onDetails }: { harvests: HarvestModel[], assessments: QualityAssessmentModel[], onRecord: () => void, onDetails: (data: CombinedHarvestData) => void }) => {
     
@@ -410,7 +411,7 @@ const HarvestsTabContent = withObservables(
     const combinedData: CombinedHarvestData[] = useMemo(() => {
         return harvests.map(harvest => ({
             harvest: harvestModelToPlain(harvest)!,
-            assessment: qualityAssessmentModelToPlain(assessmentMap.get(harvest.id) || null),
+            assessment: qualityAssessmentModelToPlain(assessmentMap.get((harvest as any).id) || null),
         })).sort((a, b) => new Date(b.harvest.harvestDate).getTime() - new Date(a.harvest.harvestDate).getTime());
     }, [harvests, assessmentMap]);
     
@@ -506,7 +507,7 @@ const KycTabContent = withObservables(['farmer'], ({ farmer }: { farmer: FarmerM
                     </span>
                 </div>
                 {accounts.map(acc => (
-                     <div key={acc.id} className="p-4 border rounded-lg">
+                     <div key={(acc as any).id} className="p-4 border rounded-lg">
                         <p className="font-semibold text-gray-700">Registered Account</p>
                         <p className="text-sm text-gray-600">Type: <span className="font-medium capitalize">{acc.accountType.replace('_', ' ')}</span></p>
                         <p className="text-sm text-gray-600">Details: <span className="font-medium font-mono">{acc.details}</span></p>
@@ -529,26 +530,26 @@ const ServiceProvidersTab = withObservables(['farmer'], ({ farmer }: { farmer: F
     onRevokeConsent: (consentRecord: FarmerDealerConsentModel) => void;
 }) => {
 
-    const tenantMap = useMemo(() => new Map(allTenants.map(t => [t.id, t.name])), [allTenants]);
+    const tenantMap = useMemo(() => new Map(allTenants.map(t => [(t as any).id, t.name])), [allTenants]);
 
     const activeConsents = useMemo(() => consents.filter(c => c.isActive), [consents]);
-    const activeConsentTenantIds = useMemo(() => new Set(activeConsents.map(c => c.tenantId)), [activeConsents]);
+    const activeConsentTenantIds = useMemo(() => new Set(activeConsents.map(c => (c as any).tenantId)), [activeConsents]);
 
     const availableDealers = useMemo(() => {
         const farmerAdminCode = `${farmer.district}-${farmer.mandal}`;
-        const serviceAreaTenantIds = new Set(allTerritories.filter(t => t.administrativeCode === farmerAdminCode).map(t => t.tenantId));
+        const serviceAreaTenantIds = new Set(allTerritories.filter(t => (t as any).administrativeCode === farmerAdminCode).map(t => (t as any).tenantId));
         
         return allTenants.filter(t => 
-            serviceAreaTenantIds.has(t.id) && 
-            !activeConsentTenantIds.has(t.id) &&
-            t.id !== farmer.tenantId
+            serviceAreaTenantIds.has((t as any).id) && 
+            !activeConsentTenantIds.has((t as any).id) &&
+            (t as any).id !== farmer.tenantId
         );
     }, [allTerritories, allTenants, farmer, activeConsentTenantIds]);
 
     const allConsentedTenants = useMemo(() => {
         const consented = activeConsents.map(c => ({
-            id: c.tenantId,
-            name: tenantMap.get(c.tenantId) || 'Unknown Tenant',
+            id: (c as any).tenantId,
+            name: tenantMap.get((c as any).tenantId) || 'Unknown Tenant',
             isOriginal: false,
             consentRecord: c,
         }));
@@ -589,9 +590,9 @@ const ServiceProvidersTab = withObservables(['farmer'], ({ farmer }: { farmer: F
                 {availableDealers.length > 0 ? (
                     <div className="space-y-3">
                         {availableDealers.map(tenant => (
-                            <div key={tenant.id} className="p-4 border rounded-lg flex justify-between items-center bg-gray-50">
+                            <div key={(tenant as any).id} className="p-4 border rounded-lg flex justify-between items-center bg-gray-50">
                                 <p className="font-semibold text-gray-700">{tenant.name}</p>
-                                <button onClick={() => onOpenConsentModal({id: tenant.id, name: tenant.name}, null)} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 font-semibold">Manage Consent</button>
+                                <button onClick={() => onOpenConsentModal({id: (tenant as any).id, name: tenant.name}, null)} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 font-semibold">Manage Consent</button>
                             </div>
                         ))}
                     </div>
@@ -632,7 +633,7 @@ const FieldServiceTab = withObservables(
             </div>
             <div className="space-y-3">
                 {visitRequests.map(req => (
-                    <div key={req.id} onClick={() => onOpenDetailsModal(req)} className={`p-4 border rounded-lg hover:bg-gray-100 cursor-pointer ${req.status === VisitRequestStatus.Completed ? 'bg-green-50' : 'bg-gray-50'}`}>
+                    <div key={(req as any).id} onClick={() => onOpenDetailsModal(req)} className={`p-4 border rounded-lg hover:bg-gray-100 cursor-pointer ${req.status === VisitRequestStatus.Completed ? 'bg-green-50' : 'bg-gray-50'}`}>
                         <div className="flex justify-between items-start">
                             <div>
                                 <p className="font-semibold text-gray-800">{req.reason}</p>
@@ -683,8 +684,10 @@ const EnrichedCropAssignment = withObservables(
                     <h6 className="text-xs font-bold text-gray-600 mb-1">Logged Harvests:</h6>
                     <ul className="space-y-1 text-xs text-gray-500">
                         {harvests.map(h => (
-                            <li key={h.id} className="flex justify-between">
-                                <span>{new Date(h.harvestDate).toLocaleDateString()}</span>
+                            <li key={(h as any).id} className="flex justify-between">
+                                <span>{new Date(h.harvestDate).toLocaleDateString()}</
+
+                                span>
                                 <span className="font-medium">{h.quantity} {h.unit}</span>
                             </li>
                         ))}
@@ -731,7 +734,7 @@ const PlotTimeline = withObservables(
                     <div className="space-y-3">
                         {assignments.map(assignment => (
                             <EnrichedCropAssignment
-                                key={assignment.id}
+                                key={(assignment as any).id}
                                 assignment={assignment}
                                 onLogHarvest={onLogHarvest}
                             />
@@ -745,7 +748,7 @@ const PlotTimeline = withObservables(
                         <h6 className="text-xs font-bold text-gray-600 mb-2">Recent Inputs:</h6>
                         <ul className="space-y-2 text-xs text-gray-600">
                             {agronomicInputs.slice(0, 3).map(input => (
-                                <li key={input.id} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                                <li key={(input as any).id} className="flex justify-between items-center bg-gray-50 p-2 rounded">
                                     <div>
                                         <span className="font-semibold text-gray-800">{input.name}</span> ({input.inputType})
                                     </div>
@@ -781,14 +784,14 @@ const FarmPortfolioTab = withObservables(
         if (acreage > 0) {
             await database.write(async () => {
                 const newPlot = await database.get<FarmPlotModel>('farm_plots').create(p => {
-                    p.farmerId = farmer.id;
+                    p.farmerId = (farmer as any).id;
                     p.acreage = acreage;
                     p.name = `Plot ${farmPlots.length + 1}`;
                     p.tenantId = currentUser.tenantId; // Set tenantId
                     p.syncStatusLocal = 'pending';
                 });
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.FARM_PLOT_CREATED;
                     log.description = `Created a new plot '${newPlot.name}' of ${acreage} acres.`;
                     log.createdBy = currentUser.id;
@@ -803,14 +806,14 @@ const FarmPortfolioTab = withObservables(
         try {
             await database.write(async () => {
                 await database.get<AgronomicInputModel>('agronomic_inputs').create(input => {
-                    input.farmPlotId = plotForInput.id;
+                    input.farmPlotId = (plotForInput as any).id;
                     Object.assign(input, data);
                     input.createdBy = currentUser.id;
                     input.tenantId = currentUser.tenantId;
                     input.syncStatusLocal = 'pending';
                 });
 
-                const farmPlot = await database.get<FarmPlotModel>('farm_plots').find(plotForInput.id);
+                const farmPlot = await database.get<FarmPlotModel>('farm_plots').find((plotForInput as any).id);
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
                     log.farmerId = farmPlot.farmerId;
                     log.activityType = ActivityType.AGRONOMIC_INPUT_LOGGED;
@@ -839,7 +842,7 @@ const FarmPortfolioTab = withObservables(
                  <div className="space-y-6">
                     {farmPlots.map(plot => (
                         <PlotTimeline
-                            key={plot.id}
+                            key={(plot as any).id}
                             plot={plot}
                             onAssignCrop={setPlotToAssign}
                             onLogHarvest={setAssignmentToLog}
@@ -987,7 +990,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 });
             } else { // Create new payment
                 await database.get<SubsidyPaymentModel>('subsidy_payments').create(p => {
-                    p.farmerId = farmer.id;
+                    p.farmerId = (farmer as any).id;
                     p.paymentDate = paymentData.paymentDate;
                     p.amount = paymentData.amount;
                     p.utrNumber = paymentData.utrNumber;
@@ -999,7 +1002,7 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                 });
 
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.PAYMENT_RECORDED;
                     log.description = `${paymentData.paymentStage} of ₹${paymentData.amount.toLocaleString()} recorded.`;
                     log.createdBy = currentUser.id;
@@ -1036,21 +1039,21 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
                         c.isActive = true;
                         c.permissionsJson = JSON.stringify(consentData);
                         c.grantedBy = 'OFFICER';
-                        c.syncStatusLocal = 'pending';
+                        c.syncStatus = 'pending';
                     });
                 } else {
                     await database.get<FarmerDealerConsentModel>('farmer_dealer_consents').create(c => {
-                        c.farmerId = farmer.id;
+                        c.farmerId = (farmer as any).id;
                         c.tenantId = tenant.id;
                         c.isActive = true;
                         c.permissionsJson = JSON.stringify(consentData);
                         c.grantedBy = 'OFFICER';
-                        c.syncStatusLocal = 'pending';
+                        c.syncStatus = 'pending';
                     });
                 }
                 
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = farmer.id;
+                    log.farmerId = (farmer as any).id;
                     log.activityType = ActivityType.DATA_CONSENT_UPDATED;
                     log.description = `Data sharing consent updated for ${tenant.name}.`;
                     log.createdBy = currentUser.id;
@@ -1066,16 +1069,16 @@ const InnerFarmerDetailsPage: React.FC<{ farmer: FarmerModel; subsidyPayments: S
     }, [consentModal, database, farmer, currentUser, setNotification]);
 
     const handleRevokeConsent = useCallback(async (consentRecord: FarmerDealerConsentModel) => {
-        const partnerTenant = allTenants.find(t => t.id === consentRecord.tenantId);
+        const partnerTenant = allTenants.find(t => (t as any).id === consentRecord.tenantId);
         if(window.confirm(`Are you sure you want to revoke data sharing consent for ${partnerTenant?.name || 'this partner'}?`)) {
             try {
                 await database.write(async () => {
                     await (consentRecord as any).update((c: FarmerDealerConsentModel) => {
                         c.isActive = false;
-                        c.syncStatusLocal = 'pending';
+                        c.syncStatus = 'pending';
                     });
                     await database.get<ActivityLogModel>('activity_logs').create(log => {
-                        log.farmerId = farmer.id;
+                        log.farmerId = (farmer as any).id;
                         log.activityType = ActivityType.DEALER_CONSENT_REVOKED;
                         log.description = `Data sharing consent revoked for ${partnerTenant?.name || 'partner'}.`;
                         log.createdBy = currentUser.id;

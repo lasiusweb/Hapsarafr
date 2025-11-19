@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Tenant, LedgerTransactionType } from '../types';
 import { useDatabase } from '../DatabaseContext';

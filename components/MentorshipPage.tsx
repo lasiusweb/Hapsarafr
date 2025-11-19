@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -69,7 +70,7 @@ const FindMentorTab: React.FC<{ currentUser: User, setNotification: (n: any) => 
         try {
             await database.write(async () => {
                 await database.get<MentorshipModel>('mentorships').create(m => {
-                    m.mentorId = mentor.id;
+                    m.mentorId = (mentor as any).id;
                     m.menteeId = currentUser.id;
                     m.status = 'pending';
                 });
@@ -88,14 +89,14 @@ const FindMentorTab: React.FC<{ currentUser: User, setNotification: (n: any) => 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {mentors.map(mentor => {
-                const profile = mentorProfiles.find(p => p.userId === mentor.id);
+                const profile = mentorProfiles.find(p => p.userId === (mentor as any).id);
                 let tags = [];
                 try {
                     tags = profile ? JSON.parse(profile.expertiseTags || '[]') : [];
                 } catch(e) { console.error("Error parsing tags", e)}
                 
                 return (
-                    <div key={mentor.id} className="bg-white p-6 rounded-lg shadow-md border flex flex-col">
+                    <div key={(mentor as any).id} className="bg-white p-6 rounded-lg shadow-md border flex flex-col">
                         <div className="flex items-center gap-4 mb-4">
                             <img src={mentor.avatar} alt={mentor.name} className="w-16 h-16 rounded-full" />
                             <div>

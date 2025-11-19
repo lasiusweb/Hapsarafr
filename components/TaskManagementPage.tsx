@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -99,8 +100,8 @@ const TaskModal: React.FC<{
             setFormState({
                 title: task.title,
                 description: task.description || '',
-                status: task.status,
-                priority: task.priority,
+                status: task.status as TaskStatus,
+                priority: task.priority as TaskPriority,
                 dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
                 assigneeId: task.assigneeId || '',
                 farmerId: task.farmerId || '',
@@ -135,7 +136,7 @@ const TaskModal: React.FC<{
             createdBy: task?.createdBy || currentUser.id,
             tenantId: task?.tenantId || currentUser.tenantId,
             source: task?.source || 'INTERNAL',
-            directive_assignment_id: task?.directiveAssignmentId,
+            directiveAssignmentId: task?.directiveAssignmentId,
         };
         if (isGovtTask) {
             dataToSave.completion_evidence_json = JSON.stringify({ notes: formState.completionNotes, photoUrl: formState.completionPhoto });
@@ -209,13 +210,13 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
     const tenantMap = useMemo(() => new Map(allTenants.map(t => [t.id, t.name])), [allTenants]);
 
     const handleClaimDirective = useCallback(async (directive: DirectiveModel) => {
-        const assignment = myPendingAssignments.find(a => a.directiveId === directive.id);
+        const assignment = myPendingAssignments.find(a => a.directiveId === (directive as any).id);
         if (!assignment) return;
 
         await database.write(async () => {
             await assignment.update(a => {
                 a.status = 'Claimed';
-                a.claimedAt = new Date();
+                a.claimedAt = new Date().toISOString();
                 a.syncStatusLocal = 'pending';
             });
         });
@@ -237,9 +238,9 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
             }
     
             // --- NEW LOGIC for closing the loop on directives ---
-            if (taskData.status === TaskStatus.Done && taskData.directive_assignment_id) {
+            if (taskData.status === TaskStatus.Done && taskData.directiveAssignmentId) {
                 // 1. Update the assignment
-                const assignment = await database.get<DirectiveAssignmentModel>('directive_assignments').find(taskData.directive_assignment_id);
+                const assignment = await database.get<DirectiveAssignmentModel>('directive_assignments').find(taskData.directiveAssignmentId);
                 await assignment.update(a => {
                     a.status = 'Completed';
                     a.completionDetailsJson = taskData.completion_evidence_json;
@@ -288,7 +289,7 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
             }
             await database.write(async () => {
                 await task.update(t => {
-                    t.status = newStatus;
+                    t.status = newStatus as string;
                     t.syncStatusLocal = 'pending';
                 });
             });
@@ -302,8 +303,8 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
             [TaskStatus.Done]: [],
         };
         tasks.forEach(task => {
-            if (grouped[task.status]) {
-                grouped[task.status].push(task);
+            if (grouped[task.status as TaskStatus]) {
+                grouped[task.status as TaskStatus].push(task);
             }
         });
         return grouped;
@@ -338,7 +339,7 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
                         <h3 className="p-4 text-lg font-semibold text-blue-800 border-b">Open Directives from Government</h3>
                         <div className="p-4 space-y-3 max-h-60 overflow-y-auto">
                             {openDirectives.map(d => (
-                                <div key={d.id} className="bg-white p-3 rounded-md flex justify-between items-center">
+                                <div key={(d as any).id} className="bg-white p-3 rounded-md flex justify-between items-center">
                                     <div>
                                         <p className="font-semibold">{d.taskType} ({d.priority})</p>
                                         <p className="text-sm text-gray-600">Area: {d.administrativeCode}</p>

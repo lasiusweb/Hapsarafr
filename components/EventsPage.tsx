@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -101,7 +102,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ onBack, currentUser, setNotific
     }, [database, currentUser, setNotification]);
     
     const handleRsvp = useCallback(async (event: EventModel) => {
-        const eventRsvps = rsvpsByEventId[event.id] || [];
+        const eventRsvps = rsvpsByEventId[(event as any).id] || [];
         const existingRsvp = eventRsvps.find(r => r.userId === currentUser.id);
 
         try {
@@ -110,7 +111,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ onBack, currentUser, setNotific
                     await existingRsvp.destroyPermanently();
                 } else {
                     await database.get<EventRsvpModel>('event_rsvps').create(r => {
-                        r.eventId = event.id;
+                        r.eventId = (event as any).id;
                         r.userId = currentUser.id;
                         r.syncStatusLocal = 'pending';
                     });
@@ -136,12 +137,12 @@ const EventsPage: React.FC<EventsPageProps> = ({ onBack, currentUser, setNotific
 
                 <div className="space-y-6">
                     {events.length > 0 ? events.map(event => {
-                        const eventRsvps = rsvpsByEventId[event.id] || [];
+                        const eventRsvps = rsvpsByEventId[(event as any).id] || [];
                         const hasRsvpd = eventRsvps.some(r => r.userId === currentUser.id);
                         const author = userMap.get(event.createdBy);
 
                         return (
-                            <div key={event.id} className="bg-white p-6 rounded-lg shadow-md border">
+                            <div key={(event as any).id} className="bg-white p-6 rounded-lg shadow-md border">
                                 <div className="flex flex-col md:flex-row gap-6">
                                     <div className="text-center md:border-r md:pr-6">
                                         <p className="text-3xl font-bold text-green-600">{new Date(event.eventDate).getDate()}</p>

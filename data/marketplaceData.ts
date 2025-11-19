@@ -1,3 +1,4 @@
+
 import { ProductCategory, Vendor, Product, VendorProduct, VendorStatus } from '../types';
 
 export const SAMPLE_CATEGORIES: Omit<ProductCategory, 'tenantId'>[] = [
@@ -49,6 +50,7 @@ export const SAMPLE_PRODUCTS: Omit<Product, 'tenantId' | 'createdAt'>[] = [
         imageUrl: '', // No valid image URL available, will fallback to placeholder icon
         categoryId: 'cat_fertilizers',
         isQualityVerified: true,
+        type: 'Agricultural Input'
     },
     {
         id: 'prod_dap',
@@ -57,6 +59,7 @@ export const SAMPLE_PRODUCTS: Omit<Product, 'tenantId' | 'createdAt'>[] = [
         imageUrl: '',
         categoryId: 'cat_fertilizers',
         isQualityVerified: true,
+        type: 'Agricultural Input'
     },
     {
         id: 'prod_neem_oil',
@@ -65,6 +68,7 @@ export const SAMPLE_PRODUCTS: Omit<Product, 'tenantId' | 'createdAt'>[] = [
         imageUrl: '',
         categoryId: 'cat_pesticides',
         isQualityVerified: true,
+        type: 'Agricultural Input'
     },
     {
         id: 'prod_harvesting_sickle',
@@ -73,6 +77,7 @@ export const SAMPLE_PRODUCTS: Omit<Product, 'tenantId' | 'createdAt'>[] = [
         imageUrl: '',
         categoryId: 'cat_tools',
         isQualityVerified: true,
+        type: 'Agricultural Input'
     }
 ];
 

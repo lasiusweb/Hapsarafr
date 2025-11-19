@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { User, VendorStatus } from '../types';
 import { useDatabase } from '../DatabaseContext';
@@ -73,8 +74,8 @@ const CreateListingModal: React.FC<CreateListingModalProps> = ({ onClose, curren
                 
                 // 3. Create the vendor_product (the listing)
                 await database.get<VendorProductModel>('vendor_products').create(vp => {
-                    vp.vendorId = vendorRecord.id;
-                    vp.productId = newProduct.id;
+                    vp.vendorId = (vendorRecord as any).id;
+                    vp.productId = (newProduct as any).id;
                     vp.price = parseFloat(formState.price);
                     vp.stockQuantity = parseInt(formState.stockQuantity, 10);
                     vp.unit = formState.unit;

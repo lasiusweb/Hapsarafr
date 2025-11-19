@@ -1,3 +1,4 @@
+
 import { Database, Q } from '@nozbe/watermelondb';
 import { TenantModel, FreeTierUsageModel, CreditLedgerEntryModel, ServiceConsumptionLogModel } from '../db';
 import { BillableEvent, LedgerTransactionType } from '../types';

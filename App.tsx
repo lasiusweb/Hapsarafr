@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import { Farmer, User, Tenant, Permission } from './types';
@@ -69,6 +70,9 @@ const FamilyShield = lazy(() => import('./components/FamilyShield'));
 const RealtyPage = lazy(() => import('./components/RealtyPage'));
 const MitraDashboard = lazy(() => import('./components/MitraDashboard'));
 const SamridhiDashboard = lazy(() => import('./components/SamridhiDashboard'));
+const SeedRegistryPage = lazy(() => import('./components/SeedRegistryPage'));
+const PerformanceTracker = lazy(() => import('./components/PerformanceTracker'));
+const CommoditexDashboard = lazy(() => import('./components/CommoditexDashboard'));
 
 function App() {
     const database = useDatabase();
@@ -203,6 +207,9 @@ function App() {
             case 'realty': return <RealtyPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
             case 'state-craft': return <StateCraftDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} allDirectives={[]} allDirectiveAssignments={[]} allTenants={tenants as any} allUsers={users as any} allTerritories={[]} />;
             case 'samridhi': return <SamridhiDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'genetica': return <SeedRegistryPage onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
+            case 'performance-tracker': return <PerformanceTracker onBack={() => handleNavigate('genetica')} currentUser={currentUser} />;
+            case 'commoditex': return <CommoditexDashboard onBack={() => handleNavigate('dashboard')} currentUser={currentUser} />;
             default: return <NotFoundPage onBack={() => handleNavigate('dashboard')} />;
         }
     };

@@ -1,3 +1,4 @@
+
 import { BillableEvent } from '../types';
 
 export const SERVICE_PRICING: Record<BillableEvent, number> = {

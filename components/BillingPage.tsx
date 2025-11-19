@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { User, Tenant, CreditLedgerEntry, LedgerTransactionType } from '../types';
 import { useDatabase } from '../DatabaseContext';
@@ -33,7 +34,7 @@ const BillingPage: React.FC<BillingPageProps> = ({ currentUser, currentTenant, o
     };
     
     const getTransactionDescription = (tx: CreditLedgerEntry) => {
-        switch(tx.transaction_type) {
+        switch(tx.transactionType) {
             case LedgerTransactionType.PURCHASE: return `Purchased ${tx.amount} Credits`;
             case LedgerTransactionType.CONSUMPTION: return `Used ${-tx.amount} Credits for Service`;
             case LedgerTransactionType.REFUND: return `Refund of ${tx.amount} Credits`;
@@ -53,7 +54,7 @@ const BillingPage: React.FC<BillingPageProps> = ({ currentUser, currentTenant, o
                             <p className="text-gray-500">Manage your credits and view transaction history.</p>
                         </div>
                         <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                             Back to Dashboard
                         </button>
                     </div>

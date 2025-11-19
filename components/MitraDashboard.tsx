@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -175,7 +174,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
 
     const handleOrderStatus = async (order: OrderModel, status: string) => {
         await database.write(async () => {
-            await (order as any).update((o: OrderModel) => { o.status = status; o.syncStatusLocal = 'pending'; });
+            await (order as any).update((o: OrderModel) => { o.status = status; o.syncStatus = 'pending'; });
         });
     };
 

@@ -1,40 +1,41 @@
+
 import { Crop, CropVerificationStatus } from '../types';
 
-export const SAMPLE_CROPS: Omit<Crop, 'id' | 'tenant_id'>[] = [
+export const SAMPLE_CROPS: Omit<Crop, 'id' | 'tenantId'>[] = [
     {
         name: 'Oil Palm',
-        is_perennial: true,
-        default_unit: 'ton',
-        verification_status: CropVerificationStatus.Verified,
+        isPerennial: true,
+        defaultUnit: 'ton',
+        verificationStatus: CropVerificationStatus.Verified,
     },
     {
         name: 'Paddy',
-        is_perennial: false,
-        default_unit: 'quintal',
-        verification_status: CropVerificationStatus.Verified,
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
     },
     {
         name: 'Maize',
-        is_perennial: false,
-        default_unit: 'quintal',
-        verification_status: CropVerificationStatus.Verified,
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
     },
     {
         name: 'Cotton',
-        is_perennial: false,
-        default_unit: 'quintal',
-        verification_status: CropVerificationStatus.Verified,
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
     },
     {
         name: 'Groundnut',
-        is_perennial: false,
-        default_unit: 'quintal',
-        verification_status: CropVerificationStatus.Verified,
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
     },
     {
         name: 'Chilli',
-        is_perennial: false,
-        default_unit: 'kg',
-        verification_status: CropVerificationStatus.Verified,
+        isPerennial: false,
+        defaultUnit: 'kg',
+        verificationStatus: CropVerificationStatus.Verified,
     },
 ];

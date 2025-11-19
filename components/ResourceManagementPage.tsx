@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -56,7 +57,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
     };
 
     const handleDelete = async (resource: ResourceModel) => {
-        const usageCount = await database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('resource_id', resource.id)).fetchCount();
+        const usageCount = await database.get<ResourceDistributionModel>('resource_distributions').query(Q.where('resource_id', (resource as any).id)).fetchCount();
         if (usageCount > 0) {
             alert(`Cannot delete "${resource.name}". It has been distributed ${usageCount} time(s).`);
             return;
@@ -67,7 +68,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
     const confirmDelete = async () => {
         if (itemToDelete) {
             await database.write(async () => {
-                await itemToDelete.destroyPermanently();
+                await (itemToDelete as any).destroyPermanently();
             });
             setItemToDelete(null);
         }
@@ -105,7 +106,7 @@ const ResourceManagementPage: React.FC<ResourceManagementPageProps> = ({ onBack 
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {resources.map(r => (
-                                    <tr key={r.id}>
+                                    <tr key={(r as any).id}>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{r.name}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{r.unit}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">{formatCurrency(r.cost || 0)}</td>
