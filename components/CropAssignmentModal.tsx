@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -27,6 +28,23 @@ const CropAssignmentModal: React.FC<CropAssignmentModalProps> = ({ farmPlot, onC
 
     const crops = useQuery(useMemo(() => database.get<CropModel>('crops').query(Q.where('verification_status', CropVerificationStatus.Verified)), [database]));
     const cropOptions = useMemo(() => crops.map(c => ({ value: c.id, label: c.name })), [crops]);
+
+    // Seed sample data if empty (development convenience)
+    useMemo(async () => {
+         if (crops.length === 0) {
+             await database.write(async () => {
+                 for (const crop of SAMPLE_CROPS) {
+                     await database.get<CropModel>('crops').create(c => {
+                         c.name = crop.name;
+                         c.isPerennial = crop.isPerennial;
+                         c.defaultUnit = crop.defaultUnit;
+                         c.verificationStatus = crop.verificationStatus;
+                         c.tenantId = currentUser.tenantId;
+                     });
+                 }
+             });
+         }
+    }, [crops.length, database, currentUser.tenantId]);
 
     const handleSave = async () => {
         setIsSubmitting(true);

@@ -1,6 +1,7 @@
 
 
 
+
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
@@ -906,7 +907,6 @@ const schema = appSchema({
         { name: 'valid_until', type: 'number' },
       ]
     }),
-    // Caelus - Climate Resilience
     tableSchema({
         name: 'climate_risk_cache',
         columns: [
@@ -1041,6 +1041,38 @@ const schema = appSchema({
         { name: 'is_required', type: 'boolean' },
         { name: 'sort_order', type: 'number' },
       ]
+    }),
+    // Agros - Multi-Crop
+    tableSchema({
+        name: 'crops',
+        columns: [
+            { name: 'name', type: 'string' },
+            { name: 'is_perennial', type: 'boolean' },
+            { name: 'default_unit', type: 'string' },
+            { name: 'verification_status', type: 'string' },
+            { name: 'tenant_id', type: 'string', isIndexed: true },
+        ]
+    }),
+    tableSchema({
+        name: 'crop_assignments',
+        columns: [
+            { name: 'farm_plot_id', type: 'string', isIndexed: true },
+            { name: 'crop_id', type: 'string', isIndexed: true },
+            { name: 'season', type: 'string' },
+            { name: 'year', type: 'number' },
+            { name: 'is_primary_crop', type: 'boolean' },
+        ]
+    }),
+    tableSchema({
+        name: 'harvest_logs',
+        columns: [
+            { name: 'crop_assignment_id', type: 'string', isIndexed: true },
+            { name: 'harvest_date', type: 'string' },
+            { name: 'quantity', type: 'number' },
+            { name: 'unit', type: 'string' },
+            { name: 'notes', type: 'string', isOptional: true },
+            { name: 'created_by', type: 'string' },
+        ]
     }),
   ]
 });

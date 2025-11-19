@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef, Suspense } from 'react';
 import { Database } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
@@ -32,6 +34,7 @@ const GranularConsentModal = lazy(() => import('./GranularConsentModal'));
 const CropAssignmentModal = lazy(() => import('./CropAssignmentModal'));
 const HarvestLogger = lazy(() => import('./HarvestLogger'));
 const AgronomicInputModal = lazy(() => import('./components/AgronomicInputModal'));
+const PlotFormModal = lazy(() => import('./PlotFormModal'));
 
 
 declare var QRCode: any;
@@ -731,13 +734,15 @@ const PlotTimeline = withObservables(
         assignments: plot.cropAssignments.observe(Q.sortBy('year', Q.desc)),
         agronomicInputs: plot.agronomicInputs.observe(Q.sortBy('input_date', 'desc')),
     })
-)(({ plot, assignments, agronomicInputs, onAssignCrop, onLogHarvest, onLogInput }: {
+)(({ plot, assignments, agronomicInputs, onAssignCrop, onLogHarvest, onLogInput, onEditPlot, onDeletePlot }: {
     plot: FarmPlotModel;
     assignments: CropAssignmentModel[];
     agronomicInputs: AgronomicInputModel[];
     onAssignCrop: (plot: FarmPlotModel) => void;
     onLogHarvest: (assignment: CropAssignmentModel) => void;
     onLogInput: (plot: FarmPlotModel) => void;
+    onEditPlot: (plot: FarmPlotModel) => void;
+    onDeletePlot: (plot: FarmPlotModel) => void;
 }) => {
     return (
         <Card>
@@ -747,15 +752,18 @@ const PlotTimeline = withObservables(
                     <p className="text-xs text-gray-500">{plot.acreage} Acres • {plot.soilType || 'Soil Unknown'}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => onLogInput(plot)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-md hover:bg-gray-50 transition">Log Input</button>
-                    <button
-                        onClick={() => onAssignCrop(plot)}
-                        className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 font-semibold shadow-sm"
-                    >
-                        Assign Crop
+                    <button onClick={() => onEditPlot(plot)} className="text-blue-600 hover:text-blue-800 p-1" title="Edit Plot">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                    </button>
+                    <button onClick={() => onDeletePlot(plot)} className="text-red-600 hover:text-red-800 p-1" title="Delete Plot">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                     </button>
                 </div>
             </CardHeader>
+            <div className="px-6 py-2 bg-gray-50 border-b flex gap-2">
+                 <button onClick={() => onLogInput(plot)} className="flex-1 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-md hover:bg-gray-50 transition">Log Input</button>
+                 <button onClick={() => onAssignCrop(plot)} className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 font-semibold shadow-sm">Assign Crop</button>
+            </div>
             <CardContent className="pt-4">
                 {assignments.length > 0 ? (
                     <div className="space-y-3">
@@ -800,10 +808,6 @@ const FarmPortfolioTab = withObservables(
     ['farmer'],
     ({ farmer }: { farmer: FarmerModel }) => ({
         farmPlots: farmer.farmPlots.observe(Q.sortBy('created_at', 'asc')),
-        // Observe active assignments across all plots for the summary dashboard
-        // This is complex with WatermelonDB's observable structure. 
-        // We will simplify by just observing plots, and calculating summary in the render based on loaded data or separate queries if needed.
-        // For now, the summary will be based on plot data.
     })
 )(({ farmPlots, farmer, currentUser, setNotification }: { farmPlots: FarmPlotModel[], farmer: FarmerModel, currentUser: User, setNotification: (n: any) => void }) => {
 
@@ -811,32 +815,104 @@ const FarmPortfolioTab = withObservables(
     const [plotToAssign, setPlotToAssign] = useState<FarmPlotModel | null>(null);
     const [assignmentToLog, setAssignmentToLog] = useState<CropAssignmentModel | null>(null);
     const [plotForInput, setPlotForInput] = useState<FarmPlotModel | null>(null);
+    
+    // Modal States
+    const [isPlotModalOpen, setIsPlotModalOpen] = useState(false);
+    const [editingPlot, setEditingPlot] = useState<FarmPlotModel | null>(null);
+    
+    // Financial & Diversification Stats
+    const [totalHarvestValue, setTotalHarvestValue] = useState(0);
+    const [activeCrops, setActiveCrops] = useState<string[]>([]);
 
-    // Calculated summary stats (would be better if pre-calculated or using specialized queries)
+    // Calculate summary stats
     const totalAcreage = farmPlots.reduce((sum, p) => sum + p.acreage, 0);
     
-    const handleAddPlot = async () => {
-        const acreageStr = prompt("Enter acreage for the new plot:");
-        const acreage = parseFloat(acreageStr || '0');
-        if (acreage > 0) {
+    // Effect to calculate aggregated financial data (doing this in a single effect to avoid too many re-renders)
+    useEffect(() => {
+        const calculateStats = async () => {
+             if (farmPlots.length === 0) {
+                 setTotalHarvestValue(0);
+                 setActiveCrops([]);
+                 return;
+             }
+             
+             let totalVal = 0;
+             const uniqueCrops = new Set<string>();
+             
+             for (const plot of farmPlots) {
+                 const assignments = await plot.cropAssignments.fetch();
+                 for (const assignment of assignments) {
+                     const crop = await assignment.crop.fetch();
+                     if (crop) uniqueCrops.add(crop.name);
+                     
+                     const harvests = await assignment.harvestLogs.fetch();
+                     for (const harvest of harvests) {
+                         // Simple estimation logic (similar to EnrichedCropAssignment)
+                         // For aggregation, we use a fixed rough price or fetch from Oracle if performant
+                         // Defaulting to 10,000 INR/ton roughly for Oil Palm
+                         let price = 10000; 
+                         if (crop?.name !== 'Oil Palm') price = 2000; // Generic other price
+                         
+                         let multiplier = 1;
+                         if (harvest.unit === 'kg') multiplier = 0.001;
+                         if (harvest.unit === 'quintal') multiplier = 0.1;
+                         
+                         totalVal += (harvest.quantity * multiplier * price);
+                     }
+                 }
+             }
+             setTotalHarvestValue(totalVal);
+             setActiveCrops(Array.from(uniqueCrops));
+        };
+        calculateStats();
+    }, [farmPlots]); // Re-run when plots change. Ideally should trigger on harvest log changes too.
+
+    const handleSavePlot = async (data: any, mode: 'create' | 'edit') => {
+        try {
             await database.write(async () => {
-                const newPlot = await database.get<FarmPlotModel>('farm_plots').create(p => {
-                    p.farmerId = (farmer as any).id;
-                    p.acreage = acreage;
-                    p.name = `Plot ${farmPlots.length + 1}`;
-                    p.tenantId = currentUser.tenantId;
-                    p.syncStatusLocal = 'pending';
-                });
-                await database.get<ActivityLogModel>('activity_logs').create(log => {
-                    log.farmerId = (farmer as any).id;
-                    log.activityType = ActivityType.FARM_PLOT_CREATED;
-                    log.description = `Created a new plot '${newPlot.name}' of ${acreage} acres.`;
-                    log.createdBy = currentUser.id;
-                    log.tenantId = currentUser.tenantId;
-                });
+                if (mode === 'edit' && editingPlot) {
+                    await editingPlot.update(p => {
+                         Object.assign(p, data);
+                         p.syncStatusLocal = 'pending';
+                    });
+                } else {
+                    const newPlot = await database.get<FarmPlotModel>('farm_plots').create(p => {
+                        p.farmerId = (farmer as any).id;
+                        Object.assign(p, data);
+                        p.tenantId = currentUser.tenantId;
+                        p.syncStatusLocal = 'pending';
+                    });
+                    
+                    await database.get<ActivityLogModel>('activity_logs').create(log => {
+                        log.farmerId = (farmer as any).id;
+                        log.activityType = ActivityType.FARM_PLOT_CREATED;
+                        log.description = `Created new plot '${newPlot.name}' of ${newPlot.acreage} acres.`;
+                        log.createdBy = currentUser.id;
+                        log.tenantId = currentUser.tenantId;
+                    });
+                }
             });
+            setIsPlotModalOpen(false);
+            setEditingPlot(null);
+            setNotification({ message: `Plot ${mode === 'edit' ? 'updated' : 'created'} successfully.`, type: 'success' });
+        } catch (e) {
+            console.error("Failed to save plot", e);
+            setNotification({ message: 'Failed to save plot.', type: 'error' });
         }
     };
+
+    const handleDeletePlot = async (plot: FarmPlotModel) => {
+        if(window.confirm(`Are you sure you want to delete plot "${plot.name}"? This will remove all associated crop history.`)) {
+             try {
+                await database.write(async () => {
+                    await plot.destroyPermanently(); // Cascading deletes handled by DB or manual cleanup if needed
+                });
+                setNotification({ message: 'Plot deleted.', type: 'info' });
+             } catch (e) {
+                 setNotification({ message: 'Failed to delete plot.', type: 'error' });
+             }
+        }
+    }
 
     const handleLogInput = async (data: any) => {
         if (!plotForInput) return;
@@ -876,13 +952,12 @@ const FarmPortfolioTab = withObservables(
                         <h3 className="text-lg font-bold text-indigo-900">Farm Overview</h3>
                         <p className="text-sm text-indigo-700">At a glance summary of {farmer.fullName}'s operations.</p>
                     </div>
-                    <button className="text-xs font-semibold text-indigo-600 hover:underline bg-white px-3 py-1 rounded border border-indigo-200 shadow-sm">View Full Report</button>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="bg-white p-3 rounded-md shadow-sm text-center">
                         <p className="text-xs text-gray-500 uppercase font-bold">Total Land</p>
-                        <p className="text-xl font-extrabold text-gray-800">{totalAcreage} <span className="text-xs font-normal text-gray-500">Acres</span></p>
+                        <p className="text-xl font-extrabold text-gray-800">{totalAcreage.toFixed(2)} <span className="text-xs font-normal text-gray-500">Acres</span></p>
                     </div>
                     <div className="bg-white p-3 rounded-md shadow-sm text-center">
                          <p className="text-xs text-gray-500 uppercase font-bold">Active Plots</p>
@@ -890,7 +965,12 @@ const FarmPortfolioTab = withObservables(
                     </div>
                     <div className="bg-white p-3 rounded-md shadow-sm text-center">
                         <p className="text-xs text-gray-500 uppercase font-bold">Diversification</p>
-                        <p className="text-xl font-extrabold text-green-600">Calculating...</p> {/* Placeholder for crop count logic */}
+                        <p className="text-xl font-extrabold text-indigo-600">{activeCrops.length}</p>
+                        <p className="text-xs text-gray-400 truncate">{activeCrops.join(', ')}</p>
+                    </div>
+                     <div className="bg-white p-3 rounded-md shadow-sm text-center border-l-4 border-green-500">
+                        <p className="text-xs text-gray-500 uppercase font-bold">Est. Harvest Value</p>
+                        <p className="text-xl font-extrabold text-green-700">{formatCurrency(totalHarvestValue)}</p>
                     </div>
                 </div>
 
@@ -902,7 +982,7 @@ const FarmPortfolioTab = withObservables(
 
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-800">Plot Details & History</h3>
-                <button onClick={handleAddPlot} className="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 font-semibold shadow-sm">
+                <button onClick={() => { setEditingPlot(null); setIsPlotModalOpen(true); }} className="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 font-semibold shadow-sm">
                     + Add New Farm Plot
                 </button>
             </div>
@@ -916,6 +996,8 @@ const FarmPortfolioTab = withObservables(
                             onAssignCrop={setPlotToAssign}
                             onLogHarvest={setAssignmentToLog}
                             onLogInput={setPlotForInput}
+                            onEditPlot={(p) => { setEditingPlot(p); setIsPlotModalOpen(true); }}
+                            onDeletePlot={handleDeletePlot}
                         />
                     ))}
                  </div>
@@ -926,6 +1008,16 @@ const FarmPortfolioTab = withObservables(
                 </div>
             )}
             
+            {isPlotModalOpen && (
+                <Suspense fallback={null}>
+                    <PlotFormModal 
+                        onClose={() => setIsPlotModalOpen(false)}
+                        onSubmit={handleSavePlot}
+                        plot={editingPlot}
+                    />
+                </Suspense>
+            )}
+
             {plotToAssign && (
                 <Suspense fallback={null}>
                     <CropAssignmentModal 

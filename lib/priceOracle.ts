@@ -6,14 +6,22 @@ const MOCK_MARKET_DATA: Record<string, Record<string, number>> = {
         'Paddy': 2200,
         'Maize': 1950,
         'Cotton': 6800,
-        'Chilli': 18000
+        'Chilli': 18000,
+        'Turmeric': 7500,
+        'Red Gram': 6000,
+        'Green Gram': 7200,
+        'Black Gram': 6500
     },
     'Mulugu': {
         'Oil Palm': 14200,
         'Paddy': 2150,
         'Maize': 1900,
         'Cotton': 6750,
-        'Chilli': 17500
+        'Chilli': 17500,
+        'Turmeric': 7400,
+        'Red Gram': 5900,
+        'Green Gram': 7100,
+        'Black Gram': 6400
     }
 };
 

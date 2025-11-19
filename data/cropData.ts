@@ -38,4 +38,34 @@ export const SAMPLE_CROPS: Omit<Crop, 'id' | 'tenantId'>[] = [
         defaultUnit: 'kg',
         verificationStatus: CropVerificationStatus.Verified,
     },
+    {
+        name: 'Turmeric',
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
+    },
+    {
+        name: 'Cocoa',
+        isPerennial: true,
+        defaultUnit: 'kg',
+        verificationStatus: CropVerificationStatus.Verified,
+    },
+    {
+        name: 'Red Gram',
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
+    },
+    {
+        name: 'Green Gram',
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
+    },
+    {
+        name: 'Black Gram',
+        isPerennial: false,
+        defaultUnit: 'quintal',
+        verificationStatus: CropVerificationStatus.Verified,
+    }
 ];
