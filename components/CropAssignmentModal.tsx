@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -5,6 +6,7 @@ import { CropModel, FarmPlotModel, CropAssignmentModel, ActivityLogModel } from 
 import { Q } from '@nozbe/watermelondb';
 import { User, Season, CropVerificationStatus, ActivityType } from '../types';
 import CustomSelect from './CustomSelect';
+import { SAMPLE_CROPS } from '../data/cropData'; // Import sample crop data
 
 interface CropAssignmentModalProps {
     farmPlot: FarmPlotModel;
@@ -47,6 +49,9 @@ const CropAssignmentModal: React.FC<CropAssignmentModalProps> = ({ farmPlot, onC
                     throw new Error("No crop selected or created.");
                 }
 
+                // If this is marked primary, unset primary for other crops on this plot for same year/season if needed
+                // For simplicity, we allow multiple primary if they are intercropped, but typically one main crop.
+                
                 await database.get<CropAssignmentModel>('crop_assignments').create(ca => {
                     ca.farmPlotId = farmPlot.id;
                     ca.cropId = cropIdToAssign;
@@ -59,7 +64,7 @@ const CropAssignmentModal: React.FC<CropAssignmentModalProps> = ({ farmPlot, onC
                 await database.get<ActivityLogModel>('activity_logs').create(log => {
                     log.farmerId = farmPlot.farmerId;
                     log.activityType = ActivityType.CROP_ASSIGNED;
-                    log.description = `Assigned ${cropName} to ${farmPlot.name} (${farmPlot.acreage} acres) for ${season} ${year}.`;
+                    log.description = `Assigned ${cropName} (${isPrimary ? 'Primary' : 'Secondary'}) to ${farmPlot.name} for ${season} ${year}.`;
                     log.createdBy = currentUser.id;
                     log.tenantId = currentUser.tenantId;
                 });
@@ -78,38 +83,59 @@ const CropAssignmentModal: React.FC<CropAssignmentModalProps> = ({ farmPlot, onC
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg">
-                <div className="p-6 border-b"><h2 className="text-xl font-bold text-gray-800">Assign Crop to {farmPlot.name}</h2></div>
-                <div className="p-8 space-y-4">
-                    {!showCustom ? (
-                        <div>
-                            <CustomSelect label="Select a Crop" options={cropOptions} value={selectedCropId} onChange={setSelectedCropId} placeholder="-- Choose Crop --" />
-                            <button onClick={() => setShowCustom(true)} className="text-sm text-blue-600 hover:underline mt-2">Or, add a custom crop</button>
-                        </div>
-                    ) : (
-                        <div>
-                             <label className="block text-sm font-medium text-gray-700">Custom Crop Name</label>
-                             <input type="text" value={customCropName} onChange={e => setCustomCropName(e.target.value)} className="mt-1 w-full p-2 border border-gray-300 rounded-md" />
-                             <p className="text-xs text-gray-500 mt-1">This will be submitted for verification by an administrator.</p>
-                             <button onClick={() => setShowCustom(false)} className="text-sm text-blue-600 hover:underline mt-2">Select from list</button>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <CustomSelect label="Season" value={season} onChange={v => setSeason(v as Season)} options={Object.values(Season).map(s => ({value: s, label: s}))} />
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Year</label>
-                            <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="mt-1 w-full p-2.5 border border-gray-300 rounded-lg" />
-                        </div>
+                <div className="p-6 border-b">
+                    <h2 className="text-xl font-bold text-gray-800">Assign Crop to {farmPlot.name}</h2>
+                    <p className="text-sm text-gray-500">Track what is growing to get better advice.</p>
+                </div>
+                <div className="p-8 space-y-6">
+                    
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">1. Select Crop</h4>
+                        {!showCustom ? (
+                            <div>
+                                <CustomSelect label="Available Crops" options={cropOptions} value={selectedCropId} onChange={setSelectedCropId} placeholder="-- Choose from Database --" />
+                                <button onClick={() => setShowCustom(true)} className="text-sm text-blue-600 hover:underline mt-2 flex items-center gap-1">
+                                    <span>+</span> Can't find it? Add custom crop
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="bg-gray-50 p-3 rounded border">
+                                 <label className="block text-sm font-medium text-gray-700">Custom Crop Name</label>
+                                 <input type="text" value={customCropName} onChange={e => setCustomCropName(e.target.value)} className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g. Dragon Fruit" />
+                                 <p className="text-xs text-gray-500 mt-1">This will be submitted for verification.</p>
+                                 <button onClick={() => setShowCustom(false)} className="text-sm text-blue-600 hover:underline mt-2">Back to list</button>
+                            </div>
+                        )}
                     </div>
 
-                    <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={isPrimary} onChange={e => setIsPrimary(e.target.checked)} className="h-4 w-4 text-green-600 border-gray-300 rounded" />
-                        Set as primary crop for this assignment
-                    </label>
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">2. Season & Role</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <CustomSelect label="Season" value={season} onChange={v => setSeason(v as Season)} options={Object.values(Season).map(s => ({value: s, label: s}))} />
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Year</label>
+                                <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="mt-1 w-full p-2.5 border border-gray-300 rounded-lg" />
+                            </div>
+                        </div>
+
+                        <div className={`p-4 rounded-md border cursor-pointer transition-colors ${isPrimary ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:bg-gray-50'}`} onClick={() => setIsPrimary(!isPrimary)}>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isPrimary ? 'border-green-600 bg-green-600' : 'border-gray-400'}`}>
+                                    {isPrimary && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                </div>
+                                <div>
+                                    <span className="font-bold text-gray-800">Primary Crop</span>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        This is the main commercial focus for this plot. {isPrimary ? "You will receive tailored AI advice for this crop." : "Uncheck if this is an intercrop or secondary crop."}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
-                    <button type="button" onClick={onClose} disabled={isSubmitting}>Cancel</button>
-                    <button type="button" onClick={handleSave} disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Assign Crop</button>
+                    <button type="button" onClick={onClose} disabled={isSubmitting} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                    <button type="button" onClick={handleSave} disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 shadow-sm">Assign Crop</button>
                 </div>
             </div>
         </div>

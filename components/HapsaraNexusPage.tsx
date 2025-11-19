@@ -1,3 +1,4 @@
+
 import React, { useState, lazy, Suspense } from 'react';
 import { User } from '../types';
 import { useDatabase } from '../DatabaseContext';
@@ -9,6 +10,7 @@ import VisitDetailsModal from './VisitDetailsModal';
 
 
 const AppointmentScheduler = lazy(() => import('./AppointmentScheduler'));
+const ServicePointManager = lazy(() => import('./ServicePointManager'));
 
 const FieldVisitsView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     const database = useDatabase();
@@ -87,7 +89,10 @@ interface HapsaraNexusPageProps {
 }
 
 const HapsaraNexusPage: React.FC<HapsaraNexusPageProps> = ({ onBack, currentUser }) => {
-    const [activeTab, setActiveTab] = useState<'collection' | 'visits'>('collection');
+    const [activeTab, setActiveTab] = useState<'collection' | 'visits' | 'admin'>('collection');
+    
+    // Check if user can manage logistics (simple check for admin group)
+    const isAdmin = currentUser.groupId.includes('admin');
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
@@ -106,12 +111,14 @@ const HapsaraNexusPage: React.FC<HapsaraNexusPageProps> = ({ onBack, currentUser
                     <div className="flex border-b">
                         <button onClick={() => setActiveTab('collection')} className={`px-4 py-3 font-semibold ${activeTab === 'collection' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>Collection Center Booking</button>
                         <button onClick={() => setActiveTab('visits')} className={`px-4 py-3 font-semibold ${activeTab === 'visits' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>Field Officer Visits</button>
+                        {isAdmin && <button onClick={() => setActiveTab('admin')} className={`px-4 py-3 font-semibold ${activeTab === 'admin' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Logistics Admin</button>}
                     </div>
 
                     <div className="p-6">
                         <Suspense fallback={<div className="text-center p-10">Loading...</div>}>
                             {activeTab === 'collection' && <AppointmentScheduler currentUser={currentUser} />}
                             {activeTab === 'visits' && <FieldVisitsView currentUser={currentUser} />}
+                            {activeTab === 'admin' && <ServicePointManager currentUser={currentUser} />}
                         </Suspense>
                     </div>
                 </div>

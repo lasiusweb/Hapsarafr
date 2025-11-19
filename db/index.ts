@@ -1,5 +1,6 @@
 
 
+
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
@@ -8,7 +9,7 @@ import { field, text, readonly, date, relation, children, writer, json } from '@
 
 // --- Schema Definition ---
 const schema = appSchema({
-  version: 6, // Incremented for Leads
+  version: 8, // Incremented for Multi-Crop
   tables: [
     // ... existing tables ...
     tableSchema({
@@ -653,6 +654,8 @@ const schema = appSchema({
             { name: 'name', type: 'string' },
             { name: 'location', type: 'string' },
             { name: 'service_type', type: 'string' },
+            { name: 'capacity_per_slot', type: 'number', isOptional: true },
+            { name: 'is_active', type: 'boolean', isOptional: true },
             { name: 'tenant_id', type: 'string', isIndexed: true },
         ]
     }),
@@ -1713,6 +1716,8 @@ export class ServicePointModel extends Model {
     @text('name') name!: string;
     @text('location') location!: string;
     @text('service_type') serviceType!: string;
+    @field('capacity_per_slot') capacityPerSlot!: number;
+    @field('is_active') isActive!: boolean;
     @text('tenant_id') tenantId!: string;
 }
 

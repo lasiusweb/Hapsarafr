@@ -1,5 +1,4 @@
 
-
 export interface District {
     code: string;
     name: string;
@@ -768,6 +767,8 @@ export interface OrderItem {
     pricePerUnit: number;
 }
 
+// --- Hapsara Agros: Multi-Crop System Types ---
+
 export interface Crop {
     id: string;
     name: string;
@@ -807,6 +808,8 @@ export interface HarvestLog {
     createdBy: string;
 }
 
+// --- End Hapsara Agros Types ---
+
 export interface DataSharingConsent {
     id: string;
     farmerId: string;
@@ -839,6 +842,8 @@ export interface ServicePoint {
     name: string;
     location: string;
     serviceType: string;
+    capacityPerSlot?: number;
+    isActive?: boolean;
     tenantId: string;
 }
 
