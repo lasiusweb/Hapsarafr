@@ -82,6 +82,9 @@ export const SYNC_TABLE_ORDER = [
   'seed_performance_logs',
   'commodity_listings',
   'leads',
+  'credit_ledger',
+  'service_consumption_logs',
+  'free_tier_usages',
 ];
 
 // Helper to process array in chunks (Network Optimization)

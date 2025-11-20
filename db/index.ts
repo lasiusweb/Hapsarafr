@@ -8,7 +8,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
 // --- Schema Definition ---
 
 const schema = appSchema({
-  version: 6, // Incremented version for Insight updates
+  version: 7, // Incremented version for Billing updates
   tables: [
     tableSchema({
       name: 'tenants',
