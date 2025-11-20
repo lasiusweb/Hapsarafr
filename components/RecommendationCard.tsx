@@ -1,6 +1,4 @@
 
-
-
 import React, { useState } from 'react';
 import { AgronomicRecommendation } from '../types';
 import { GoogleGenAI, Modality } from '@google/genai';

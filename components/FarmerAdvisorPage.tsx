@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Farmer, AgronomicRecommendation } from '../types';
 import { useDatabase } from '../DatabaseContext';

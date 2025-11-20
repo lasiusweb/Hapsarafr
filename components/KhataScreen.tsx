@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Farmer, KhataRecord, KhataTransactionType } from '../types';
 import { useDatabase } from '../DatabaseContext';

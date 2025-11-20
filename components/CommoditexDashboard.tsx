@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
-import { User, CommodityListing, ListingStatus } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { User, CommodityListing, ListingStatus, CommodityOffer, OfferStatus } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { CommodityListingModel, FarmerModel } from '../db';
+import { CommodityListingModel, FarmerModel, CommodityOfferModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
 import { getFairPriceRange, getPriceTrend, PriceAnalysis } from '../lib/priceOracle';
@@ -25,6 +25,8 @@ const MarketTicker: React.FC<{ crop: string; price: number; trend: string }> = (
         </div>
     </div>
 );
+
+// --- Modals ---
 
 const CreateListingModal: React.FC<{ onClose: () => void; onSave: (data: any) => Promise<void>; farmers: FarmerModel[]; currentUser: User }> = ({ onClose, onSave, farmers, currentUser }) => {
     const [formState, setFormState] = useState({
@@ -75,7 +77,7 @@ const CreateListingModal: React.FC<{ onClose: () => void; onSave: (data: any) =>
     const askPriceNum = parseFloat(formState.askPrice);
     const quantityNum = parseFloat(formState.quantity);
     const isUnderselling = priceAnalysis && askPriceNum < priceAnalysis.low;
-    const isSmallQuantity = quantityNum > 0 && quantityNum < 1 && formState.unit === 'tons'; // < 1 ton considered small for bulk
+    const isSmallQuantity = quantityNum > 0 && quantityNum < 1 && formState.unit === 'tons'; 
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -109,11 +111,10 @@ const CreateListingModal: React.FC<{ onClose: () => void; onSave: (data: any) =>
                         </div>
                     </div>
                     
-                    {/* Fair Price Oracle UI - Multi-Factor Transparency */}
                     <div className="bg-indigo-50 p-4 rounded-md border border-indigo-100 transition-all">
                         <div className="flex justify-between items-center mb-3">
                              <p className="text-xs text-indigo-800 font-bold uppercase flex items-center gap-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" /></svg>
                                 Fair Price Logic
                              </p>
                         </div>
@@ -191,9 +192,92 @@ const CreateListingModal: React.FC<{ onClose: () => void; onSave: (data: any) =>
     );
 };
 
+const MakeOfferModal: React.FC<{ onClose: () => void; onOffer: (price: number, name: string, contact: string) => void; listing: CommodityListingModel }> = ({ onClose, onOffer, listing }) => {
+    const [offerPrice, setOfferPrice] = useState('');
+    const [buyerName, setBuyerName] = useState('');
+    const [buyerContact, setBuyerContact] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!offerPrice || !buyerName) return;
+        onOffer(parseFloat(offerPrice), buyerName, buyerContact);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+            <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-2xl w-full max-w-md">
+                <div className="p-6 border-b">
+                    <h2 className="text-xl font-bold text-gray-800">Place Bid / Offer</h2>
+                    <p className="text-sm text-gray-500">For {listing.quantity} {listing.unit} of {listing.cropName}</p>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Your Offer Price (Per Unit)</label>
+                        <input type="number" value={offerPrice} onChange={e => setOfferPrice(e.target.value)} className="w-full p-2 border rounded-md mt-1" placeholder={`Ask: ${listing.askPrice}`} required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Buyer Name</label>
+                        <input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)} className="w-full p-2 border rounded-md mt-1" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Contact Number</label>
+                        <input type="tel" value={buyerContact} onChange={e => setBuyerContact(e.target.value)} className="w-full p-2 border rounded-md mt-1" />
+                    </div>
+                </div>
+                <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
+                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
+                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md font-semibold">Submit Offer</button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
+const ViewOffersModal: React.FC<{ onClose: () => void; listing: CommodityListingModel; onAccept: (offerId: string) => void }> = ({ onClose, listing, onAccept }) => {
+    const database = useDatabase();
+    // Fetch offers
+    const offers = useQuery(useMemo(() => database.get<CommodityOfferModel>('commodity_offers').query(Q.where('listing_id', (listing as any).id), Q.sortBy('created_at', 'desc')), [database, listing]));
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+                <div className="p-6 border-b">
+                    <h2 className="text-xl font-bold text-gray-800">Offers Received</h2>
+                    <p className="text-sm text-gray-500">Ask Price: {formatCurrency(listing.askPrice)}</p>
+                </div>
+                <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                    {offers.length === 0 ? (
+                        <p className="text-center text-gray-500 py-4">No offers received yet.</p>
+                    ) : (
+                        offers.map(offer => (
+                            <div key={offer.id} className="border p-4 rounded-lg flex justify-between items-center hover:bg-gray-50">
+                                <div>
+                                    <p className="font-bold text-lg text-gray-800">{formatCurrency(offer.offerPrice)}</p>
+                                    <p className="text-sm text-gray-600">From: {offer.buyerName}</p>
+                                    <p className="text-xs text-gray-400">{new Date(offer.createdAt).toLocaleString()}</p>
+                                </div>
+                                {offer.status === OfferStatus.PENDING ? (
+                                    <button onClick={() => onAccept(offer.id)} className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700">Accept</button>
+                                ) : (
+                                    <span className={`px-2 py-1 text-xs font-bold rounded ${offer.status === OfferStatus.ACCEPTED ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{offer.status}</span>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+                <div className="bg-gray-100 p-4 flex justify-end rounded-b-lg">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-md">Close</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, currentUser }) => {
     const database = useDatabase();
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [offerListing, setOfferListing] = useState<CommodityListingModel | null>(null);
+    const [viewOffersListing, setViewOffersListing] = useState<CommodityListingModel | null>(null);
 
     const listings = useQuery(useMemo(() => database.get<CommodityListingModel>('commodity_listings').query(Q.sortBy('created_at', 'desc')), [database]));
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
@@ -216,6 +300,61 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
         });
         setIsCreateModalOpen(false);
     };
+
+    const handlePlaceOffer = async (price: number, buyerName: string, contact: string) => {
+        if (!offerListing) return;
+        try {
+            await database.write(async () => {
+                await database.get<CommodityOfferModel>('commodity_offers').create(o => {
+                    o.listingId = offerListing.id;
+                    o.buyerName = buyerName;
+                    o.buyerContact = contact;
+                    o.offerPrice = price;
+                    o.status = OfferStatus.PENDING;
+                    o.createdAt = new Date();
+                });
+            });
+            alert("Offer placed successfully!");
+            setOfferListing(null);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to place offer.");
+        }
+    };
+
+    const handleAcceptOffer = async (offerId: string) => {
+        if(!viewOffersListing) return;
+        if(!confirm("Accepting this offer will mark the listing as Booked. Proceed?")) return;
+        
+        const listingId = (viewOffersListing as any).id;
+
+        try {
+            await database.write(async () => {
+                const offer = await database.get<CommodityOfferModel>('commodity_offers').find(offerId);
+                await offer.update(o => { o.status = OfferStatus.ACCEPTED; });
+                
+                const listing = await database.get<CommodityListingModel>('commodity_listings').find(listingId);
+                await listing.update(l => { l.status = ListingStatus.BidAccepted; });
+            });
+            alert("Offer accepted! Please proceed to offline settlement.");
+            setViewOffersListing(null);
+        } catch(e) {
+            console.error(e);
+            alert("Failed to accept offer.");
+        }
+    };
+    
+    const handleMarkSold = async (listing: CommodityListingModel) => {
+        if(!confirm("Confirm that payment has been received and goods delivered?")) return;
+        try {
+            await database.write(async () => {
+                const listingToUpdate = await database.get<CommodityListingModel>('commodity_listings').find((listing as any).id);
+                await listingToUpdate.update(l => { l.status = ListingStatus.Sold; });
+            });
+        } catch (e) {
+            console.error("Failed to mark sold", e);
+        }
+    }
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
@@ -270,6 +409,9 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
                                 {listings.map(listing => {
                                     const farmer = farmerMap.get(listing.farmerId);
                                     const formattedDate = listing.createdAt ? new Date(listing.createdAt).toLocaleDateString() : 'N/A';
+                                    const isSold = listing.status === ListingStatus.Sold;
+                                    const isBooked = listing.status === ListingStatus.BidAccepted;
+
                                     return (
                                         <tr key={listing.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -288,10 +430,20 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{formatCurrency(listing.askPrice)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded border border-blue-100 text-xs font-bold">{listing.status}</span>
+                                                <span className={`px-2 py-1 rounded border text-xs font-bold ${isSold ? 'bg-gray-200 text-gray-600' : isBooked ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{listing.status}</span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                <button className="text-blue-600 hover:text-blue-800 hover:underline text-sm font-semibold">View Details</button>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm space-x-2">
+                                                {listing.status === ListingStatus.Active && (
+                                                    <>
+                                                        <button onClick={() => setOfferListing(listing)} className="text-blue-600 hover:underline font-semibold">Bid</button>
+                                                        <span className="text-gray-300">|</span>
+                                                        <button onClick={() => setViewOffersListing(listing)} className="text-gray-600 hover:text-gray-900 font-semibold">Manage</button>
+                                                    </>
+                                                )}
+                                                {isBooked && (
+                                                     <button onClick={() => handleMarkSold(listing)} className="text-green-600 hover:underline font-semibold">Mark Paid</button>
+                                                )}
+                                                {isSold && <span className="text-gray-400">Closed</span>}
                                             </td>
                                         </tr>
                                     );
@@ -310,6 +462,20 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
                     onSave={handleCreateListing}
                     farmers={farmers}
                     currentUser={currentUser}
+                />
+            )}
+            {offerListing && (
+                <MakeOfferModal 
+                    onClose={() => setOfferListing(null)}
+                    listing={offerListing}
+                    onOffer={handlePlaceOffer}
+                />
+            )}
+            {viewOffersListing && (
+                <ViewOffersModal 
+                    onClose={() => setViewOffersListing(null)}
+                    listing={viewOffersListing}
+                    onAccept={handleAcceptOffer}
                 />
             )}
         </div>

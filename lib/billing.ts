@@ -8,7 +8,8 @@ export async function deductCredits(
     database: Database,
     tenantId: string,
     serviceName: BillableEvent,
-    metadata: any = {}
+    metadata: any = {},
+    costOverride?: number // New optional parameter
 ): Promise<{ success: true, usedFreeTier: boolean } | { error: string }> {
 
     const now = new Date();
@@ -38,6 +39,9 @@ export async function deductCredits(
             return { success: true, usedFreeTier: true };
         }
         
+        // For transaction processing, free tier is usually volume-based, 
+        // but here we keep it simple: count of transactions.
+        // A more complex implementation would sum the transaction amounts.
         if (usageRecord.usageCount < freeTierLimit) {
              await database.write(async () => {
                 await usageRecord.update(u => {
@@ -48,10 +52,20 @@ export async function deductCredits(
         }
     }
     
-    // 2. If free tier is exhausted, deduct credits
-    const creditCost = SERVICE_PRICING[serviceName];
+    // 2. Determine cost
+    let creditCost = SERVICE_PRICING[serviceName];
+    
+    // Use override if provided (for percentage-based fees)
+    if (costOverride !== undefined) {
+        creditCost = costOverride;
+    }
+
     if (creditCost === undefined) {
         return { error: `Service "${serviceName}" has no defined price.` };
+    }
+
+    if (creditCost === 0) {
+         return { success: true, usedFreeTier: true }; // Free service
     }
 
     try {

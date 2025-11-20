@@ -1,11 +1,9 @@
 
-
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
-import { Farmer, User, Tenant, Permission } from './types';
+import { User, Tenant, Permission } from './types';
 import { useDatabase } from './DatabaseContext';
 import { FarmerModel, UserModel, TenantModel, GroupModel } from './db';
-import { Q } from '@nozbe/watermelondb';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { getSupabase } from './lib/supabase';
 import LoginScreen from './components/LoginScreen';
@@ -21,7 +19,7 @@ import AcceptInvitation from './components/AcceptInvitation';
 const FarmerDirectoryPage = lazy(() => import('./components/FarmerDirectoryPage'));
 const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const SettingsPage = lazy(() => import('./components/AdminPage')); // Reusing AdminPage for settings/admin
+const SettingsPage = lazy(() => import('./components/AdminPage')); 
 const ReportsPage = lazy(() => import('./components/ReportsPage'));
 const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
 const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
@@ -43,12 +41,11 @@ const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const TaskManagementPage = lazy(() => import('./components/TaskManagementPage'));
 const ResourceManagementPage = lazy(() => import('./components/ResourceManagementPage'));
 const DistributionReportPage = lazy(() => import('./components/DistributionReportPage'));
-const TrainingHubPage = lazy(() => import('./components/TrainingHubPage')); // Alias for ResourceLibraryPage
 const ResourceLibraryPage = lazy(() => import('./components/ResourceLibraryPage'));
 const EventsPage = lazy(() => import('./components/EventsPage'));
 const TerritoryManagementPage = lazy(() => import('./components/TerritoryManagementPage'));
 const FarmerAdvisorPage = lazy(() => import('./components/FarmerAdvisorPage'));
-const FinancialsPage = lazy(() => import('./components/FinancialsPage')); // Wallet
+const FinancialsPage = lazy(() => import('./components/FinancialsPage'));
 const FieldServicePage = lazy(() => import('./components/FieldServicePage'));
 const AssistanceSchemesPage = lazy(() => import('./components/AssistanceSchemesPage'));
 const QualityAssessmentPage = lazy(() => import('./components/QualityAssessmentPage'));
@@ -97,11 +94,40 @@ function App() {
     const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
     const [appContent, setAppContent] = useState<any>(null);
 
+    // --- Security: Fortis Data Protection Protocol (KILL SWITCH) ---
+    // Data Wipe on Inactivity (30 Days) to prevent unauthorized access on lost devices.
+    useEffect(() => {
+        const checkSecurity = async () => {
+            const lastActiveStr = localStorage.getItem('hapsara_last_active');
+            const now = Date.now();
+            const MAX_INACTIVITY = 30 * 24 * 60 * 60 * 1000; // 30 Days in Milliseconds
+
+            if (lastActiveStr) {
+                const lastActive = parseInt(lastActiveStr, 10);
+                if (now - lastActive > MAX_INACTIVITY) {
+                    console.warn("Security Alert: Device inactive for >30 days. Initiating Fortis Wipe Protocol.");
+                    try {
+                        await database.write(async () => {
+                            await database.unsafeResetDatabase();
+                        });
+                        localStorage.clear(); // Clear auth tokens and keys
+                        alert("For your security, local data has been wiped due to 30 days of inactivity. Please re-authenticate.");
+                        window.location.reload();
+                    } catch (e) {
+                        console.error("Wipe failed", e);
+                    }
+                    return;
+                }
+            }
+            // Update activity timestamp on app load
+            localStorage.setItem('hapsara_last_active', now.toString());
+        };
+        checkSecurity();
+    }, [database]);
+
     // Initialize Auth & Data
     useEffect(() => {
         const checkAuth = async () => {
-            // Mock Auth for MVP
-            // In real app, check Supabase session or local storage token
             const usersCollection = database.get<UserModel>('users');
             const allUsers = await usersCollection.query().fetch();
             const plainUsers = allUsers.map(u => ({ ...u._raw } as unknown as User));
@@ -112,24 +138,32 @@ function App() {
             const plainTenants = allTenants.map(t => ({ ...t._raw } as unknown as Tenant));
             setTenants(plainTenants);
 
-            // Auto-login first user found (for dev) or show login screen
+            // Auto-login first user found (for dev/offline capability)
              if (plainUsers.length > 0) {
                  const user = plainUsers[0];
                  setCurrentUser(user);
                  const tenant = plainTenants.find(t => t.id === user.tenantId) || null;
                  setCurrentTenant(tenant);
 
-                 const group = await database.get<GroupModel>('groups').find(user.groupId);
-                 setPermissions(new Set(JSON.parse(group.permissionsStr || '[]')));
+                 // Load permissions safely
+                 try {
+                    const group = await database.get<GroupModel>('groups').find(user.groupId);
+                    setPermissions(new Set(JSON.parse(group.permissionsStr || '[]')));
+                 } catch (e) {
+                     console.warn("Could not load group permissions, defaulting to empty.");
+                     setPermissions(new Set());
+                 }
              }
         };
         checkAuth();
     }, [database]);
 
-    // Navigation Handler
+    // Navigation Handler with Security Timestamp Update
     const handleNavigate = (view: string, param?: string) => {
         setCurrentView(view);
         setViewParam(param);
+        // Update security timestamp on every navigation action to keep session alive
+        localStorage.setItem('hapsara_last_active', Date.now().toString());
     };
     
     const handleLogout = () => {
@@ -137,9 +171,10 @@ function App() {
         setCurrentTenant(null);
         setPermissions(new Set());
         setCurrentView('dashboard');
+        // We do NOT wipe DB on logout, only on extended inactivity.
     };
 
-    // Render
+    // Render Logic
     if (!currentUser) {
         if (pendingInvitation) {
             return <AcceptInvitation invitationCode={pendingInvitation} onAccept={() => setPendingInvitation(null)} />;
@@ -147,7 +182,6 @@ function App() {
         return <LoginScreen supabase={getSupabase()} />;
     }
 
-    // Special Dealer Layout Override
     if (currentView === 'mitra') {
         return (
             <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading Hapsara Mitra...</div>}>
@@ -158,7 +192,7 @@ function App() {
 
     const renderView = () => {
         switch (currentView) {
-            case 'dashboard': return <Dashboard farmers={[]} onNavigateWithFilter={(v, f) => { console.log(f); handleNavigate(v); }} />; // Passing empty array for now, Dashboard fetches its own data or needs refactor
+            case 'dashboard': return <Dashboard farmers={[]} onNavigateWithFilter={(v, f) => { console.log(f); handleNavigate(v); }} />;
             case 'farmer-directory': return <FarmerDirectoryPage users={users} tenants={tenants} currentUser={currentUser} permissions={permissions} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} onNavigate={handleNavigate} setNotification={setNotification} />;
             case 'farmer-details': return <FarmerDetailsPage farmerId={viewParam!} users={users} currentUser={currentUser} onBack={() => handleNavigate('farmer-directory')} permissions={permissions} setNotification={setNotification} allTenants={tenants as any} allTerritories={[]} />;
             case 'settings': return <SettingsPage users={users} groups={[]} currentUser={currentUser} onSaveUsers={async () => {}} onSaveGroups={async () => {}} onBack={() => handleNavigate('dashboard')} onNavigate={handleNavigate as any} setNotification={setNotification} />;

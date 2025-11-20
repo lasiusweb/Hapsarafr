@@ -1,6 +1,4 @@
 
-
-
 import { FarmPlotModel, ProductModel, DealerInventorySignalModel } from '../db';
 import { farmPlotModelToPlain } from './utils';
 

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { CropAssignmentModel, HarvestLogModel, CropModel, ActivityLogModel, FarmPlotModel, FarmerModel } from '../db';
@@ -7,7 +6,7 @@ import { User, ActivityType } from '../types';
 import { useQuery } from '../hooks/useQuery';
 import { Q } from '@nozbe/watermelondb';
 import { getFairPriceRange } from '../lib/priceOracle';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, normalizeToKg } from '../lib/utils';
 
 interface HarvestLoggerProps {
     cropAssignment: CropAssignmentModel;
@@ -26,12 +25,15 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
     const [formData, setFormData] = useState({
         harvest_date: new Date().toISOString().split('T')[0],
         quantity: '',
-        unit: crop?.defaultUnit || 'kg',
+        unit: crop?.defaultUnit || 'ton',
         notes: ''
     });
     const [estimatedValue, setEstimatedValue] = useState<number>(0);
     const [priceRange, setPriceRange] = useState<{low: number, high: number, fair: number} | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Data Validation State
+    const [validationWarning, setValidationWarning] = useState<string | null>(null);
 
     // Fetch plot and farmer details for location-based pricing
     useEffect(() => {
@@ -46,28 +48,27 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
         fetchData();
     }, [cropAssignment]);
 
-    // Calculate estimated value when quantity or crop changes
+    // Calculate estimated value & validate yield
     useEffect(() => {
-        if (crop && farmer) {
-            // Get per-unit price range from Oracle
+        if (crop && farmer && farmPlot) {
+            // 1. Price Estimation
             const range = getFairPriceRange(crop.name, farmer.district || 'Warangal');
             
-            // Adjust price based on selected unit vs standard unit (assuming standard is 'ton' for Oil Palm, 'quintal' for others)
-            // This is a simplified conversion logic for the demo.
-            let unitMultiplier = 1; 
+            // Base logic: Price Oracle usually returns per Quintal or Ton based on crop. 
+            // Normalizing for display.
             
+            let unitMultiplier = 1; 
             if (crop.name === 'Oil Palm') {
-                 // Base price is per Ton.
+                 // Oracle is per Ton.
                  if (formData.unit === 'kg') unitMultiplier = 0.001;
                  if (formData.unit === 'quintal') unitMultiplier = 0.1;
-                 if (formData.unit === 'bunch') unitMultiplier = 0.02; // Approx 20kg per bunch?
+                 if (formData.unit === 'bunch') unitMultiplier = 0.02; 
             } else {
-                 // Base price is per Quintal for most others in mock data
+                 // Oracle is per Quintal.
                  if (formData.unit === 'kg') unitMultiplier = 0.01;
                  if (formData.unit === 'ton') unitMultiplier = 10;
             }
 
-            // Adjust the range for display
             setPriceRange({
                 low: range.low * unitMultiplier,
                 high: range.high * unitMultiplier,
@@ -77,11 +78,27 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
             const qty = parseFloat(formData.quantity);
             if (!isNaN(qty)) {
                 setEstimatedValue(qty * range.fair * unitMultiplier);
+
+                // 2. Yield Logic Validation (Hapsara Agros)
+                // Check if yield per acre is biologically plausible
+                const kgYield = normalizeToKg(qty, formData.unit);
+                const tonsPerAcre = (kgYield / 1000) / farmPlot.acreage;
+                
+                // Oil Palm mature yield ~10-12 tons/acre/year. Single harvest shouldn't exceed ~2-3 tons/acre usually.
+                // Setting a soft limit warning.
+                if (crop.name === 'Oil Palm' && tonsPerAcre > 5) {
+                    setValidationWarning(`Warning: ${tonsPerAcre.toFixed(1)} tons/acre seems unusually high for a single harvest. Please verify.`);
+                } else if (crop.name === 'Oil Palm' && tonsPerAcre < 0.1 && qty > 0) {
+                    setValidationWarning(`Notice: Yield seems very low (${tonsPerAcre.toFixed(2)} t/ac). Is this a partial harvest?`);
+                } else {
+                    setValidationWarning(null);
+                }
             } else {
                 setEstimatedValue(0);
+                setValidationWarning(null);
             }
         }
-    }, [formData.quantity, crop, farmer, formData.unit]);
+    }, [formData.quantity, crop, farmer, formData.unit, farmPlot]);
 
     const handleSave = async () => {
         const quantity = parseFloat(formData.quantity);
@@ -89,6 +106,11 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
             alert('Please enter a valid quantity.');
             return;
         }
+        
+        if (validationWarning && !window.confirm("The data looks unusual. Are you sure you want to submit?")) {
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             await database.write(async () => {
@@ -105,7 +127,7 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
                      await database.get<ActivityLogModel>('activity_logs').create(log => {
                         log.farmerId = farmer.id;
                         log.activityType = ActivityType.HARVEST_LOGGED;
-                        log.description = `Logged harvest of ${quantity} ${formData.unit} of ${crop?.name} from ${farmPlot.name}. Est. Value: ${formatCurrency(estimatedValue)}`;
+                        log.description = `Harvest: ${quantity} ${formData.unit} of ${crop?.name}. Est. Value: ${formatCurrency(estimatedValue)}`;
                         log.createdBy = currentUser.id;
                         log.tenantId = currentUser.tenantId;
                     });
@@ -126,7 +148,7 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg">
                 <div className="p-6 border-b bg-green-50 rounded-t-lg">
                     <h2 className="text-xl font-bold text-green-900">Log Harvest: {crop?.name}</h2>
-                    <p className="text-sm text-green-700">Record your yield to track productivity and earnings.</p>
+                    <p className="text-sm text-green-700">Record yield for {farmPlot?.name} ({farmPlot?.acreage} ac).</p>
                 </div>
                 <div className="p-8 space-y-6">
                     <div className="grid grid-cols-2 gap-4">
@@ -143,14 +165,21 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
                          <div>
                             <label className="block text-sm font-medium text-gray-700">Unit</label>
                             <select value={formData.unit} onChange={e => setFormData(s => ({ ...s, unit: e.target.value }))} className="mt-1 w-full p-2 border border-gray-300 rounded-md bg-white">
-                                <option value="kg">Kilograms (kg)</option>
-                                <option value="quintal">Quintals (100kg)</option>
                                 <option value="tons">Tons (1000kg)</option>
+                                <option value="quintal">Quintals (100kg)</option>
+                                <option value="kg">Kilograms (kg)</option>
                                 <option value="bunch">Bunches</option>
                                 <option value="bag">Gunny Bags (~50kg)</option>
                             </select>
                         </div>
                     </div>
+
+                    {validationWarning && (
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md flex items-start gap-2 text-sm text-yellow-800">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 text-yellow-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                            {validationWarning}
+                        </div>
+                    )}
                     
                     {/* Real-time Value Estimation */}
                     <div className="bg-white p-4 rounded-lg border-2 border-green-100 shadow-sm">
@@ -172,13 +201,6 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
                      <div>
                         <label className="block text-sm font-medium text-gray-700">Notes (Optional)</label>
                         <textarea value={formData.notes} onChange={e => setFormData(s => ({...s, notes: e.target.value}))} rows={2} className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g. Good quality, harvested early morning..."></textarea>
-                    </div>
-                    
-                    <div className="text-center">
-                         <button disabled className="w-full px-4 py-2 bg-gray-50 text-gray-400 rounded-md border border-dashed border-gray-300 flex items-center justify-center gap-2 cursor-not-allowed hover:bg-gray-100 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                            <span className="text-sm font-medium">Voice Input (Coming Soon)</span>
-                        </button>
                     </div>
                 </div>
                 <div className="bg-gray-50 p-4 flex justify-end gap-4 rounded-b-lg">

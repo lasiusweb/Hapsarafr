@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User } from '../types';
 import { useDatabase } from '../DatabaseContext';

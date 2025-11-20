@@ -1,14 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
 import { Database } from '@nozbe/watermelondb';
 import { field, text, date, json, relation, children, writer, readonly, nochange } from '@nozbe/watermelondb/decorators';
 import Model from '@nozbe/watermelondb/Model';
@@ -18,7 +8,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
 // --- Schema Definition ---
 
 const schema = appSchema({
-  version: 3, // Incremented version for Samridhi Inventory updates
+  version: 6, // Incremented version for Insight updates
   tables: [
     tableSchema({
       name: 'tenants',
@@ -768,6 +758,32 @@ const schema = appSchema({
         { name: 'description', type: 'string' },
         { name: 'image_url', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
+        // Added fields for Genetica
+        { name: 'consent_level', type: 'string' },
+        { name: 'owner_farmer_id', type: 'string', isOptional: true },
+        { name: 'origin_village', type: 'string', isOptional: true },
+        { name: 'oral_history_url', type: 'string', isOptional: true },
+        { name: 'passport_hash', type: 'string', isOptional: true },
+      ],
+    }),
+    tableSchema({
+      name: 'genetic_lineage',
+      columns: [
+        { name: 'child_seed_id', type: 'string' },
+        { name: 'parent_seed_id', type: 'string' },
+        { name: 'relationship_type', type: 'string' },
+        { name: 'confidence_score', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'benefit_agreements',
+      columns: [
+        { name: 'seed_variety_id', type: 'string' },
+        { name: 'researcher_org_name', type: 'string' },
+        { name: 'community_id', type: 'string' },
+        { name: 'terms_hash', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'agreed_at', type: 'string' },
       ],
     }),
     tableSchema({
@@ -798,6 +814,17 @@ const schema = appSchema({
         { name: 'status', type: 'string' },
         { name: 'farm_plot_id', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string' },
+        { name: 'created_at', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'commodity_offers',
+      columns: [
+        { name: 'listing_id', type: 'string' },
+        { name: 'buyer_name', type: 'string' },
+        { name: 'buyer_contact', type: 'string' },
+        { name: 'offer_price', type: 'number' },
+        { name: 'status', type: 'string' },
         { name: 'created_at', type: 'number' },
       ],
     }),
@@ -853,17 +880,6 @@ const schema = appSchema({
         { name: 'blocked_categories_json', type: 'string', isOptional: true },
         { name: 'blocked_partner_ids_json', type: 'string', isOptional: true },
         { name: 'sync_status', type: 'string' },
-      ],
-    }),
-    tableSchema({
-      name: 'assistance_applications',
-      columns: [
-        { name: 'farmer_id', type: 'string' },
-        { name: 'scheme_id', type: 'string' },
-        { name: 'status', type: 'string' },
-        { name: 'applied_date', type: 'string' },
-        { name: 'approved_date', type: 'string', isOptional: true },
-        { name: 'tenant_id', type: 'string' },
       ],
     }),
     tableSchema({
@@ -1693,6 +1709,30 @@ export class SeedVarietyModel extends Model {
     @text('description') description!: string;
     @text('image_url') imageUrl!: string;
     @text('tenant_id') tenantId!: string;
+    // Genetica Fields
+    @text('consent_level') consentLevel!: string;
+    @text('owner_farmer_id') ownerFarmerId!: string;
+    @text('origin_village') originVillage!: string;
+    @text('oral_history_url') oralHistoryUrl!: string;
+    @text('passport_hash') passportHash!: string;
+}
+
+export class GeneticLineageModel extends Model {
+    static table = 'genetic_lineage';
+    @text('child_seed_id') childSeedId!: string;
+    @text('parent_seed_id') parentSeedId!: string;
+    @text('relationship_type') relationshipType!: string;
+    @field('confidence_score') confidenceScore!: number;
+}
+
+export class BenefitAgreementModel extends Model {
+    static table = 'benefit_agreements';
+    @text('seed_variety_id') seedVarietyId!: string;
+    @text('researcher_org_name') researcherOrgName!: string;
+    @text('community_id') communityId!: string;
+    @text('terms_hash') termsHash!: string;
+    @text('status') status!: string;
+    @text('agreed_at') agreedAt!: string;
 }
 
 export class SeedPerformanceLogModel extends Model {
@@ -1722,6 +1762,18 @@ export class CommodityListingModel extends Model {
     @text('farm_plot_id') farmPlotId!: string;
     @text('tenant_id') tenantId!: string;
     @date('created_at') createdAt!: Date;
+    @children('commodity_offers') offers!: any;
+}
+
+export class CommodityOfferModel extends Model {
+    static table = 'commodity_offers';
+    @text('listing_id') listingId!: string;
+    @text('buyer_name') buyerName!: string;
+    @text('buyer_contact') buyerContact!: string;
+    @field('offer_price') offerPrice!: number;
+    @text('status') status!: string;
+    @date('created_at') createdAt!: Date;
+    @relation('commodity_listings', 'listing_id') listing!: any;
 }
 
 export class LeadModel extends Model {
@@ -1892,10 +1944,11 @@ const database = new Database({
     TrainingCompletionModel, EventModel, EventRsvpModel, ProtectionProductModel, ProtectionSubscriptionModel,
     ProtectionClaimModel, LandListingModel, LandValuationHistoryModel, DealerModel, CropModel,
     CropAssignmentModel, HarvestLogModel, SeedVarietyModel, SeedPerformanceLogModel,
-    CommodityListingModel, LeadModel, ServicePointModel, CollectionAppointmentModel,
+    CommodityListingModel, CommodityOfferModel, LeadModel, ServicePointModel, CollectionAppointmentModel,
     FarmerDealerConsentModel, TenantPartnerConfigModel, PartnerModel, PartnerOfferingModel,
     FarmerPartnerConsentModel, PartnerInteractionModel, DealerInventorySignalModel, KhataRecordModel,
-    DealerFarmerConnectionModel, AgronomicRecommendationModel, AssistanceApplicationModel
+    DealerFarmerConnectionModel, AgronomicRecommendationModel, AssistanceApplicationModel,
+    GeneticLineageModel, BenefitAgreementModel // Added new models
   ],
 });
 

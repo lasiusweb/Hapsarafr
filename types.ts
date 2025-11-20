@@ -223,10 +223,13 @@ export enum ActivityType {
     DEALER_CONSENT_REVOKED = 'DEALER_CONSENT_REVOKED',
     COLLECTION_APPOINTMENT_BOOKED = 'COLLECTION_APPOINTMENT_BOOKED',
     CROP_ASSIGNED = 'CROP_ASSIGNED',
+    SEED_REGISTERED = 'SEED_REGISTERED',
 }
 
 export enum BillableEvent {
-    CROP_HEALTH_SCAN_COMPLETED = 'CROP_HEALTH_SCAN_COMPLETED'
+    CROP_HEALTH_SCAN_COMPLETED = 'CROP_HEALTH_SCAN_COMPLETED',
+    APPOINTMENT_BOOKED = 'APPOINTMENT_BOOKED',
+    TRANSACTION_PROCESSED = 'TRANSACTION_PROCESSED'
 }
 
 export interface CreditLedgerEntry {
@@ -534,7 +537,10 @@ export enum InputType {
     Fertilizer = 'FERTILIZER',
     Pesticide = 'PESTICIDE',
     Irrigation = 'IRRIGATION',
-    Other = 'OTHER'
+    Other = 'OTHER',
+    // Add new types for flexibility
+    Seeds = 'SEEDS',
+    Labor = 'LABOR'
 }
 
 export interface AssistanceScheme {
@@ -1118,6 +1124,12 @@ export interface DealerProfile {
 
 // --- Hapsara Genetica (Seed System) Types ---
 
+export enum ConsentLevel {
+    Red = 'RED',       // Private
+    Yellow = 'YELLOW', // Community Share
+    Green = 'GREEN'    // Global/Research
+}
+
 export enum SeedType {
     Traditional = 'TRADITIONAL',
     OpenSource = 'OPEN_SOURCE',
@@ -1138,6 +1150,30 @@ export interface SeedVariety {
     description: string;
     imageUrl?: string;
     tenantId?: string; // If private to a tenant
+    // Genetica fields
+    consentLevel: ConsentLevel;
+    ownerFarmerId?: string;
+    originVillage?: string;
+    oralHistoryUrl?: string; // Audio URL
+    passportHash?: string;
+}
+
+export interface GeneticLineage {
+    id: string;
+    childSeedId: string;
+    parentSeedId: string;
+    relationshipType: 'POLLINATOR' | 'MOTHER' | 'SELECTION' | 'MUTATION';
+    confidenceScore: number;
+}
+
+export interface BenefitAgreement {
+    id: string;
+    seedVarietyId: string;
+    researcherOrgName: string;
+    communityId: string; // Village code
+    termsHash: string;
+    status: 'ACTIVE' | 'EXPIRED' | 'PENDING';
+    agreedAt: string;
 }
 
 export interface SeedPerformanceLog {
@@ -1202,6 +1238,23 @@ export interface CommodityBid {
     offerPrice: number;
     status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
     isBinding: boolean;
+}
+
+export enum OfferStatus {
+    PENDING = 'PENDING',
+    ACCEPTED = 'ACCEPTED',
+    REJECTED = 'REJECTED',
+    WITHDRAWN = 'WITHDRAWN'
+}
+
+export interface CommodityOffer {
+    id: string;
+    listingId: string;
+    buyerName: string; // External or internal name
+    buyerContact: string;
+    offerPrice: number; // Per unit
+    status: OfferStatus;
+    createdAt: number;
 }
 
 // --- Lead Generation ---

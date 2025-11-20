@@ -5,7 +5,7 @@ import { useQuery } from '../hooks/useQuery';
 import { Q } from '@nozbe/watermelondb';
 import { 
     FarmerModel, FarmPlotModel, SubsidyPaymentModel, ActivityLogModel, 
-    AssistanceApplicationModel, TenantModel, TerritoryModel 
+    AssistanceApplicationModel, TenantModel, TerritoryModel, CropAssignmentModel, CropModel
 } from '../db';
 import { 
     User, Farmer, FarmPlot, SubsidyPayment, PaymentStage, ActivityType, 
@@ -27,6 +27,7 @@ import GranularConsentModal from './GranularConsentModal';
 import RequestVisitModal from './RequestVisitModal';
 import CropAssignmentModal from './CropAssignmentModal';
 import ResourceRecommender from './ResourceRecommender';
+import HarvestLogger from './HarvestLogger';
 
 interface FarmerDetailsPageProps {
     farmerId: string;
@@ -55,6 +56,10 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
     const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
     const [isCropAssignmentModalOpen, setIsCropAssignmentModalOpen] = useState(false);
     const [plotForCropAssignment, setPlotForCropAssignment] = useState<FarmPlotModel | null>(null);
+    
+    // Harvest Logger State
+    const [isHarvestLoggerOpen, setIsHarvestLoggerOpen] = useState(false);
+    const [activeCropAssignment, setActiveCropAssignment] = useState<CropAssignmentModel | null>(null);
 
     // Data Queries
     const farmerModel = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('id', farmerId)), [database, farmerId]))[0];
@@ -62,6 +67,16 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
     const subsidies = useQuery(useMemo(() => database.get<SubsidyPaymentModel>('subsidy_payments').query(Q.where('farmer_id', farmerId), Q.sortBy('payment_date', 'desc')), [database, farmerId]));
     const activities = useQuery(useMemo(() => database.get<ActivityLogModel>('activity_logs').query(Q.where('farmer_id', farmerId), Q.sortBy('created_at', 'desc')), [database, farmerId]));
     const assistanceApps = useQuery(useMemo(() => database.get<AssistanceApplicationModel>('assistance_applications').query(Q.where('farmer_id', farmerId)), [database, farmerId]));
+    
+    // Fetch crop assignments for plots
+    const plotIds = useMemo(() => plots.map(p => p.id), [plots]);
+    const assignments = useQuery(useMemo(() => {
+        if(plotIds.length === 0) return database.get<CropAssignmentModel>('crop_assignments').query(Q.where('id', 'null'));
+        return database.get<CropAssignmentModel>('crop_assignments').query(Q.where('farm_plot_id', Q.oneOf(plotIds)));
+    }, [database, plotIds]));
+    
+    const crops = useQuery(useMemo(() => database.get<CropModel>('crops').query(), [database])); // Simplified query
+    const cropMap = useMemo(() => new Map(crops.map(c => [c.id, c.name])), [crops]);
 
     const farmer = useMemo(() => farmerModelToPlain(farmerModel), [farmerModel]);
     const plainPlots = useMemo(() => plots.map(p => farmPlotModelToPlain(p)!), [plots]);
@@ -147,6 +162,11 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
     const handleOpenCropAssignment = (plot: FarmPlotModel) => {
         setPlotForCropAssignment(plot);
         setIsCropAssignmentModalOpen(true);
+    };
+    
+    const handleLogHarvest = (assignment: CropAssignmentModel) => {
+        setActiveCropAssignment(assignment);
+        setIsHarvestLoggerOpen(true);
     };
 
     if (!farmer) return <div className="p-6 text-center">Loading farmer details...</div>;
@@ -243,26 +263,57 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
                             )}
 
                             {activeTab === 'plots' && (
-                                <div className="space-y-4">
+                                <div className="space-y-6">
                                     <div className="flex justify-between items-center mb-2">
                                         <h3 className="font-bold text-gray-800">Farm Plots ({plots.length})</h3>
                                         <button onClick={() => { setSelectedPlot(null); setIsPlotModalOpen(true); }} className="text-sm text-green-600 hover:underline font-semibold">+ Add Plot</button>
                                     </div>
-                                    {plots.map(plot => (
-                                        <div key={plot.id} className="p-4 border rounded-lg hover:shadow-sm transition-shadow">
-                                            <div className="flex justify-between items-start">
+                                    {plots.map(plot => {
+                                        const plotAssignments = assignments.filter(a => a.farmPlotId === plot.id);
+                                        
+                                        return (
+                                        <div key={plot.id} className="p-4 border rounded-lg hover:shadow-sm transition-shadow bg-white">
+                                            <div className="flex justify-between items-start mb-3">
                                                 <div>
                                                     <h4 className="font-bold text-gray-800">{plot.name}</h4>
                                                     <p className="text-sm text-gray-500">{plot.acreage} Acres • {plot.soilType || 'Unknown Soil'}</p>
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => handleOpenCropAssignment(plot)} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100">Assign Crop</button>
-                                                    <button onClick={() => { setSelectedPlot(plot); setIsPlotModalOpen(true); }} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200">Edit</button>
+                                                    <button onClick={() => { setSelectedPlot(plot); setIsPlotModalOpen(true); }} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200">Edit Plot</button>
                                                     <button onClick={() => handleDeletePlot(plot)} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded hover:bg-red-100">Delete</button>
                                                 </div>
                                             </div>
+                                            
+                                            {/* Hapsara Agros: Crop Assignments */}
+                                            <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <p className="text-xs font-bold text-gray-500 uppercase">Active Crops</p>
+                                                    <button onClick={() => handleOpenCropAssignment(plot)} className="text-xs text-blue-600 hover:underline font-semibold">+ Assign Crop</button>
+                                                </div>
+                                                {plotAssignments.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {plotAssignments.map(assignment => (
+                                                            <div key={assignment.id} className="flex justify-between items-center bg-white p-2 rounded border border-gray-100 shadow-sm">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`w-2 h-2 rounded-full ${assignment.isPrimaryCrop ? 'bg-green-500' : 'bg-blue-300'}`}></span>
+                                                                    <div>
+                                                                         <p className="text-sm font-medium text-gray-800">{cropMap.get(assignment.cropId) || 'Unknown Crop'}</p>
+                                                                         <p className="text-xs text-gray-500">{assignment.season} {assignment.year}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <button onClick={() => handleLogHarvest(assignment)} className="px-3 py-1 bg-green-100 text-green-700 rounded text-xs font-bold hover:bg-green-200 flex items-center gap-1">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                                                    Log Harvest
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-gray-400 italic">No crops assigned to this plot.</p>
+                                                )}
+                                            </div>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             )}
 
@@ -331,12 +382,22 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
             {isKycModalOpen && <KycOnboardingModal farmer={farmer} onClose={() => setIsKycModalOpen(false)} setNotification={setNotification} />}
             {isVisitModalOpen && <RequestVisitModal farmer={farmer} users={users} currentUser={currentUser} onClose={() => setIsVisitModalOpen(false)} onSave={async () => {}} />}
             {isConsentModalOpen && <GranularConsentModal farmer={farmer} tenant={allTenants.find(t => t.id === currentUser.tenantId) || { id: '', name: 'Unknown' }} onClose={() => setIsConsentModalOpen(false)} onSave={() => setIsConsentModalOpen(false)} isOpen={isConsentModalOpen} />}
+            
             {isCropAssignmentModalOpen && plotForCropAssignment && (
                 <CropAssignmentModal 
                     farmPlot={plotForCropAssignment} 
                     onClose={() => setIsCropAssignmentModalOpen(false)} 
                     currentUser={currentUser} 
                     setNotification={setNotification} 
+                />
+            )}
+            
+            {isHarvestLoggerOpen && activeCropAssignment && (
+                <HarvestLogger 
+                    cropAssignment={activeCropAssignment}
+                    onClose={() => setIsHarvestLoggerOpen(false)}
+                    currentUser={currentUser}
+                    setNotification={setNotification}
                 />
             )}
         </div>

@@ -4,9 +4,11 @@ import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { SeedVarietyModel, SeedPerformanceLogModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
-import { SeedVariety, SeedType, User } from '../types';
+import { SeedVariety, SeedType, User, ConsentLevel } from '../types';
 import CustomSelect from './CustomSelect';
 import { GoogleGenAI } from '@google/genai';
+import SeedPassport from './SeedPassport';
+import { generateSeedPassportHash } from '../lib/genetics';
 
 interface SeedRegistryPageProps {
     onBack: () => void;
@@ -30,22 +32,27 @@ const SeedCard: React.FC<{ seed: SeedVariety; performanceScore: number; onClick:
                         Restricted License
                     </div>
                 )}
+                <div className="absolute bottom-2 right-2">
+                    {seed.consentLevel === ConsentLevel.Green && <div className="w-3 h-3 rounded-full bg-green-500 ring-2 ring-white"></div>}
+                    {seed.consentLevel === ConsentLevel.Yellow && <div className="w-3 h-3 rounded-full bg-yellow-400 ring-2 ring-white"></div>}
+                    {seed.consentLevel === ConsentLevel.Red && <div className="w-3 h-3 rounded-full bg-red-500 ring-2 ring-white"></div>}
+                </div>
             </div>
             <div className="p-4">
                 <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-gray-800">{seed.name}</h3>
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">{seed.seedType.replace('_', ' ')}</span>
+                    <h3 className="font-bold text-gray-800 truncate">{seed.name}</h3>
+                    <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100 whitespace-nowrap">{seed.seedType.replace('_', ' ')}</span>
                 </div>
-                <p className="text-sm text-gray-600 line-clamp-2">{seed.description}</p>
+                <p className="text-sm text-gray-600 line-clamp-2 h-10">{seed.description}</p>
                 
-                <div className="mt-4 pt-3 border-t flex justify-between items-center text-xs">
+                <div className="mt-2 pt-2 border-t flex justify-between items-center text-xs">
                     <div className="flex flex-col">
                         <span className="text-gray-500">Maturity</span>
                         <span className="font-semibold">{seed.daysToMaturity} days</span>
                     </div>
                      <div className="flex flex-col items-end">
-                        <span className="text-gray-500">Resilience Score</span>
-                        <span className={`font-bold ${performanceScore > 7 ? 'text-green-600' : 'text-yellow-600'}`}>{performanceScore.toFixed(1)} / 10</span>
+                        <span className="text-gray-500">Resilience</span>
+                        <span className={`font-bold ${performanceScore > 7 ? 'text-green-600' : 'text-yellow-600'}`}>{performanceScore > 0 ? performanceScore.toFixed(1) + '/10' : 'N/A'}</span>
                     </div>
                 </div>
             </div>
@@ -57,17 +64,17 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
     const database = useDatabase();
     const [filterType, setFilterType] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedSeed, setSelectedSeed] = useState<SeedVariety | null>(null);
+    const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
 
     // Data
     const seeds = useQuery(useMemo(() => database.get<SeedVarietyModel>('seed_varieties').query(Q.sortBy('name', 'asc')), [database]));
-    // In a real app, performance scores would be pre-calculated aggregates. Here we fetch logs to demo logic.
     const performanceLogs = useQuery(useMemo(() => database.get<SeedPerformanceLogModel>('seed_performance_logs').query(), [database]));
 
     const seedScores = useMemo(() => {
         const scores: Record<string, { total: number, count: number }> = {};
         performanceLogs.forEach(log => {
             if (!scores[log.seedVarietyId]) scores[log.seedVarietyId] = { total: 0, count: 0 };
-            // Simple composite score: (Disease + Drought) / 2
             const logScore = (log.diseaseResistanceScore + log.droughtSurvivalScore) / 2;
             scores[log.seedVarietyId].total += logScore;
             scores[log.seedVarietyId].count++;
@@ -76,7 +83,7 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
         const result: Record<string, number> = {};
         seeds.forEach(s => {
             const data = scores[s.id];
-            result[s.id] = data ? data.total / data.count : 0; // 0 implies no data
+            result[s.id] = data ? data.total / data.count : 0;
         });
         return result;
     }, [seeds, performanceLogs]);
@@ -89,9 +96,32 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
         });
     }, [seeds, filterType, searchQuery]);
 
-    const handleCreateSeed = async () => {
-         // Placeholder for modal trigger
-         alert("Feature coming soon: Submit new variety for verification.");
+    // --- Registration Logic ---
+    const handleRegistration = async (data: any) => {
+        // In a real implementation, this would handle the full creation logic including AI analysis result storage
+        try {
+            await database.write(async () => {
+                const hash = generateSeedPassportHash(data.name, 'Local Village', currentUser.id, {});
+                await database.get<SeedVarietyModel>('seed_varieties').create(s => {
+                    s.name = data.name;
+                    s.seedType = data.seedType;
+                    s.daysToMaturity = parseInt(data.daysToMaturity);
+                    s.isSeedSavingAllowed = true; // Default for local
+                    s.waterRequirement = 'Medium';
+                    s.potentialYield = 0; 
+                    s.description = data.description;
+                    s.consentLevel = ConsentLevel.Yellow; // Default community share
+                    s.ownerFarmerId = currentUser.id; // Assuming user is farmer for MVP
+                    s.passportHash = hash;
+                    s.tenantId = currentUser.tenantId;
+                });
+            });
+            setIsRegistrationOpen(false);
+            alert("Seed Passport Issued Successfully!");
+        } catch(e) {
+            console.error(e);
+            alert("Failed to register seed.");
+        }
     };
 
     return (
@@ -106,7 +136,7 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
                         <p className="text-gray-500">The Open Seed Registry & Ethical Crop Improvement Ecosystem</p>
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={handleCreateSeed} className="px-4 py-2 bg-green-600 text-white rounded-md font-semibold hover:bg-green-700 text-sm">+ Register New Variety</button>
+                        <button onClick={() => setIsRegistrationOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-md font-semibold hover:bg-green-700 text-sm">+ Register New Variety</button>
                         <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-300 px-4 py-2 rounded-md bg-white">Back</button>
                     </div>
                 </div>
@@ -139,7 +169,7 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
                             key={seed.id} 
                             seed={seed as any} 
                             performanceScore={seedScores[seed.id] || 0} 
-                            onClick={() => alert(`Details for ${seed.name} coming soon.`)} 
+                            onClick={() => setSelectedSeed(seed as any)} 
                         />
                     ))}
                      {filteredSeeds.length === 0 && (
@@ -149,6 +179,41 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
                     )}
                 </div>
             </div>
+            
+            {selectedSeed && (
+                <SeedPassport 
+                    seed={selectedSeed} 
+                    onClose={() => setSelectedSeed(null)} 
+                    isEditable={selectedSeed.ownerFarmerId === currentUser.id || currentUser.groupId.includes('admin')}
+                />
+            )}
+            
+            {isRegistrationOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6">
+                        <h2 className="text-xl font-bold mb-4">Register Indigenous Variety</h2>
+                        <form onSubmit={(e) => { e.preventDefault(); handleRegistration({ name: (e.target as any).name.value, seedType: SeedType.Traditional, description: (e.target as any).description.value, daysToMaturity: '120' }); }}>
+                             <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Variety Name</label>
+                                    <input name="name" required className="w-full p-2 border rounded" placeholder="e.g. Warangal Red Rice" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Description / History</label>
+                                    <textarea name="description" required className="w-full p-2 border rounded" rows={3} placeholder="Describe characteristics and history..." />
+                                </div>
+                                <div className="bg-blue-50 p-3 rounded text-sm text-blue-800">
+                                    AI Analysis: In a future update, you will be able to upload a photo here to auto-fill traits using Gemini Vision.
+                                </div>
+                             </div>
+                             <div className="mt-6 flex justify-end gap-2">
+                                 <button type="button" onClick={() => setIsRegistrationOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+                                 <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded">Register Passport</button>
+                             </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

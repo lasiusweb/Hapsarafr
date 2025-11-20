@@ -1,7 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
-import { Farmer } from '../types';
+import { Farmer, BillableEvent } from '../types';
 import { WalletModel } from '../db';
 import CustomSelect from './CustomSelect';
+import { TRANSACTION_FEE_PERCENT } from '../data/subscriptionPlans';
+import { deductCredits } from '../lib/billing';
+import { useDatabase } from '../DatabaseContext';
 
 const formatCurrency = (value: number) => {
     return value.toLocaleString('en-IN', {
@@ -19,6 +23,7 @@ interface SendMoneyModalProps {
 }
 
 const SendMoneyModal: React.FC<SendMoneyModalProps> = ({ onClose, onSave, senderWallet, senderFarmer, allFarmers }) => {
+    const database = useDatabase();
     const [recipientId, setRecipientId] = useState('');
     const [amount, setAmount] = useState('');
     const [description, setDescriptiion] = useState('');
@@ -45,6 +50,13 @@ const SendMoneyModal: React.FC<SendMoneyModalProps> = ({ onClose, onSave, sender
         }
     };
 
+    // Calculate estimated fee in Credits (1 Credit = 1 INR)
+    const estimatedFee = useMemo(() => {
+         const val = parseFloat(amount);
+         if(isNaN(val) || val <= 0) return 0;
+         return Math.ceil(val * (TRANSACTION_FEE_PERCENT / 100));
+    }, [amount]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const numericAmount = parseFloat(amount);
@@ -54,8 +66,33 @@ const SendMoneyModal: React.FC<SendMoneyModalProps> = ({ onClose, onSave, sender
             return;
         }
 
+        // Confirmation for Fee
+        if (estimatedFee > 0) {
+             if (!confirm(`This transaction will incur a processing fee of ${estimatedFee} Credits (charged to the Tenant). Proceed?`)) {
+                 return;
+             }
+        }
+
         setIsSubmitting(true);
         try {
+            // 1. Deduct Fee
+            if (estimatedFee > 0) {
+                 const billingResult = await deductCredits(
+                    database,
+                    senderFarmer.tenantId,
+                    BillableEvent.TRANSACTION_PROCESSED,
+                    { amount: numericAmount, senderId: senderFarmer.id, recipientId },
+                    estimatedFee // Dynamic cost override
+                );
+
+                if ('error' in billingResult) {
+                    alert(`Transaction Failed: ${billingResult.error}`);
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            // 2. Process Transfer
             await onSave({
                 recipientId,
                 amount: numericAmount,
@@ -90,9 +127,16 @@ const SendMoneyModal: React.FC<SendMoneyModalProps> = ({ onClose, onSave, sender
                             required 
                             className={`mt-1 w-full p-2.5 border rounded-lg ${error ? 'border-red-500' : 'border-gray-300'}`}
                         />
-                        <p className={`text-xs mt-1 ${error ? 'text-red-600' : 'text-gray-500'}`}>
-                            {error || `Available: ${formatCurrency(senderWallet.balance)}`}
-                        </p>
+                        <div className="flex justify-between mt-1">
+                             <p className={`text-xs ${error ? 'text-red-600' : 'text-gray-500'}`}>
+                                {error || `Available: ${formatCurrency(senderWallet.balance)}`}
+                            </p>
+                            {estimatedFee > 0 && (
+                                <p className="text-xs text-blue-600 font-semibold">
+                                    Tenant Fee: {estimatedFee} Credits ({TRANSACTION_FEE_PERCENT}%)
+                                </p>
+                            )}
+                        </div>
                     </div>
                     <div>
                         <label htmlFor="description" className="block text-sm font-medium text-gray-700">Note (Optional)</label>

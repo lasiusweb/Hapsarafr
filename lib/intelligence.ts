@@ -1,6 +1,4 @@
 
-
-
 import { Farmer, FarmPlot, AgronomicInput, AgronomicRecommendation, InputType } from '../types';
 import { calculateNeighborStats, NeighborStats } from './socialProof';
 

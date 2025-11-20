@@ -4,8 +4,10 @@ import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { FarmerModel, ServicePointModel, CollectionAppointmentModel, ActivityLogModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
-import { User, ActivityType } from '../types';
+import { User, ActivityType, BillableEvent } from '../types';
 import CustomSelect from './CustomSelect';
+import { deductCredits } from '../lib/billing';
+import { SERVICE_PRICING } from '../data/subscriptionPlans';
 
 const AppointmentScheduler: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     const database = useDatabase();
@@ -92,8 +94,28 @@ const AppointmentScheduler: React.FC<{ currentUser: User }> = ({ currentUser }) 
             alert("Please select a farmer, service point, and time slot.");
             return;
         }
+        
+        if (!confirm(`Booking this appointment will cost ${SERVICE_PRICING.APPOINTMENT_BOOKED} credits. Proceed?`)) {
+            return;
+        }
+
         setIsSubmitting(true);
         try {
+            // 1. Deduct Credits
+            const billingResult = await deductCredits(
+                database, 
+                currentUser.tenantId, 
+                BillableEvent.APPOINTMENT_BOOKED, 
+                { farmerId: selectedFarmerId, servicePointId: selectedServicePointId }
+            );
+
+            if ('error' in billingResult) {
+                alert(`Billing Error: ${billingResult.error}`);
+                setIsSubmitting(false);
+                return;
+            }
+
+            // 2. Book Appointment
             await database.write(async () => {
                 const [hour, minute] = selectedSlot.split(':').map(Number);
                 const startTime = new Date(selectedDate);
@@ -117,7 +139,7 @@ const AppointmentScheduler: React.FC<{ currentUser: User }> = ({ currentUser }) 
                     log.tenantId = currentUser.tenantId;
                 });
             });
-            alert('Appointment booked successfully!');
+            alert(`Appointment booked successfully! ${billingResult.usedFreeTier ? '(Free Tier Used)' : ''}`);
             setSelectedSlot('');
         } catch (error) {
             console.error("Failed to book appointment:", error);
@@ -199,7 +221,10 @@ const AppointmentScheduler: React.FC<{ currentUser: User }> = ({ currentUser }) 
                 </div>
             )}
             
-            <div className="mt-8 pt-6 border-t flex justify-end">
+            <div className="mt-8 pt-6 border-t flex justify-end items-center gap-4">
+                 <span className="text-sm text-gray-500">
+                     Cost: <strong>{SERVICE_PRICING.APPOINTMENT_BOOKED} Credits</strong>
+                 </span>
                 <button
                     onClick={handleBookAppointment}
                     disabled={!selectedSlot || isSubmitting}
