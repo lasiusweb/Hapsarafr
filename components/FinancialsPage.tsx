@@ -1,16 +1,18 @@
 
+
+
 import React, { useState, useMemo, useCallback } from 'react';
 import withObservables from '@nozbe/with-observables';
 import { User, Farmer, EntrySource, TransactionStatus, WithdrawalAccount } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { FarmerModel, WalletModel, WalletTransactionModel, WithdrawalAccountModel } from '../db';
+import { FarmerModel, WalletModel, WalletTransactionModel, WithdrawalAccountModel, KhataRecordModel, DealerModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import SendMoneyModal from './SendMoneyModal';
 import WithdrawMoneyModal from './WithdrawMoneyModal';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, calculateReputationScore } from '../lib/utils';
 import SubsidyDisbursementModal from './SubsidyDisbursementModal';
 
 interface FinancialsPageProps {
@@ -20,6 +22,32 @@ interface FinancialsPageProps {
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
     onNavigate: (view: string, param?: string) => void;
 }
+
+const ReputationGauge: React.FC<{ score: number }> = ({ score }) => {
+    let color = 'text-gray-400';
+    let label = 'Unknown';
+    if (score >= 80) { color = 'text-green-600'; label = 'Excellent'; }
+    else if (score >= 60) { color = 'text-blue-600'; label = 'Good'; }
+    else if (score >= 40) { color = 'text-yellow-600'; label = 'Fair'; }
+    else { color = 'text-red-600'; label = 'At Risk'; }
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 text-center">
+            <p className="text-sm text-gray-500 uppercase tracking-wide font-bold mb-2">Reputation Capital</p>
+            <div className="relative h-32 w-32 mx-auto flex items-center justify-center">
+                <svg className="h-full w-full transform -rotate-90" viewBox="0 0 36 36">
+                    <path className="text-gray-200" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
+                    <path className={color} strokeDasharray={`${score}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                    <span className={`text-3xl font-extrabold ${color}`}>{score}</span>
+                    <span className="text-xs font-medium text-gray-500">{label}</span>
+                </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">Based on on-time payments & verified khata.</p>
+        </div>
+    );
+};
 
 const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: string }) => {
     const database = useDatabase();
@@ -40,6 +68,22 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
     const transactions = useQuery(useMemo(() => 
         wallet ? database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('wallet_id', (wallet as any).id), Q.sortBy('created_at', 'desc')) : database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('id', 'null')),
     [database, wallet]));
+    
+    // Fetch Khata Records
+    const khataRecords = useQuery(useMemo(() => database.get<KhataRecordModel>('khata_records').query(Q.where('farmer_id', farmerId), Q.sortBy('created_at', 'desc')), [database, farmerId]));
+    const dealers = useQuery(useMemo(() => database.get<DealerModel>('dealers').query(), [database]));
+    const dealerMap = useMemo(() => new Map(dealers.map(d => [d.id, d.shopName])), [dealers]);
+
+    const reputationScore = useMemo(() => calculateReputationScore(khataRecords.map(k => k._raw as any)), [khataRecords]);
+
+    const handleAcknowledgeKhata = async (record: KhataRecordModel) => {
+        await database.write(async () => {
+            await (record as any).update((r: any) => {
+                r.status = 'ACKNOWLEDGED';
+            });
+        });
+        setNotification({ message: 'Debt acknowledged. Reputation updated.', type: 'success' });
+    };
 
     const handleCreateWallet = async () => {
         if (!farmerId) return;
@@ -75,38 +119,83 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
     }
 
     return (
-        <div className="space-y-6">
-            <div className="bg-gradient-to-br from-green-600 to-emerald-700 text-white rounded-xl shadow-lg p-8">
-                <p className="text-lg opacity-80">Current Balance</p>
-                <p className="text-5xl font-bold mt-2">{formatCurrency(wallet.balance)}</p>
-                <p className="text-xs opacity-70 mt-4">Last updated: {new Date(wallet.updatedAt).toLocaleString()}</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button onClick={onOpenSendMoney} disabled={wallet.balance <= 0} className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-3 disabled:bg-gray-100 disabled:cursor-not-allowed"><span className="text-2xl">💸</span> <span className="font-semibold">Send Money</span></button>
-                <button onClick={onOpenWithdrawMoney} disabled={wallet.balance <= 0} className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-3 disabled:bg-gray-100 disabled:cursor-not-allowed"><span className="text-2xl">🏦</span> <span className="font-semibold">Withdraw</span></button>
-                <button onClick={() => setNotification({ message: 'Adding money to the wallet is coming soon.', type: 'info' })} className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-3"><span className="text-2xl">💳</span> <span className="font-semibold">Add Money</span></button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+                {/* Wallet Card */}
+                <div className="bg-gradient-to-br from-green-600 to-emerald-700 text-white rounded-xl shadow-lg p-8">
+                    <p className="text-lg opacity-80">Current Balance</p>
+                    <p className="text-5xl font-bold mt-2">{formatCurrency(wallet.balance)}</p>
+                    <div className="mt-6 flex gap-4">
+                         <button onClick={onOpenSendMoney} disabled={wallet.balance <= 0} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition flex items-center gap-2 disabled:opacity-50"><span>💸</span> Send</button>
+                         <button onClick={onOpenWithdrawMoney} disabled={wallet.balance <= 0} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition flex items-center gap-2 disabled:opacity-50"><span>🏦</span> Withdraw</button>
+                    </div>
+                </div>
+                
+                {/* Khata / Pending Approvals */}
+                <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+                     <div className="p-4 border-b bg-orange-50 flex justify-between items-center">
+                        <h3 className="font-bold text-orange-800 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Pending Approvals
+                        </h3>
+                        <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-1 rounded-full">
+                            {khataRecords.filter(r => r.status === 'PENDING').length}
+                        </span>
+                    </div>
+                    <div className="divide-y">
+                        {khataRecords.filter(r => r.status === 'PENDING').map(record => (
+                            <div key={record.id} className="p-4 flex justify-between items-center">
+                                <div>
+                                    <p className="font-bold text-gray-800">{dealerMap.get(record.dealerId) || 'Unknown Dealer'}</p>
+                                    <p className="text-sm text-gray-500">{record.description} • {formatCurrency(record.amount)}</p>
+                                </div>
+                                <button onClick={() => handleAcknowledgeKhata(record)} className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 shadow-sm">
+                                    Acknowledge
+                                </button>
+                            </div>
+                        ))}
+                         {khataRecords.filter(r => r.status === 'PENDING').length === 0 && (
+                            <p className="p-6 text-center text-gray-500 text-sm">No pending approvals.</p>
+                         )}
+                    </div>
+                </div>
+
+                {/* Transactions */}
+                <div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Wallet History</h3>
+                    <div className="bg-white rounded-lg shadow-md divide-y border border-gray-200">
+                        {transactions.map(tx => (
+                            <div key={tx.id} className="p-4 flex justify-between items-center">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-gray-100 p-3 rounded-full text-xl">{getTransactionIcon(tx.source)}</div>
+                                    <div>
+                                        <p className="font-semibold text-gray-800">{tx.description}</p>
+                                        <p className="text-xs text-gray-500">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <p className={`font-bold ${tx.transactionType === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                                    {tx.transactionType === 'credit' ? '+' : '-'} {formatCurrency(tx.amount)}
+                                </p>
+                            </div>
+                        ))}
+                        {transactions.length === 0 && <p className="text-center text-gray-500 p-8">No transactions yet.</p>}
+                    </div>
+                </div>
             </div>
 
-            <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Transactions</h3>
-                <div className="bg-white rounded-lg shadow-md divide-y">
-                    {transactions.map(tx => (
-                        <div key={tx.id} className="p-4 flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                                <div className="bg-gray-100 p-3 rounded-full">{getTransactionIcon(tx.source)}</div>
-                                <div>
-                                    <p className="font-semibold">{tx.description}</p>
-                                    <p className="text-sm text-gray-500">{new Date(tx.createdAt).toLocaleDateString()}</p>
-                                </div>
-                            </div>
-                            <p className={`font-bold text-lg ${tx.transactionType === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                                {tx.transactionType === 'credit' ? '+' : '-'} {formatCurrency(tx.amount)}
-                            </p>
-                        </div>
-                    ))}
-                    {transactions.length === 0 && <p className="text-center text-gray-500 p-8">No transactions yet.</p>}
-                </div>
+            <div className="lg:col-span-1 space-y-6">
+                 <ReputationGauge score={reputationScore} />
+                 
+                 {/* Offers based on Reputation */}
+                 {reputationScore > 70 && (
+                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                        <h4 className="font-bold text-blue-900 mb-2">Offers Unlocked! 🎉</h4>
+                        <ul className="space-y-2 text-sm text-blue-800">
+                            <li className="flex items-center gap-2">✅ <strong>Low Interest BNPL</strong> available at Agri-Store.</li>
+                            <li className="flex items-center gap-2">✅ <strong>Priority Processing</strong> for crop loans.</li>
+                        </ul>
+                     </div>
+                 )}
             </div>
         </div>
     );
@@ -226,7 +315,7 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-6xl mx-auto">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Farmer Wallet Dashboard</h1>
@@ -248,7 +337,7 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                     <WalletView farmerId={selectedFarmerId} setNotification={setNotification} onOpenSendMoney={() => setIsSendMoneyModalOpen(true)} onOpenWithdrawMoney={() => setIsWithdrawMoneyModalOpen(true)} />
                 ) : (
                     <div className="text-center py-20 text-gray-500 bg-white rounded-lg shadow-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                         <h2 className="text-xl font-semibold mt-4">Select a Farmer</h2>
                         <p className="mt-1">Choose a farmer from the list above to view their wallet and transaction history.</p>
                     </div>

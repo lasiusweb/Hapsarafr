@@ -1,9 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { User, Group, Permission } from '../types';
 import { PERMISSIONS_LIST } from '../data/permissionsData';
 import CustomSelect from './CustomSelect';
 import { Input } from './ui/Input';
 import { Label } from './ui/Label';
+
+const TenantPartnerSettingsModal = lazy(() => import('./TenantPartnerSettingsModal'));
 
 interface AdminPageProps {
     users: User[];
@@ -40,11 +43,15 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
     const canManageUsers = permissions.has(Permission.CAN_MANAGE_USERS);
     const canManageGroups = permissions.has(Permission.CAN_MANAGE_GROUPS);
     const isSuperAdmin = currentUser.groupId === SUPER_ADMIN_GROUP_ID;
+    // Check if user is a Tenant Admin (usually 'group-admin' for that tenant)
+    const isTenantAdmin = currentUser.groupId.includes('admin') && !isSuperAdmin;
 
     const [activeTab, setActiveTab] = useState<'users' | 'groups'>(canManageUsers ? 'users' : 'groups');
     const [editedUsers, setEditedUsers] = useState<User[]>(users);
     const [editedGroups, setEditedGroups] = useState<Group[]>(groups);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(groups[0]?.id || null);
+    
+    const [isPartnerSettingsOpen, setIsPartnerSettingsOpen] = useState(false);
 
     useEffect(() => {
         setEditedUsers(users);
@@ -273,11 +280,25 @@ const AdminPage: React.FC<AdminPageProps> = ({ users, groups, currentUser, onSav
                         {permissions.has(Permission.CAN_MANAGE_SCHEMA) && <AdminCard title="Schema Manager" description="Define custom data fields for the farmer registration form." onClick={() => onNavigate('schema-manager')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>} />}
                         <AdminCard title="Resource Definitions" description="Manage inventory items like saplings and fertilizer for distribution." onClick={() => onNavigate('resource-management')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" /><path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" /></svg>} />
                         {permissions.has(Permission.CAN_MANAGE_VENDORS) && <AdminCard title="Vendor Management" description="Onboard and manage marketplace vendors." onClick={() => onNavigate('vendor-management')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H20a1 1 0 001-1V5a1 1 0 00-1-1h-6z" /></svg>} />}
-                         {isSuperAdmin && <AdminCard title="Tenant Management" description="Onboard new organizations and manage their subscription status." onClick={() => onNavigate('tenant-management')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" /></svg>} />}
+                        {isSuperAdmin && <AdminCard title="Tenant Management" description="Onboard new organizations and manage their subscription status." onClick={() => onNavigate('tenant-management')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" /></svg>} />}
+                        
+                        {/* Ethical Partnership Card */}
+                        {(isTenantAdmin || isSuperAdmin) && (
+                            <AdminCard 
+                                title="Partner Ecosystem" 
+                                description="Configure ethical standards, block categories, and manage revenue sharing." 
+                                onClick={() => setIsPartnerSettingsOpen(true)} 
+                                icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
+                            />
+                        )}
                     </div>
                 </div>
-
             </div>
+            {isPartnerSettingsOpen && (
+                <Suspense fallback={null}>
+                    <TenantPartnerSettingsModal onClose={() => setIsPartnerSettingsOpen(false)} currentUser={currentUser} />
+                </Suspense>
+            )}
         </div>
     );
 };

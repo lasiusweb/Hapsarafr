@@ -1,9 +1,11 @@
 
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { User } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { DealerModel, FarmerModel, FarmPlotModel, ProductModel } from '../db';
+import { DealerModel, FarmerModel, FarmPlotModel, ProductModel, DealerInventorySignalModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import { getInventoryPredictions } from '../lib/businessIntelligence';
 
@@ -42,6 +44,7 @@ const DealerInsights: React.FC<DealerInsightsProps> = ({ currentUser }) => {
     const [dealer, setDealer] = useState<DealerModel | null>(null);
     const [predictions, setPredictions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [regionalStats, setRegionalStats] = useState<{ plantingTrend: string, recentAcreage: number }>({ plantingTrend: '', recentAcreage: 0 });
 
     // 1. Load Dealer Profile
     useEffect(() => {
@@ -55,32 +58,38 @@ const DealerInsights: React.FC<DealerInsightsProps> = ({ currentUser }) => {
 
     // 2. Load Data for Intelligence Engine
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
-    // Need all plots to aggregate acreage
     const allPlots = useQuery(useMemo(() => database.get<FarmPlotModel>('farm_plots').query(), [database]));
     const products = useQuery(useMemo(() => database.get<ProductModel>('products').query(), [database]));
+    const inventory = useQuery(useMemo(() => database.get<DealerInventorySignalModel>('dealer_inventory_signals').query(Q.where('dealer_id', dealer?.id || 'unknown')), [database, dealer?.id]));
 
     // 3. Run Intelligence Logic
     useEffect(() => {
         if (!dealer || farmers.length === 0) return;
         
         const runAnalysis = async () => {
-            // In a real app, we'd fetch pre-computed 'market_trends' from the server here.
-            // For now, we run the client-side heuristic.
-            
-            // Filter farmers in this dealer's mandal (if dealer has location set)
             const localFarmers = dealer.mandal !== 'Unknown' 
                 ? farmers.filter(f => f.mandal === dealer.mandal)
-                : farmers; // Fallback to all if location unknown
+                : farmers; 
             
             const localFarmerIds = new Set(localFarmers.map(f => f.id));
             const localPlots = allPlots.filter(p => localFarmerIds.has(p.farmerId));
 
-            const results = getInventoryPredictions(localPlots, products);
+            // Regional Stats (Last 30 days)
+            const now = new Date();
+            const recentPlots = localPlots.filter(p => p.plantationDate && (now.getTime() - new Date(p.plantationDate).getTime()) < (30 * 24 * 60 * 60 * 1000));
+            const recentAcreage = recentPlots.reduce((sum, p) => sum + p.acreage, 0);
+            
+            setRegionalStats({
+                plantingTrend: recentAcreage > 10 ? 'High Activity' : 'Low Activity',
+                recentAcreage: parseFloat(recentAcreage.toFixed(1))
+            });
+
+            const results = getInventoryPredictions(localPlots, products, inventory);
             setPredictions(results);
         };
         
         runAnalysis();
-    }, [dealer, farmers, allPlots, products]);
+    }, [dealer, farmers, allPlots, products, inventory]);
 
 
     if (loading) return <div className="text-center p-10">Loading Intelligence...</div>;
@@ -93,10 +102,32 @@ const DealerInsights: React.FC<DealerInsightsProps> = ({ currentUser }) => {
                 <strong>Beta Feature:</strong> These insights are generated based on aggregated, anonymized crop data in your service area ({dealer.mandal || 'General Region'}). They are estimates to help you plan, not guarantees of sales.
             </div>
 
+            {/* Regional Outlook Card (New) */}
+            <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl p-6 text-white shadow-lg">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="font-bold text-lg">Regional Outlook</h3>
+                        <p className="text-sm text-purple-200">{dealer.mandal} Mandal</p>
+                    </div>
+                    <span className="bg-white/20 px-2 py-1 rounded text-xs font-bold">Last 30 Days</span>
+                </div>
+                
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                    <div>
+                        <p className="text-3xl font-bold">{regionalStats.recentAcreage} ac</p>
+                        <p className="text-xs opacity-80">New Plantations</p>
+                    </div>
+                     <div>
+                        <p className="text-3xl font-bold">{regionalStats.plantingTrend}</p>
+                        <p className="text-xs opacity-80">Activity Level</p>
+                    </div>
+                </div>
+            </div>
+
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <InsightCard 
-                    title="Est. Fertilizer Demand (Next 30 Days)" 
+                    title="Est. Fertilizer Demand (30 Days)" 
                     value={`${predictions.reduce((sum, p) => p.category === 'Fertilizer' ? sum + p.predictedQuantity : sum, 0).toLocaleString()} kg`}
                     trend="up"
                     description="Based on active gestation acreage."
@@ -109,22 +140,31 @@ const DealerInsights: React.FC<DealerInsightsProps> = ({ currentUser }) => {
                 />
             </div>
 
-            {/* Inventory Recommendations */}
+            {/* Inventory Forecast */}
             <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Inventory Forecast</h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Stock Risk Analysis</h2>
                 
                 {predictions.length > 0 ? (
                     <div className="space-y-4">
                         {predictions.slice(0, 5).map((pred, idx) => (
                             <div key={idx} className="border-b pb-3 last:border-0">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="font-semibold text-gray-700">{pred.productName}</span>
-                                    <span className="font-mono font-bold text-indigo-600">{pred.predictedQuantity} {pred.unit}</span>
+                                    <div>
+                                        <span className="font-semibold text-gray-700">{pred.productName}</span>
+                                        {pred.stockStatus === 'CRITICAL_OUT' && <span className="ml-2 text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full font-bold">STOCKOUT</span>}
+                                        {pred.stockStatus === 'LOW' && <span className="ml-2 text-[10px] bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded-full font-bold">LOW</span>}
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="block font-mono font-bold text-indigo-600">{pred.predictedQuantity} {pred.unit}</span>
+                                        <span className="text-[10px] text-gray-400">Predicted Demand</span>
+                                    </div>
                                 </div>
                                 <div className="w-full bg-gray-100 rounded-full h-2">
+                                    {/* Confidence visualization */}
                                     <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${Math.min(pred.confidence * 100, 100)}%` }}></div>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-1">{pred.reasoning} ({Math.round(pred.confidence * 100)}% confidence)</p>
+                                <p className="text-xs text-gray-500 mt-1">{pred.reasoning}</p>
+                                {pred.gap > 0 && <p className="text-xs text-red-600 font-semibold mt-1">Deficit: {pred.gap} {pred.unit}</p>}
                             </div>
                         ))}
                     </div>

@@ -1,4 +1,6 @@
 
+
+
 import React, { useState } from 'react';
 import { AgronomicRecommendation } from '../types';
 import { GoogleGenAI, Modality } from '@google/genai';
@@ -18,6 +20,24 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation,
         'Medium': 'border-l-4 border-yellow-500 bg-yellow-50',
         'Low': 'border-l-4 border-blue-500 bg-blue-50',
     };
+
+    // Parse social proof if available
+    let socialProof = null;
+    if (recommendation.socialProofJson) {
+        try {
+            socialProof = JSON.parse(recommendation.socialProofJson);
+        } catch (e) { /* ignore */ }
+    }
+
+    // Parse action info if available
+    let actionInfo = { label: 'Take Action' };
+    if (recommendation.actionJson) {
+         try {
+            const parsed = JSON.parse(recommendation.actionJson);
+            if(parsed.label) actionInfo.label = parsed.label;
+        } catch (e) { /* ignore */ }
+    }
+
 
     const handleSpeak = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -40,7 +60,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation,
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const response = await ai.models.generateContent({
                     model: 'gemini-2.5-flash-preview-tts',
-                    contents: { parts: [{ text: `${recommendation.title}. ${recommendation.reasoning}` }] },
+                    contents: { parts: [{ text: `${recommendation.title}. ${recommendation.description}. ${socialProof ? socialProof.text : ''}` }] },
                     config: { responseModalities: [Modality.AUDIO] },
                 });
 
@@ -73,7 +93,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation,
         }
 
         // Fallback to Browser TTS
-        const utterance = new SpeechSynthesisUtterance(`${recommendation.title}. ${recommendation.reasoning}`);
+        const utterance = new SpeechSynthesisUtterance(`${recommendation.title}. ${recommendation.description}. ${socialProof ? socialProof.text : ''}`);
         utterance.onend = () => setIsPlaying(false);
         window.speechSynthesis.speak(utterance);
     };
@@ -87,6 +107,13 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation,
                         <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded-full bg-white/50 text-gray-600 border border-gray-200">{recommendation.priority}</span>
                     </div>
                     <p className="text-sm text-gray-700">{recommendation.description}</p>
+                    
+                    {socialProof && (
+                         <div className="mt-2 flex items-center gap-2 text-xs text-green-700 font-semibold bg-green-100 px-2 py-1 rounded-md w-fit border border-green-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            {socialProof.text}
+                        </div>
+                    )}
                 </div>
                 <button 
                     onClick={handleSpeak}
@@ -107,7 +134,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation,
                     </p>
                     <div className="mt-3 flex justify-end gap-2">
                         <button className="px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded">Dismiss</button>
-                        <button onClick={onAction} className="px-3 py-1 text-xs font-semibold bg-gray-800 text-white hover:bg-gray-900 rounded shadow-sm">Take Action</button>
+                        <button onClick={onAction} className="px-3 py-1 text-xs font-semibold bg-gray-800 text-white hover:bg-gray-900 rounded shadow-sm">{actionInfo.label}</button>
                     </div>
                 </div>
             )}
@@ -118,7 +145,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation,
                         onClick={() => setShowReasoning(true)}
                         className="text-xs font-medium text-gray-500 hover:text-gray-800 flex items-center justify-center gap-1 mx-auto"
                     >
-                        See Why
+                        See Why & Actions
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                     </button>
                 </div>

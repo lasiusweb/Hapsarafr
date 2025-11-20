@@ -1,13 +1,12 @@
 
-
 import React, { useMemo, useState } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { ProductCategoryModel, VendorModel, LeadModel, FarmerModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import { useCart } from '../CartContext';
-import { formatCurrency } from '../lib/utils';
-import { User, VendorStatus } from '../types';
+import { formatCurrency, farmerModelToPlain } from '../lib/utils';
+import { User, VendorStatus, Farmer } from '../types';
 import CreateListingModal from './CreateListingModal';
 import CustomSelect from './CustomSelect';
 
@@ -55,12 +54,18 @@ const CartWidget: React.FC<{ onNavigate: (view: 'checkout') => void }> = ({ onNa
     );
 };
 
-const PartnerCard: React.FC<{ vendor: VendorModel; onContact: (v: VendorModel) => void }> = ({ vendor, onContact }) => (
-    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-        <div className="flex justify-between items-start">
+const PartnerCard: React.FC<{ vendor: VendorModel; onContact: (v: VendorModel) => void; distanceTag?: string }> = ({ vendor, onContact, distanceTag }) => (
+    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg transition-shadow relative overflow-hidden">
+        {distanceTag && (
+            <div className="absolute top-0 right-0 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
+                {distanceTag}
+            </div>
+        )}
+        <div className="flex justify-between items-start mt-2">
             <div>
                 <h3 className="font-bold text-lg text-gray-800">{vendor.name}</h3>
                 <p className="text-sm text-gray-500">{vendor.sellerType} • {vendor.district}</p>
+                {vendor.mandal && <p className="text-xs text-gray-400">{vendor.mandal}</p>}
             </div>
             {vendor.status === VendorStatus.Verified && (
                 <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
@@ -117,11 +122,43 @@ const MarketplacePage: React.FC<MarketplacePageProps> = ({ onBack, onNavigate, c
     const [activeTab, setActiveTab] = useState<'products' | 'partners'>('products');
     const [isCreateListingOpen, setIsCreateListingOpen] = useState(false);
     const [contactModalVendor, setContactModalVendor] = useState<VendorModel | null>(null);
+    const [contextFarmerId, setContextFarmerId] = useState<string>('');
 
     const categories = useQuery(useMemo(() => database.get<ProductCategoryModel>('product_categories').query(Q.sortBy('name', 'asc')), [database]));
     // Filter partners (vendors who are not just selling products but offering services, or general verified vendors)
     const partners = useQuery(useMemo(() => database.get<VendorModel>('vendors').query(Q.where('status', VendorStatus.Verified)), [database]));
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
+    const farmerOptions = useMemo(() => farmers.map(f => ({ value: f.id, label: `${f.fullName} (${f.hapId || 'N/A'})` })), [farmers]);
+
+    const contextFarmer = useMemo(() => farmers.find(f => f.id === contextFarmerId), [farmers, contextFarmerId]);
+
+    // Hyper-Local Sorting Logic
+    const sortedPartners = useMemo(() => {
+        if (!contextFarmer) return partners;
+
+        return [...partners].sort((a, b) => {
+            // Score calculation (Lower score is closer/better)
+            // 0 = Same Village, 1 = Same Mandal, 2 = Same District, 3 = Far
+            const getScore = (v: VendorModel) => {
+                if (v.mandal === contextFarmer.mandal) return 0; // Treating Village same as Mandal for simplicity as vendor village data often missing
+                if (v.district === contextFarmer.district) return 1;
+                return 2;
+            };
+
+            const scoreA = getScore(a);
+            const scoreB = getScore(b);
+
+            if (scoreA !== scoreB) return scoreA - scoreB;
+            return b.rating - a.rating; // Then sort by rating desc
+        });
+    }, [partners, contextFarmer]);
+
+    const getDistanceTag = (vendor: VendorModel) => {
+        if (!contextFarmer) return undefined;
+        if (vendor.mandal === contextFarmer.mandal) return "📍 Local (Same Mandal)";
+        if (vendor.district === contextFarmer.district) return "🚗 Nearby (Same District)";
+        return undefined;
+    };
 
     const handleContactPartner = async (farmerId: string, notes: string) => {
         if (!contactModalVendor) return;
@@ -162,6 +199,22 @@ const MarketplacePage: React.FC<MarketplacePageProps> = ({ onBack, onNavigate, c
                     </button>
                 </div>
                 
+                <div className="bg-white p-4 rounded-lg shadow-sm mb-6 flex items-center gap-4 border border-indigo-100">
+                    <div className="bg-indigo-100 p-2 rounded-full text-indigo-600">
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </div>
+                    <div className="flex-grow">
+                        <p className="text-xs text-gray-500 font-semibold uppercase">Location Context</p>
+                         <CustomSelect 
+                            options={farmerOptions} 
+                            value={contextFarmerId} 
+                            onChange={setContextFarmerId} 
+                            placeholder="Select Farmer to see local options..." 
+                            className="mt-1 w-full max-w-md"
+                        />
+                    </div>
+                </div>
+
                 <div className="flex space-x-4 mb-6 border-b border-gray-200">
                     <button onClick={() => setActiveTab('products')} className={`pb-3 px-2 text-lg font-bold border-b-2 transition-colors ${activeTab === 'products' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Agri-Store</button>
                     <button onClick={() => setActiveTab('partners')} className={`pb-3 px-2 text-lg font-bold border-b-2 transition-colors ${activeTab === 'partners' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Service Partners</button>
@@ -187,10 +240,10 @@ const MarketplacePage: React.FC<MarketplacePageProps> = ({ onBack, onNavigate, c
                             <p className="text-sm text-blue-800"><strong>Verified Partners Only:</strong> All partners listed here have undergone physical verification by Hapsara Field Officers to ensure trust and quality service.</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {partners.map(vendor => (
-                                <PartnerCard key={vendor.id} vendor={vendor} onContact={setContactModalVendor} />
+                            {sortedPartners.map(vendor => (
+                                <PartnerCard key={vendor.id} vendor={vendor} onContact={setContactModalVendor} distanceTag={getDistanceTag(vendor)} />
                             ))}
-                             {partners.length === 0 && <div className="col-span-full text-center text-gray-500 py-10 bg-white rounded-lg">No verified partners available in your area yet.</div>}
+                             {sortedPartners.length === 0 && <div className="col-span-full text-center text-gray-500 py-10 bg-white rounded-lg">No verified partners available in your area yet.</div>}
                         </div>
                     </>
                 )}

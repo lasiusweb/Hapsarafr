@@ -1,18 +1,13 @@
-// Using `any` for Supabase types because the library is loaded from a CDN.
-// In a project with a package manager, you would import types:
-// import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-let supabase: any | null = null;
+let supabase: SupabaseClient | null = null;
 
-export const initializeSupabase = (): any | null => {
+export const initializeSupabase = (): SupabaseClient | null => {
     const supabaseUrl = localStorage.getItem('supabaseUrl');
     const supabaseAnonKey = localStorage.getItem('supabaseAnonKey');
 
-    // @ts-ignore - supabase is loaded from CDN
-    const { createClient } = window.supabase;
-
-    if (supabaseUrl && supabaseAnonKey && createClient) {
-        if (!supabase) { // Initialize only once
+    if (supabaseUrl && supabaseAnonKey) {
+        if (!supabase) {
             supabase = createClient(supabaseUrl, supabaseAnonKey);
         }
         return supabase;
@@ -20,9 +15,10 @@ export const initializeSupabase = (): any | null => {
     return null;
 };
 
-export const getSupabase = (): any => {
+export const getSupabase = (): SupabaseClient | null => {
+    // Attempt to initialize if not already done (e.g. on page reload)
     if (!supabase) {
-        throw new Error("Supabase has not been initialized. Call initializeSupabase first.");
+        return initializeSupabase();
     }
     return supabase;
-}
+};

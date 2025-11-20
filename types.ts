@@ -118,6 +118,7 @@ export interface Farmer {
     mlrdPlants?: number;
     fullCostPlants?: number;
     asoId?: string;
+    trustScore?: number; // 0-100 Data Fidelity Score
 }
 
 export interface FarmPlot {
@@ -303,6 +304,12 @@ export interface ForumAnswer {
 
 export interface ForumContentFlag {
     id: string;
+    content_id: string;
+    content_type: 'post' | 'answer';
+    reason: string;
+    notes?: string;
+    flagged_by_id: string;
+    status: 'pending' | 'resolved' | 'dismissed';
 }
 
 export interface Resource {
@@ -572,6 +579,7 @@ export interface Event {
     location: string;
     createdBy: string;
     tenantId: string;
+    createdAt: number;
 }
 
 export interface EventRsvp {
@@ -722,6 +730,9 @@ export interface Vendor {
     sellerType: string;
     farmerId?: string;
     documentsJson?: string;
+    // Add these
+    mandal?: string;
+    district?: string;
 }
 
 export enum VendorStatus {
@@ -991,7 +1002,17 @@ export interface DealerInventorySignal {
     dealerId: string;
     productId: string;
     isAvailable: boolean;
+    stockQuantity: number;
+    reorderLevel: number;
     updatedAt: string;
+}
+
+// Enhanced Khata Types for Hapsara Khata v2.0
+export enum KhataTransactionType {
+    CREDIT_GIVEN = 'CREDIT_GIVEN',
+    PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
+    INTEREST_CHARGED = 'INTEREST_CHARGED',
+    DISCOUNT_GIVEN = 'DISCOUNT_GIVEN'
 }
 
 export interface KhataRecord {
@@ -999,11 +1020,14 @@ export interface KhataRecord {
     dealerId: string;
     farmerId: string;
     amount: number;
-    transactionType: string;
+    transactionType: KhataTransactionType | string; // string fallback for legacy
     description: string;
     transactionDate: string;
-    status: string;
+    dueDate?: string; // New for aging analysis
+    proofImageUrl?: string; // New for evidence
+    status: string; // 'PENDING' | 'SYNCED' | 'DISPUTED'
     createdAt: number;
+    syncStatusLocal?: string;
 }
 
 export interface DealerFarmerConnection {
@@ -1014,11 +1038,13 @@ export interface DealerFarmerConnection {
     lastTransactionDate: string;
 }
 
+// Expanded for Hapsara Intellectus
 export interface AgronomicRecommendation {
     id: string;
     farmerId: string;
     triggerSource: string;
-    actionType: string;
+    type: 'URGENT_INTERVENTION' | 'YIELD_OPPORTUNITY' | 'MARKET_TIMING' | 'MAINTENANCE' | 'INPUT_PURCHASE' | 'GENERAL';
+    actionType: string; // Deprecated in favor of type, keep for compat if needed or map it
     title: string;
     description: string;
     reasoning: string;
@@ -1026,6 +1052,10 @@ export interface AgronomicRecommendation {
     status: string;
     createdAt: string;
     tenantId: string;
+    // New rich fields
+    actionJson?: string; // JSON string: { label: string, intent: string, payload: any }
+    impactJson?: string; // JSON string: { metric: string, change: string, confidence: number }
+    socialProofJson?: string; // JSON string: { text: string, stats: any }
 }
 
 export interface DealerInsights {
@@ -1081,6 +1111,9 @@ export interface DealerProfile {
     id: string;
     userId: string;
     shopName: string;
+    address: string;
+    district: string;
+    mandal: string;
 }
 
 // --- Hapsara Genetica (Seed System) Types ---
@@ -1182,4 +1215,59 @@ export interface Lead {
     notes?: string;
     createdAt: number;
     tenantId: string;
+}
+
+// --- Partnership Ecosystem Types ---
+
+export interface Partner {
+    id: string;
+    name: string;
+    category: string;
+    trustScore: number;
+    status: 'Sandbox' | 'Active' | 'Suspended';
+    kybStatus: 'Pending' | 'Verified' | 'Rejected';
+    logoUrl?: string;
+    website?: string;
+    createdAt: number;
+}
+
+export interface PartnerOffering {
+    id: string;
+    partnerId: string;
+    title: string;
+    description: string;
+    targetCropsJson?: string;
+    targetSoilTypesJson?: string;
+    regionCodesJson?: string;
+    affiliateFeePercent: number;
+    actionLabel: string;
+}
+
+export interface FarmerPartnerConsent {
+    id: string;
+    farmerId: string;
+    partnerId: string;
+    scopesJson: string;
+    grantedAt: number;
+    expiresAt: number;
+    status: 'Active' | 'Revoked';
+    tenantId: string;
+}
+
+export interface PartnerInteraction {
+    id: string;
+    farmerId: string;
+    partnerId: string;
+    offeringId?: string;
+    interactionType: 'VIEW' | 'CONNECT' | 'CONVERT';
+    timestamp: number;
+    tenantId: string;
+}
+export interface TenantPartnerConfig {
+    id: string;
+    tenantId: string;
+    revenueShareEnabled: boolean;
+    blockedCategoriesJson?: string; // JSON array of blocked partner categories
+    blockedPartnerIdsJson?: string; // JSON array of blocked partner IDs
+    syncStatus?: string;
 }

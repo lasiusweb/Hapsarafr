@@ -1,9 +1,10 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { DatabaseProvider } from './DatabaseContext';
 import { CartProvider } from './CartContext';
+import './index.css';
+import 'leaflet/dist/leaflet.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

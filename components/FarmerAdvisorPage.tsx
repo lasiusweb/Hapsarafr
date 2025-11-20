@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Farmer, AgronomicRecommendation } from '../types';
 import { useDatabase } from '../DatabaseContext';
@@ -32,8 +34,8 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
         selectedFarmerId ? database.get<FarmPlotModel>('farm_plots').query(Q.where('farmer_id', selectedFarmerId)) : database.get<FarmPlotModel>('farm_plots').query(Q.where('id', 'null')),
     [database, selectedFarmerId]));
     
-    // We need ALL inputs to check history properly, or at least filtered by farmer if we had a direct link. 
-    // Currently FarmPlot <-> AgronomicInput. So we can filter inputs by plots belonging to this farmer.
+    // Fetch ALL data to support Social Proof logic in the intelligence engine
+    const allPlotsModels = useQuery(useMemo(() => database.get<FarmPlotModel>('farm_plots').query(), [database]));
     const allInputModels = useQuery(useMemo(() => database.get<AgronomicInputModel>('agronomic_inputs').query(), [database]));
 
     const [recommendations, setRecommendations] = useState<AgronomicRecommendation[]>([]);
@@ -42,14 +44,26 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
         if (selectedFarmerModel && farmPlotsModels.length > 0) {
             const plainFarmer = farmerModelToPlain(selectedFarmerModel)!;
             const plainPlots = farmPlotsModels.map(p => farmPlotModelToPlain(p)!);
-            const plainInputs = allInputModels.map(i => agronomicInputModelToPlain(i)!);
             
-            const generated = runIntelligenceEngine(plainFarmer, plainPlots, plainInputs);
+            // Convert all models to plain objects for the engine
+            const plainAllFarmers = farmers.map(f => farmerModelToPlain(f)!);
+            const plainAllPlots = allPlotsModels.map(p => farmPlotModelToPlain(p)!);
+            const plainAllInputs = allInputModels.map(i => agronomicInputModelToPlain(i)!);
+            
+            // Run engine with full context
+            const generated = runIntelligenceEngine(
+                plainFarmer, 
+                plainPlots, 
+                plainAllInputs.filter(i => plainPlots.some(p => p.id === i.farm_plot_id)), // Current farmer inputs
+                plainAllFarmers,
+                plainAllPlots,
+                plainAllInputs
+            );
             setRecommendations(generated);
         } else {
             setRecommendations([]);
         }
-    }, [selectedFarmerModel, farmPlotsModels, allInputModels]);
+    }, [selectedFarmerModel, farmPlotsModels, allPlotsModels, allInputModels, farmers]);
 
 
     return (
@@ -84,10 +98,23 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
                                             key={rec.id} 
                                             recommendation={rec} 
                                             onAction={() => {
-                                                if (rec.actionType === 'MAINTENANCE' || rec.actionType === 'INPUT_PURCHASE') {
-                                                    onNavigate('farmer-details', selectedFarmerId); // Ideally navigate to specific tab
+                                                // Basic routing based on intent from new actionJson
+                                                if (rec.actionJson) {
+                                                    try {
+                                                        const action = JSON.parse(rec.actionJson);
+                                                        if (action.intent === 'OPEN_INPUT_LOG') {
+                                                            // Navigate or open modal - for now just simple routing
+                                                            onNavigate('farmer-details', selectedFarmerId); 
+                                                        } else if (action.intent === 'OPEN_MARKETPLACE') {
+                                                            onNavigate('marketplace');
+                                                        }
+                                                    } catch(e) { console.error(e); }
                                                 }
-                                                // Add more specific navigation logic here
+                                                
+                                                // Fallback
+                                                if (rec.type === 'MAINTENANCE' || rec.type === 'INPUT_PURCHASE') {
+                                                    onNavigate('farmer-details', selectedFarmerId); 
+                                                }
                                             }}
                                         />
                                     ))

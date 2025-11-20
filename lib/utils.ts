@@ -1,6 +1,7 @@
+
 import { GEO_DATA } from '../data/geoData';
 // FIX: Import AgronomicInput type
-import { Farmer, FarmPlot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, EquipmentLease, PlantingRecord, AgronomicInput } from '../types';
+import { Farmer, FarmPlot, SubsidyPayment, User, Group, ActivityLog, Tenant, Resource, ResourceDistribution, CustomFieldDefinition, Task, Harvest, QualityAssessment, QualityMetric, ProcessingBatch, ProcessingStep, Equipment, ManualLedgerEntry, EquipmentLease, PlantingRecord, AgronomicInput, KhataRecord } from '../types';
 // FIX: Import AgronomicInputModel type
 import { FarmerModel, FarmPlotModel, SubsidyPaymentModel, UserModel, GroupModel, ActivityLogModel, TenantModel, ResourceModel, ResourceDistributionModel, CustomFieldDefinitionModel, TaskModel, HarvestModel, QualityAssessmentModel, QualityMetricModel, ProcessingBatchModel, ProcessingStepModel, EquipmentModel, ManualLedgerEntryModel, EquipmentLeaseModel, PlantingRecordModel, AgronomicInputModel } from '../db';
 import DOMPurify from 'dompurify';
@@ -69,4 +70,29 @@ export const getGeoName = (type: 'district' | 'mandal' | 'village', farmer: { di
 
     const village = mandal.villages.find(v => v.code === farmer.village);
     return village ? village.name : 'Unknown';
+};
+
+export const generateWhatsAppLink = (mobileNumber: string, message: string) => {
+    // Remove non-numeric characters
+    const cleanNumber = mobileNumber.replace(/\D/g, '');
+    // Ensure country code (assuming India +91 if not present and length is 10)
+    const formattedNumber = cleanNumber.length === 10 ? `91${cleanNumber}` : cleanNumber;
+    const encodedMessage = encodeURIComponent(message);
+    return `https://wa.me/${formattedNumber}?text=${encodedMessage}`;
+};
+
+export const calculateReputationScore = (khataRecords: KhataRecord[]): number => {
+    if (khataRecords.length === 0) return 50; // Start neutral
+
+    let score = 50;
+    const paidOnTime = khataRecords.filter(r => r.status === 'PAID').length;
+    const pending = khataRecords.filter(r => r.status === 'PENDING' || r.status === 'ACKNOWLEDGED').length;
+    const disputed = khataRecords.filter(r => r.status === 'DISPUTED').length;
+    
+    // Basic heuristic
+    score += (paidOnTime * 5);
+    score -= (disputed * 10);
+    
+    // Cap between 0 and 100
+    return Math.max(0, Math.min(100, score));
 };
