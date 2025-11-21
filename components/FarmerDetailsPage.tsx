@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { Q } from '@nozbe/watermelondb';
@@ -28,6 +28,7 @@ import RequestVisitModal from './RequestVisitModal';
 import CropAssignmentModal from './CropAssignmentModal';
 import ResourceRecommender from './ResourceRecommender';
 import HarvestLogger from './HarvestLogger';
+import InsigniaCard from './InsigniaCard'; // Import the new component
 
 interface FarmerDetailsPageProps {
     farmerId: string;
@@ -39,6 +40,124 @@ interface FarmerDetailsPageProps {
     allTenants: TenantModel[];
     allTerritories: TerritoryModel[];
 }
+
+// --- Catalyst Widget Component ---
+interface CatalystAction {
+    title: string;
+    description: string;
+    buttonLabel: string;
+    action: () => void;
+    icon: React.ReactNode;
+    type: 'URGENT' | 'OPPORTUNITY' | 'ROUTINE';
+}
+
+const CatalystWidget: React.FC<{ farmer: Farmer; plots: FarmPlot[]; actions: Record<string, () => void> }> = ({ farmer, plots, actions }) => {
+    
+    const recommendedAction: CatalystAction | null = useMemo(() => {
+        // Priority 1: KYC (Blocker for subsidies)
+        if (!farmer.accountVerified) {
+            return {
+                title: 'KYC Verification Pending',
+                description: 'Bank account is unverified. Subsidies cannot be processed.',
+                buttonLabel: 'Verify Now',
+                action: actions.openKyc,
+                icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
+                type: 'URGENT'
+            };
+        }
+
+        // Priority 2: Registered but no Plots (Data Gap)
+        if (farmer.status === FarmerStatus.Registered && plots.length === 0) {
+            return {
+                title: 'Add Farm Plot',
+                description: 'Farmer is registered but has no land details. Add a plot to proceed.',
+                buttonLabel: 'Add Plot',
+                action: actions.openPlot,
+                icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>,
+                type: 'URGENT'
+            };
+        }
+
+        // Priority 3: Plots exist but not Planted (Execution Gap)
+        if (farmer.status === FarmerStatus.Sanctioned && plots.length > 0) {
+             return {
+                title: 'Verify Plantation',
+                description: 'Plots are sanctioned. Check if planting is complete to update status.',
+                buttonLabel: 'Schedule Visit',
+                action: actions.openVisit,
+                icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+                type: 'OPPORTUNITY'
+            };
+        }
+
+        // Priority 4: Planted > 4 years (Mature - Revenue Opportunity)
+        const hasMaturePlot = plots.some(p => {
+            if (!p.plantation_date) return false;
+            const age = (new Date().getTime() - new Date(p.plantation_date).getTime()) / (1000 * 60 * 60 * 24 * 365);
+            return age > 3.5;
+        });
+
+        if (hasMaturePlot) {
+             return {
+                title: 'Harvest Ready',
+                description: 'Mature plots detected. Ensure harvest logs are being recorded.',
+                buttonLabel: 'Log Harvest',
+                action: actions.openHarvest, // This implies navigating to harvest logger or opening modal if available
+                icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>,
+                type: 'OPPORTUNITY'
+            };
+        }
+        
+        // Default: General Advisory
+        return {
+            title: 'Routine Check-in',
+            description: 'Farmer is in good standing. Review agronomic advisory.',
+            buttonLabel: 'Open Advisor',
+            action: actions.openAdvisor,
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
+            type: 'ROUTINE'
+        };
+
+    }, [farmer, plots]);
+
+    if (!recommendedAction) return null;
+
+    const bgColors = {
+        'URGENT': 'bg-red-50 border-red-200',
+        'OPPORTUNITY': 'bg-yellow-50 border-yellow-200',
+        'ROUTINE': 'bg-blue-50 border-blue-200',
+    };
+
+    const btnColors = {
+        'URGENT': 'bg-red-600 hover:bg-red-700',
+        'OPPORTUNITY': 'bg-yellow-600 hover:bg-yellow-700',
+        'ROUTINE': 'bg-blue-600 hover:bg-blue-700',
+    };
+
+    return (
+        <div className={`mb-6 rounded-lg border p-4 flex items-start justify-between ${bgColors[recommendedAction.type]} shadow-sm`}>
+            <div className="flex gap-4">
+                <div className={`p-2 rounded-full bg-white shadow-sm`}>
+                    {recommendedAction.icon}
+                </div>
+                <div>
+                    <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-gray-800">{recommendedAction.title}</h4>
+                        {recommendedAction.type === 'URGENT' && <span className="px-2 py-0.5 text-[10px] font-bold bg-red-200 text-red-800 rounded-full">ACTION REQUIRED</span>}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{recommendedAction.description}</p>
+                </div>
+            </div>
+            <button 
+                onClick={recommendedAction.action}
+                className={`px-4 py-2 text-white text-sm font-semibold rounded-lg shadow-md transition-transform transform hover:scale-105 ${btnColors[recommendedAction.type]}`}
+            >
+                {recommendedAction.buttonLabel}
+            </button>
+        </div>
+    );
+};
+
 
 const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({ 
     farmerId, users, currentUser, onBack, permissions, setNotification, allTenants 
@@ -60,6 +179,9 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
     // Harvest Logger State
     const [isHarvestLoggerOpen, setIsHarvestLoggerOpen] = useState(false);
     const [activeCropAssignment, setActiveCropAssignment] = useState<CropAssignmentModel | null>(null);
+
+    // Insignia State
+    const [isInsigniaOpen, setIsInsigniaOpen] = useState(false);
 
     // Data Queries
     const farmerModel = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('id', farmerId)), [database, farmerId]))[0];
@@ -169,6 +291,27 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
         setIsHarvestLoggerOpen(true);
     };
 
+    // Catalyst Actions
+    const catalystActions = {
+        openKyc: () => setIsKycModalOpen(true),
+        openPlot: () => { setSelectedPlot(null); setIsPlotModalOpen(true); },
+        openVisit: () => setIsVisitModalOpen(true),
+        openHarvest: () => {
+            // Try to find a primary assignment to log harvest for.
+            // Simplification: Just open the modal for the first assignment if exists, else show generic harvest logger
+            // For now, just alert as placeholder if complex flow needed, but let's just open visit modal as proxy or implement direct harvest if assignment exists.
+            // Better: show message
+            if (assignments.length > 0) {
+                handleLogHarvest(assignments[0]);
+            } else {
+                 setNotification({ message: 'No active crop assignments found to harvest. Assign crops to plots first.', type: 'info' });
+                 setActiveTab('plots');
+            }
+        },
+        openAdvisor: () => { /* Navigate to advisor page handled via routing usually, but here we can use props */ }
+    };
+
+
     if (!farmer) return <div className="p-6 text-center">Loading farmer details...</div>;
 
     const userMap = new Map(users.map(u => [u.id, u.name]));
@@ -185,6 +328,10 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                                 {farmer.fullName}
                                 <StatusBadge status={farmer.status as FarmerStatus} />
+                                <button onClick={() => setIsInsigniaOpen(true)} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded border border-indigo-200 hover:bg-indigo-200 flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1.323l-9.8 3.518A8.955 8.955 0 0110 2zm1 2.677V18H9V4.677L1 7.549V9a9 9 0 1018 0V7.549l-8-2.872z"/></svg>
+                                    VIEW INSIGNIA
+                                </button>
                             </h1>
                             <p className="text-sm text-gray-500">HAP ID: {farmer.hap_id || 'Pending Sync'} • {getGeoName('village', farmer)}, {getGeoName('mandal', farmer)}</p>
                         </div>
@@ -194,6 +341,9 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
                         <button onClick={() => setIsConsentModalOpen(true)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 text-sm font-semibold">Data Consent</button>
                     </div>
                 </div>
+
+                {/* Hapsara Catalyst Widget */}
+                <CatalystWidget farmer={farmer} plots={plainPlots} actions={catalystActions} />
 
                 {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -398,6 +548,14 @@ const FarmerDetailsPage: React.FC<FarmerDetailsPageProps> = ({
                     onClose={() => setIsHarvestLoggerOpen(false)}
                     currentUser={currentUser}
                     setNotification={setNotification}
+                />
+            )}
+
+            {/* Insignia Modal */}
+            {isInsigniaOpen && (
+                <InsigniaCard 
+                    farmer={farmer}
+                    onClose={() => setIsInsigniaOpen(false)}
                 />
             )}
         </div>

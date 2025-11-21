@@ -14,6 +14,7 @@ import FeedbackModal from './components/FeedbackModal';
 import SupabaseSettingsModal from './components/SupabaseSettingsModal';
 import InvitationModal from './components/InvitationModal';
 import AcceptInvitation from './components/AcceptInvitation';
+import DiscussModeModal from './components/DiscussModeModal';
 
 // Lazy loaded components
 const FarmerDirectoryPage = lazy(() => import('./components/FarmerDirectoryPage'));
@@ -91,6 +92,7 @@ function App() {
     const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
     const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
     const [isInvitationModalOpen, setIsInvitationModalOpen] = useState(false);
+    const [isDiscussModeOpen, setIsDiscussModeOpen] = useState(false);
     const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
     const [appContent, setAppContent] = useState<any>(null);
 
@@ -259,6 +261,7 @@ function App() {
                 printQueueLength={printQueue.length}
                 onLogout={handleLogout}
                 onOpenHelp={() => setIsHelpModalOpen(true)}
+                onOpenDiscuss={() => setIsDiscussModeOpen(true)}
             />
             <main className="flex-1 overflow-y-auto relative">
                  {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
@@ -273,6 +276,7 @@ function App() {
             <PrivacyModal onClose={() => setIsPrivacyModalOpen(false)} appContent={appContent} />
             <FeedbackModal onClose={() => setIsFeedbackModalOpen(false)} />
             {isInvitationModalOpen && <InvitationModal currentUser={currentUser} onClose={() => setIsInvitationModalOpen(false)} />}
+            {isDiscussModeOpen && <DiscussModeModal currentUser={currentUser} onClose={() => setIsDiscussModeOpen(false)} />}
         </div>
     );
 }

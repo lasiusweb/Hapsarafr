@@ -32,6 +32,10 @@ const initialFormData: Omit<Farmer, 'id' | 'createdAt' | 'updatedAt'> & any = {
     mobileNumber: '',
     gender: 'Male',
     address: '',
+    street: '',
+    city: '',
+    state: 'Telangana',
+    zip: '',
     ppbRofrId: '',
     photo: '',
     bankAccountNumber: '',
@@ -77,7 +81,7 @@ const STEPS = [
 
 const FIELDS_BY_STEP: (keyof Farmer | string)[][] = [
     [], // 1-based index
-    ['fullName', 'fatherHusbandName', 'address', 'aadhaarNumber', 'mobileNumber', 'registrationDate'],
+    ['fullName', 'fatherHusbandName', 'street', 'city', 'state', 'zip', 'aadhaarNumber', 'mobileNumber', 'registrationDate'],
     ['district', 'mandal', 'village'],
     ['bankAccountNumber', 'ifscCode'],
     ['appliedExtent', 'approvedExtent', 'numberOfPlants', 'mlrdPlants'],
@@ -88,7 +92,14 @@ const runValidationForStep = (step: number, data: any): Record<string, string> =
     if (step === 1) {
         if (!data.fullName.trim()) newErrors.fullName = "Full Name is required.";
         if (!data.fatherHusbandName.trim()) newErrors.fatherHusbandName = "Father/Husband Name is required.";
-        if (!data.address.trim()) newErrors.address = "Address is required.";
+        
+        // Address Validation
+        if (!data.street?.trim()) newErrors.street = "Street Address is required.";
+        if (!data.city?.trim()) newErrors.city = "City is required.";
+        if (!data.state?.trim()) newErrors.state = "State is required.";
+        if (!data.zip?.trim()) newErrors.zip = "Zip Code is required.";
+        else if (!/^\d{6}$/.test(data.zip)) newErrors.zip = "Zip Code must be 6 digits.";
+
         if (data.aadhaarNumber.trim() && !/^\d{12}$/.test(data.aadhaarNumber)) newErrors.aadhaarNumber = "If provided, Aadhaar must be 12 digits.";
         if (!/^[6-9]\d{9}$/.test(data.mobileNumber)) newErrors.mobileNumber = "Mobile number must be 10 digits and start with 6-9.";
         const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -180,7 +191,40 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
     useEffect(() => {
         if (mode === 'edit' && existingFarmer) {
             const formStateFromFarmer = { ...initialFormData, ...existingFarmer };
-            setFormData(formStateFromFarmer);
+            
+            // Parse Address into components
+            const addr = existingFarmer.address || '';
+            const zipMatch = addr.match(/-\s*(\d{6})$/);
+            let zip = '';
+            let remaining = addr;
+            
+            if (zipMatch) {
+                zip = zipMatch[1];
+                remaining = addr.replace(/-\s*\d{6}$/, '').trim();
+            }
+            
+            const parts = remaining.split(',').map((s: string) => s.trim());
+            let state = 'Telangana';
+            let city = '';
+            let street = remaining;
+
+            if (parts.length >= 3) {
+                 state = parts.pop() || 'Telangana';
+                 city = parts.pop() || '';
+                 street = parts.join(', ');
+            } else if (parts.length === 2) {
+                 city = parts.pop() || '';
+                 street = parts[0];
+            }
+            
+            setFormData({ 
+                ...formStateFromFarmer,
+                street,
+                city,
+                state,
+                zip
+            });
+
             if (existingFarmer.photo) {
                 setPhotoPreview(existingFarmer.photo);
             }
@@ -278,6 +322,15 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
         } else {
              setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
         }
+        
+        // Update derived full address if components change
+        if (['street', 'city', 'state', 'zip'].includes(name)) {
+            setFormData(prev => {
+                const updated = { ...prev, [name]: value };
+                const fullAddress = `${updated.street}, ${updated.city}, ${updated.state} - ${updated.zip}`;
+                return { ...updated, address: fullAddress };
+            });
+        }
     };
     
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -366,11 +419,14 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
             let farmerData: any;
             const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
             const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
+            
+            // Clean up temporary address fields before preparing final data object
+            const { street, city, state, zip, ...finalData } = formData;
 
             if (mode === 'create') {
-                farmerData = { ...formData, id: '', asoId, createdAt: now, updatedAt: now, createdBy: currentUser.id, tenantId: currentUser.tenantId };
+                farmerData = { ...finalData, id: '', asoId, createdAt: now, updatedAt: now, createdBy: currentUser.id, tenantId: currentUser.tenantId };
             } else {
-                farmerData = { ...existingFarmer!, ...formData, updatedAt: now, updatedBy: currentUser.id };
+                farmerData = { ...existingFarmer!, ...finalData, updatedAt: now, updatedBy: currentUser.id };
             }
             setPreparedFarmerData(farmerData);
         } else {
@@ -577,7 +633,35 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
                                 <FormRow><Label htmlFor="aadhaarNumber">Aadhaar Number</Label><FormField><Input id="aadhaarNumber" type="text" name="aadhaarNumber" value={formData.aadhaarNumber} onChange={handleChange} className={getErrorClass('aadhaarNumber')} maxLength={12} disabled={mode === 'edit'} title={mode === 'edit' ? 'Aadhaar number cannot be changed.' : ''} /><InputError message={errors.aadhaarNumber} onDismiss={() => handleDismissError('aadhaarNumber')} /></FormField></FormRow>
                                 <FormRow><Label htmlFor="mobileNumber">Mobile Number <span className="text-red-500 ml-1">*</span></Label><FormField><Input id="mobileNumber" type="text" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} className={getErrorClass('mobileNumber')} maxLength={10} /><InputError message={errors.mobileNumber} onDismiss={() => handleDismissError('mobileNumber')} /></FormField></FormRow>
                                 <FormRow><Label htmlFor="gender">Gender <span className="text-red-500 ml-1">*</span></Label><FormField><Select id="gender" name="gender" value={formData.gender} onChange={handleChange} className={getErrorClass('gender')}><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></Select></FormField></FormRow>
-                                <FormRow><Label htmlFor="address">Address <span className="text-red-500 ml-1">*</span></Label><FormField><Textarea id="address" name="address" value={formData.address} onChange={handleChange} className={getErrorClass('address')} rows={3}></Textarea><InputError message={errors.address} onDismiss={() => handleDismissError('address')} /></FormField></FormRow>
+                                
+                                <div className="mb-4">
+                                    <Label>Address <span className="text-red-500 ml-1">*</span></Label>
+                                    <div className="mt-2 space-y-4">
+                                        <div>
+                                            <Label htmlFor="street" className="text-sm text-gray-600 mb-1 block">Street Address</Label>
+                                            <Input id="street" type="text" name="street" value={formData.street} onChange={handleChange} className={getErrorClass('street')} />
+                                            <InputError message={errors.street} onDismiss={() => handleDismissError('street')} />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <Label htmlFor="city" className="text-sm text-gray-600 mb-1 block">City / Village</Label>
+                                                <Input id="city" type="text" name="city" value={formData.city} onChange={handleChange} className={getErrorClass('city')} />
+                                                <InputError message={errors.city} onDismiss={() => handleDismissError('city')} />
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="state" className="text-sm text-gray-600 mb-1 block">State</Label>
+                                                <Input id="state" type="text" name="state" value={formData.state} onChange={handleChange} className={getErrorClass('state')} />
+                                                <InputError message={errors.state} onDismiss={() => handleDismissError('state')} />
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="zip" className="text-sm text-gray-600 mb-1 block">Zip Code</Label>
+                                                <Input id="zip" type="text" name="zip" value={formData.zip} onChange={handleChange} maxLength={6} className={getErrorClass('zip')} />
+                                                <InputError message={errors.zip} onDismiss={() => handleDismissError('zip')} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <FormRow><Label htmlFor="registrationDate">Registration Date</Label><FormField><Input id="registrationDate" type="date" name="registrationDate" value={formData.registrationDate} onChange={handleChange} className={getErrorClass('registrationDate')} max={new Date().toISOString().split('T')[0]} /><InputError message={errors.registrationDate} onDismiss={() => handleDismissError('registrationDate')} /></FormField></FormRow>
                                 <FormRow><Label>Photo</Label><FormField>{photoPreview ? (<div className="flex items-center gap-4"><img src={photoPreview} alt="Preview" className="w-20 h-20 rounded-md object-cover border"/><div className="flex flex-col gap-1"><div className="flex items-center gap-1.5 text-green-700 font-medium"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg><span>Photo Selected</span></div><button type="button" onClick={handleClearPhoto} className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-xs font-semibold hover:bg-red-200">Remove</button></div></div>) : (<div className="flex items-center gap-4"><Input ref={fileInputRef} type="file" name="photo" accept="image/jpeg, image/png" onChange={handlePhotoChange} /><InputError message={errors.photo} onDismiss={() => handleDismissError('photo')} /></div>)}</FormField></FormRow>
                             </section>}

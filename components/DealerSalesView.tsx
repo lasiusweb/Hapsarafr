@@ -4,10 +4,12 @@ import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { FarmerModel, FarmPlotModel, ProductModel, AgronomicInputModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
-import { getInventoryPredictions } from '../lib/businessIntelligence';
+import { getInventoryPredictions, SalesTrend } from '../lib/businessIntelligence';
+import { formatCurrency } from '../lib/utils';
 
 interface DealerSalesViewProps {
     dealerMandal?: string;
+    salesTrends?: SalesTrend[];
 }
 
 const OpportunityCard: React.FC<{ title: string; count: number; potentialValue: string; action: string }> = ({ title, count, potentialValue, action }) => (
@@ -23,7 +25,31 @@ const OpportunityCard: React.FC<{ title: string; count: number; potentialValue: 
     </div>
 );
 
-const DealerSalesView: React.FC<DealerSalesViewProps> = ({ dealerMandal }) => {
+const SimpleBarChart: React.FC<{ data: SalesTrend[] }> = ({ data }) => {
+    const maxVal = Math.max(...data.map(d => d.revenue), 1);
+    
+    return (
+        <div className="flex items-end justify-between h-40 gap-2 mt-4">
+            {data.map(d => (
+                <div key={d.period} className="flex flex-col items-center gap-1 flex-1 group relative">
+                     <div className="w-full bg-indigo-50 rounded-t-md relative overflow-hidden h-full flex items-end border-b border-indigo-100">
+                        <div 
+                            style={{ height: `${(d.revenue / maxVal) * 100}%` }} 
+                            className="w-full bg-indigo-500 transition-all duration-500 group-hover:bg-indigo-600 rounded-t-sm"
+                        ></div>
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
+                        {formatCurrency(d.revenue)} ({d.count} orders)
+                    </div>
+                    <span className="text-[10px] text-gray-500 font-medium">{d.period}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const DealerSalesView: React.FC<DealerSalesViewProps> = ({ dealerMandal, salesTrends }) => {
     const database = useDatabase();
     
     // Fetch data (scoped to region if possible, here fetching all for demo logic)
@@ -73,6 +99,18 @@ const DealerSalesView: React.FC<DealerSalesViewProps> = ({ dealerMandal }) => {
 
     return (
         <div className="space-y-6">
+            
+            {/* Sales Trend Chart */}
+            {salesTrends && salesTrends.length > 0 && (
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <div className="flex justify-between items-center mb-2">
+                        <h2 className="text-lg font-bold text-gray-800">Revenue Performance</h2>
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Last 6 Months</span>
+                    </div>
+                    <SimpleBarChart data={salesTrends} />
+                </div>
+            )}
+
             <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-xl p-6 text-white">
                 <h2 className="text-xl font-bold mb-2">Gap Analysis & Upsell</h2>
                 <p className="opacity-90 text-sm">

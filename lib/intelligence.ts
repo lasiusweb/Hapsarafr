@@ -1,5 +1,5 @@
 
-import { Farmer, FarmPlot, AgronomicInput, AgronomicRecommendation, InputType } from '../types';
+import { Farmer, FarmPlot, AgronomicInput, AgronomicRecommendation, InputType, DealerInventorySignal } from '../types';
 import { calculateNeighborStats, NeighborStats } from './socialProof';
 
 // Rule Definition Interface
@@ -8,6 +8,8 @@ interface RuleContext {
     plots: FarmPlot[];
     inputs: AgronomicInput[];
     neighborStats: NeighborStats;
+    inventory: DealerInventorySignal[];
+    walletBalance: number; // For financial feasibility checks
 }
 
 interface Rule {
@@ -16,6 +18,33 @@ interface Rule {
     condition: (ctx: RuleContext) => boolean;
     execute: (ctx: RuleContext) => AgronomicRecommendation[];
 }
+
+// --- Helper: Check Inventory & Wallet ---
+// Returns metadata about stock status and affordability
+const checkFeasibility = (ctx: RuleContext, productNameKeywords: string[], estimatedCost: number) => {
+    // 1. Check Stock
+    const relevantSignals = ctx.inventory.filter(s => 
+        productNameKeywords.some(keyword => s.productId.toLowerCase().includes(keyword.toLowerCase())) // Using ID as proxy for name for MVP
+    );
+    
+    let stockStatus: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK' = 'OUT_OF_STOCK';
+    let bestProduct = null;
+
+    // Sort by stock level desc
+    relevantSignals.sort((a, b) => b.stockQuantity - a.stockQuantity);
+    
+    if (relevantSignals.length > 0) {
+        const topSignal = relevantSignals[0];
+        bestProduct = topSignal.productId;
+        if (topSignal.stockQuantity > 50) stockStatus = 'IN_STOCK';
+        else if (topSignal.stockQuantity > 0) stockStatus = 'LOW_STOCK';
+    }
+
+    // 2. Check Wallet
+    const isFinanciallyFeasible = ctx.walletBalance >= estimatedCost;
+
+    return { stockStatus, bestProduct, isFinanciallyFeasible };
+};
 
 // --- Rules ---
 
@@ -47,11 +76,20 @@ const GestationMaintenanceRule: Rule = {
                 const daysSince = recentFertilizer ? (now.getTime() - new Date(recentFertilizer.input_date).getTime()) / (1000 * 3600 * 24) : 999;
                 
                 if (daysSince > 180) {
-                    // Social Proof Generation
                     const popularFert = ctx.neighborStats.popularFertilizers[0]?.name || 'Complex Fertilizer';
-                    const socialProofText = ctx.neighborStats.popularFertilizers.length > 0 
-                        ? `${Math.round((ctx.neighborStats.popularFertilizers[0].count / 10) * 100)}% of neighbors used ${popularFert} this season.` 
-                        : undefined;
+                    
+                    // ** INTELLECTUS UPGRADE: Inventory & Wallet Check **
+                    const estCost = plot.acreage * 1500; // Approx cost per acre
+                    const feasibility = checkFeasibility(ctx, ['urea', 'complex', 'npk'], estCost);
+
+                    let title = 'Apply Maintenance Fertilizer';
+                    let desc = `It has been >6 months since last fertilizer on "${plot.name}".`;
+                    
+                    if (feasibility.stockStatus === 'OUT_OF_STOCK') {
+                        desc += ' (⚠️ Dealer Out of Stock - Consider Booking)';
+                    } else if (feasibility.stockStatus === 'LOW_STOCK') {
+                        desc += ' (⚠️ Low Stock - Order Soon)';
+                    }
 
                     recs.push({
                         id: `rec_maint_${plot.id}_${Date.now()}`,
@@ -59,19 +97,22 @@ const GestationMaintenanceRule: Rule = {
                         triggerSource: 'rule_gestation_maint',
                         type: 'MAINTENANCE',
                         actionType: 'MAINTENANCE',
-                        title: 'Apply Maintenance Fertilizer',
-                        description: `It has been >6 months since last fertilizer on "${plot.name}".`,
-                        reasoning: `Young palms (${ageInYears.toFixed(1)} yrs) need consistent nutrients for growth.`,
+                        title: title,
+                        description: desc,
+                        reasoning: `Young palms (${ageInYears.toFixed(1)} yrs) need consistent nutrients. ROI: Est. 15% yield gain in maturity.`,
                         priority: 'High',
                         status: 'PENDING',
                         createdAt: now.toISOString(),
                         tenantId: ctx.farmer.tenantId,
-                        socialProofJson: socialProofText ? JSON.stringify({ text: socialProofText }) : undefined,
+                        socialProofJson: ctx.neighborStats.popularFertilizers.length > 0 ? JSON.stringify({ text: `${Math.round((ctx.neighborStats.popularFertilizers[0].count / 10) * 100)}% of neighbors used ${popularFert}.` }) : undefined,
                         actionJson: JSON.stringify({ 
-                            label: 'Log Application', 
-                            intent: 'OPEN_INPUT_LOG', 
-                            payload: { type: 'FERTILIZER', defaultName: popularFert } 
-                        })
+                            label: feasibility.stockStatus === 'OUT_OF_STOCK' ? 'Pre-book Input' : 'Buy Input', 
+                            intent: 'OPEN_MARKETPLACE', 
+                            payload: { category: 'Fertilizers', search: popularFert } 
+                        }),
+                        isFinanciallyFeasible: feasibility.isFinanciallyFeasible,
+                        inventoryStatus: feasibility.stockStatus,
+                        alternativeProductId: feasibility.bestProduct || undefined
                     });
                 }
             }
@@ -92,6 +133,9 @@ const SandySoilRule: Rule = {
              const hasOrganic = ctx.inputs.some(i => i.farm_plot_id === plot.id && (i.name.toLowerCase().includes('manure') || i.name.toLowerCase().includes('vermi')));
              
              if (!hasOrganic) {
+                 const estCost = plot.acreage * 2000;
+                 const feasibility = checkFeasibility(ctx, ['vermi', 'compost', 'manure'], estCost);
+
                  recs.push({
                      id: `rec_soil_${plot.id}_${Date.now()}`,
                      farmerId: ctx.farmer.id,
@@ -100,7 +144,7 @@ const SandySoilRule: Rule = {
                      actionType: 'INPUT_PURCHASE',
                      title: 'Improve Sandy Soil Retention',
                      description: `Sandy soil in "${plot.name}" drains quickly. Add organic matter.`,
-                     reasoning: `Organic amendments act like a sponge for water/nutrients, vital for sandy soil.`,
+                     reasoning: `Organic amendments reduce water usage by ~20% in sandy soils.`,
                      priority: 'Medium',
                      status: 'PENDING',
                      createdAt: now.toISOString(),
@@ -109,7 +153,9 @@ const SandySoilRule: Rule = {
                          label: 'Find Supplier',
                          intent: 'OPEN_MARKETPLACE',
                          payload: { category: 'Fertilizers', search: 'Vermicompost' }
-                     })
+                     }),
+                     isFinanciallyFeasible: feasibility.isFinanciallyFeasible,
+                     inventoryStatus: feasibility.stockStatus
                  });
              }
         });
@@ -121,7 +167,6 @@ const DripIrrigationUpsellRule: Rule = {
     id: 'rule_drip_upsell',
     name: 'Drip Irrigation Adoption',
     condition: (ctx) => {
-        // If farmer has > 5 acres and NO drip irrigation recorded
         const totalAcres = ctx.plots.reduce((sum, p) => sum + p.acreage, 0);
         const hasDrip = ctx.inputs.some(i => i.name.toLowerCase().includes('drip'));
         return totalAcres > 5 && !hasDrip;
@@ -130,7 +175,10 @@ const DripIrrigationUpsellRule: Rule = {
         const now = new Date();
         const adoptionRate = ctx.neighborStats.adoptionRates['Drip Irrigation'];
         
-        if (adoptionRate && adoptionRate > 0.3) { // Only recommend if > 30% neighbors use it
+        // Check Wallet - Drip is expensive!
+        const canAffordDownPayment = ctx.walletBalance > 5000;
+
+        if (adoptionRate && adoptionRate > 0.3) { 
              return [{
                  id: `rec_drip_${ctx.farmer.id}`,
                  farmerId: ctx.farmer.id,
@@ -138,18 +186,19 @@ const DripIrrigationUpsellRule: Rule = {
                  type: 'YIELD_OPPORTUNITY',
                  actionType: 'YIELD_OPPORTUNITY',
                  title: 'Upgrade to Drip Irrigation',
-                 description: `Consider installing drip irrigation to improve water efficiency.`,
-                 reasoning: `Drip irrigation can increase yield by 20%.`,
+                 description: canAffordDownPayment ? 'Subsidy available. Downpayment affordable.' : 'Subsidy available, but requires savings plan.',
+                 reasoning: `Drip irrigation can increase yield by 20% and save 40% water.`,
                  priority: 'Medium',
                  status: 'PENDING',
                  createdAt: now.toISOString(),
                  tenantId: ctx.farmer.tenantId,
-                 socialProofJson: JSON.stringify({ text: `${(adoptionRate * 100).toFixed(0)}% of farmers in your Mandal use Drip Irrigation.` }),
+                 socialProofJson: JSON.stringify({ text: `${(adoptionRate * 100).toFixed(0)}% of local farmers use Drip.` }),
                  actionJson: JSON.stringify({
                      label: 'View Subsidies',
                      intent: 'OPEN_SUBSIDIES',
                      payload: { filter: 'Drip' }
-                 })
+                 }),
+                 isFinanciallyFeasible: canAffordDownPayment
              }];
         }
         return [];
@@ -165,11 +214,12 @@ export const runIntelligenceEngine = (
     farmer: Farmer, 
     plots: FarmPlot[], 
     inputs: AgronomicInput[],
-    // In a real app, we'd pass allFarmers/allPlots here or fetch them inside. 
-    // For MVP, we might rely on the caller to provide context or simple heuristics if data is missing.
     allFarmers: Farmer[] = [],
     allPlots: FarmPlot[] = [],
-    allInputs: AgronomicInput[] = []
+    allInputs: AgronomicInput[] = [],
+    // ** NEW PARAMS **
+    inventory: DealerInventorySignal[] = [],
+    walletBalance: number = 0
 ): AgronomicRecommendation[] => {
     
     // 1. Calculate Context
@@ -179,7 +229,9 @@ export const runIntelligenceEngine = (
         farmer,
         plots,
         inputs,
-        neighborStats
+        neighborStats,
+        inventory,
+        walletBalance
     };
 
     // 2. Execute Rules

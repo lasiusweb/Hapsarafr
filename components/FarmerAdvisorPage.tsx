@@ -3,12 +3,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, Farmer, AgronomicRecommendation } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { FarmerModel, FarmPlotModel, AgronomicInputModel } from '../db';
+import { FarmerModel, FarmPlotModel, AgronomicInputModel, DealerInventorySignalModel, WalletModel, ActivityLogModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
 import { farmPlotModelToPlain, agronomicInputModelToPlain, farmerModelToPlain } from '../lib/utils';
 import { runIntelligenceEngine } from '../lib/intelligence';
 import RecommendationCard from './RecommendationCard';
+import { ActivityType } from '../types'; // Ensure this is imported for feedback logging
 
 interface FarmerAdvisorPageProps {
     onBack: () => void;
@@ -31,10 +32,17 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
     const farmPlotsModels = useQuery(useMemo(() => 
         selectedFarmerId ? database.get<FarmPlotModel>('farm_plots').query(Q.where('farmer_id', selectedFarmerId)) : database.get<FarmPlotModel>('farm_plots').query(Q.where('id', 'null')),
     [database, selectedFarmerId]));
+
+    const walletModel = useQuery(useMemo(() => 
+        selectedFarmerId ? database.get<WalletModel>('wallets').query(Q.where('farmer_id', selectedFarmerId)) : database.get<WalletModel>('wallets').query(Q.where('id', 'null')),
+    [database, selectedFarmerId]))[0];
     
-    // Fetch ALL data to support Social Proof logic in the intelligence engine
+    // Fetch ALL data to support Social Proof logic
     const allPlotsModels = useQuery(useMemo(() => database.get<FarmPlotModel>('farm_plots').query(), [database]));
     const allInputModels = useQuery(useMemo(() => database.get<AgronomicInputModel>('agronomic_inputs').query(), [database]));
+    
+    // Fetch Dealer Inventory for "Ground Truth" Availability
+    const allInventoryModels = useQuery(useMemo(() => database.get<DealerInventorySignalModel>('dealer_inventory_signals').query(), [database]));
 
     const [recommendations, setRecommendations] = useState<AgronomicRecommendation[]>([]);
 
@@ -47,6 +55,8 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
             const plainAllFarmers = farmers.map(f => farmerModelToPlain(f)!);
             const plainAllPlots = allPlotsModels.map(p => farmPlotModelToPlain(p)!);
             const plainAllInputs = allInputModels.map(i => agronomicInputModelToPlain(i)!);
+            const plainInventory = allInventoryModels.map(i => i._raw as any); // Quick cast for MVP
+            const walletBalance = walletModel ? walletModel.balance : 0;
             
             // Run engine with full context
             const generated = runIntelligenceEngine(
@@ -55,14 +65,38 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
                 plainAllInputs.filter(i => plainPlots.some(p => p.id === i.farm_plot_id)), // Current farmer inputs
                 plainAllFarmers,
                 plainAllPlots,
-                plainAllInputs
+                plainAllInputs,
+                plainInventory,
+                walletBalance
             );
             setRecommendations(generated);
         } else {
             setRecommendations([]);
         }
-    }, [selectedFarmerModel, farmPlotsModels, allPlotsModels, allInputModels, farmers]);
+    }, [selectedFarmerModel, farmPlotsModels, allPlotsModels, allInputModels, farmers, allInventoryModels, walletModel]);
 
+    // Feedback Handler
+    const handleFeedback = async (rec: AgronomicRecommendation, status: 'ACCEPTED' | 'REJECTED') => {
+        // In a real system, we'd store this feedback in a dedicated table to train the model.
+        // For now, we log it as an activity.
+        try {
+            await database.write(async () => {
+                await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = rec.farmerId;
+                    log.activityType = ActivityType.RECOMMENDATION_ACTION;
+                    log.description = `${status} Recommendation: ${rec.title}`;
+                    log.createdBy = currentUser.id;
+                    log.tenantId = currentUser.tenantId;
+                });
+            });
+            
+            // Update UI state locally to remove/change the card
+            setRecommendations(prev => prev.map(r => r.id === rec.id ? { ...r, status } : r));
+            
+        } catch (e) {
+            console.error("Error logging feedback", e);
+        }
+    };
 
     return (
         <div className="p-6 bg-gray-50 min-h-full">
@@ -70,7 +104,7 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Hapsara Intellectus</h1>
-                        <p className="text-gray-500">AI-driven agronomic intelligence and advisory.</p>
+                        <p className="text-gray-500">Context-Aware Agronomic Intelligence.</p>
                     </div>
                      <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
                         &larr; Back
@@ -86,57 +120,46 @@ const FarmerAdvisorPage: React.FC<FarmerAdvisorPageProps> = ({ onBack, currentUs
                         <div className="bg-white p-6 rounded-lg shadow-md">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-2xl font-bold text-gray-800">Actionable Insights</h2>
-                                <button onClick={() => onNavigate('farmer-details', selectedFarmerId)} className="text-sm font-semibold text-green-600 hover:underline">View Full Profile &rarr;</button>
+                                <div className="flex items-center gap-2">
+                                     {walletModel && (
+                                         <span className={`text-xs font-mono px-2 py-1 rounded ${walletModel.balance < 1000 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                             Wallet: ₹{walletModel.balance}
+                                         </span>
+                                     )}
+                                    <button onClick={() => onNavigate('farmer-details', selectedFarmerId)} className="text-sm font-semibold text-green-600 hover:underline">View Profile &rarr;</button>
+                                </div>
                             </div>
                             
                             <div className="space-y-4">
-                                {recommendations.length > 0 ? (
-                                    recommendations.map((rec) => (
+                                {recommendations.filter(r => r.status === 'PENDING').length > 0 ? (
+                                    recommendations.filter(r => r.status === 'PENDING').map((rec) => (
                                         <RecommendationCard 
                                             key={rec.id} 
                                             recommendation={rec} 
                                             onAction={() => {
-                                                // Basic routing based on intent from new actionJson
+                                                handleFeedback(rec, 'ACCEPTED');
+                                                // Basic routing logic
                                                 if (rec.actionJson) {
                                                     try {
                                                         const action = JSON.parse(rec.actionJson);
-                                                        if (action.intent === 'OPEN_INPUT_LOG') {
-                                                            // Navigate or open modal - for now just simple routing
-                                                            onNavigate('farmer-details', selectedFarmerId); 
-                                                        } else if (action.intent === 'OPEN_MARKETPLACE') {
-                                                            onNavigate('marketplace');
-                                                        }
+                                                        if (action.intent === 'OPEN_MARKETPLACE') onNavigate('marketplace');
+                                                        else if (action.intent === 'OPEN_SUBSIDIES') onNavigate('assistance-schemes');
+                                                        else onNavigate('farmer-details', selectedFarmerId);
                                                     } catch(e) { console.error(e); }
-                                                }
-                                                
-                                                // Fallback
-                                                if (rec.type === 'MAINTENANCE' || rec.type === 'INPUT_PURCHASE') {
+                                                } else {
                                                     onNavigate('farmer-details', selectedFarmerId); 
                                                 }
                                             }}
+                                            onDismiss={() => handleFeedback(rec, 'REJECTED')}
                                         />
                                     ))
                                 ) : (
                                     <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        <p className="font-semibold">All good!</p>
-                                        <p className="text-sm">No immediate actions required for this farmer based on current data.</p>
+                                        <p className="font-semibold">Optimal State</p>
+                                        <p className="text-sm">No urgent recommendations based on current ground data.</p>
                                     </div>
                                 )}
-                            </div>
-                        </div>
-                        
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                             <div className="bg-white p-6 rounded-lg shadow-md">
-                                <h3 className="font-bold text-gray-700 mb-2">Yield Prediction</h3>
-                                <div className="flex items-center justify-center h-32 bg-gray-50 rounded border border-dashed">
-                                     <p className="text-sm text-gray-500">AI Model Training in Progress...</p>
-                                </div>
-                            </div>
-                             <div className="bg-white p-6 rounded-lg shadow-md">
-                                <h3 className="font-bold text-gray-700 mb-2">Log New Data</h3>
-                                <p className="text-sm text-gray-500 mb-4">Keep the intelligence engine accurate by logging the latest field activities.</p>
-                                <button onClick={() => onNavigate('farmer-details', selectedFarmerId)} className="w-full px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm hover:bg-blue-700">Go to Farmer Profile</button>
                             </div>
                         </div>
                     </div>

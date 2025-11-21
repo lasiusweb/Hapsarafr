@@ -1,4 +1,7 @@
 
+
+
+
 import { Database } from '@nozbe/watermelondb';
 import { field, text, date, json, relation, children, writer, readonly, nochange } from '@nozbe/watermelondb/decorators';
 import Model from '@nozbe/watermelondb/Model';
@@ -8,7 +11,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
 // --- Schema Definition ---
 
 const schema = appSchema({
-  version: 7, // Incremented version for Billing updates
+  version: 11, // Activity Metadata Update
   tables: [
     tableSchema({
       name: 'tenants',
@@ -18,6 +21,8 @@ const schema = appSchema({
         { name: 'subscription_status', type: 'string' },
         { name: 'max_farmers', type: 'number', isOptional: true },
         { name: 'created_at', type: 'number' },
+        { name: 'features_json', type: 'string', isOptional: true },
+        { name: 'tier', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -149,6 +154,7 @@ const schema = appSchema({
         { name: 'created_by', type: 'string' },
         { name: 'tenant_id', type: 'string' },
         { name: 'created_at', type: 'number' },
+        { name: 'metadata_json', type: 'string', isOptional: true }, // New Field for Intellectus
       ],
     }),
     tableSchema({
@@ -490,6 +496,7 @@ const schema = appSchema({
         { name: 'tenant_id', type: 'string' },
         { name: 'administrative_level', type: 'string' },
         { name: 'administrative_code', type: 'string' },
+        { name: 'service_type', type: 'string', isOptional: true }, // Aegis Update
       ],
     }),
     tableSchema({
@@ -870,6 +877,7 @@ const schema = appSchema({
         { name: 'is_active', type: 'boolean' },
         { name: 'permissions_json', type: 'string' },
         { name: 'granted_by', type: 'string' },
+        { name: 'consent_expiry', type: 'string', isOptional: true }, // Aegis Update
       ],
     }),
     tableSchema({
@@ -998,6 +1006,16 @@ export class TenantModel extends Model {
   @text('subscription_status') subscriptionStatus!: string;
   @field('max_farmers') maxFarmers!: number;
   @date('created_at') createdAt!: Date;
+  @text('features_json') featuresJson!: string;
+  @text('tier') tier!: string;
+
+  get features(): string[] {
+      try {
+          return JSON.parse(this.featuresJson || '[]');
+      } catch {
+          return [];
+      }
+  }
 }
 
 export class UserModel extends Model {
@@ -1142,6 +1160,7 @@ export class ActivityLogModel extends Model {
   @text('created_by') createdBy!: string;
   @text('tenant_id') tenantId!: string;
   @date('created_at') createdAt!: Date;
+  @text('metadata_json') metadataJson!: string; // Added
 }
 
 export class ResourceModel extends Model {
@@ -1462,6 +1481,7 @@ export class TerritoryModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('administrative_level') administrativeLevel!: string;
     @text('administrative_code') administrativeCode!: string;
+    @text('service_type') serviceType!: string; // Aegis Update
 }
 
 export class TerritoryDisputeModel extends Model {
@@ -1814,6 +1834,7 @@ export class FarmerDealerConsentModel extends Model {
     @field('is_active') isActive!: boolean;
     @text('permissions_json') permissionsJson!: string;
     @text('granted_by') grantedBy!: string;
+    @text('consent_expiry') consentExpiry!: string; // Aegis Update
 }
 
 export class TenantPartnerConfigModel extends Model {

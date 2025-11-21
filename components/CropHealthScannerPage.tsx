@@ -1,10 +1,13 @@
 
+
+
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, Chat } from '@google/genai';
-import { User } from '../types';
+import { GoogleGenAI, Chat, Type } from '@google/genai';
+import { User, ActivityType } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { BillableEvent } from '../types';
 import { deductCredits } from '../lib/billing';
+import { ActivityLogModel } from '../db';
 
 interface CropHealthScannerPageProps {
     onBack: () => void;
@@ -12,18 +15,26 @@ interface CropHealthScannerPageProps {
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
+interface ScanResult {
+    diagnosis: string;
+    confidence: number;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH';
+    treatment: string;
+}
+
 const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, currentUser, setNotification }) => {
     const database = useDatabase();
     const [image, setImage] = useState<string | null>(null);
     const [imageMimeType, setImageMimeType] = useState<string | null>(null);
     const [analysis, setAnalysis] = useState<string>('');
+    const [structuredResult, setStructuredResult] = useState<ScanResult | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isCameraOn, setIsCameraOn] = useState(false);
 
-    // New state for chat functionality
+    // Chat state
     const [chat, setChat] = useState<Chat | null>(null);
     const [conversation, setConversation] = useState<{ role: 'user' | 'model', text: string }[]>([]);
     const [userInput, setUserInput] = useState('');
@@ -54,17 +65,18 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
         }
 
         if (!process.env.API_KEY) {
-            setError("Gemini API key is not configured. An administrator needs to set the API_KEY environment variable.");
+            setError("Gemini API key is not configured.");
             return;
         }
         
         setIsLoading(true);
         setAnalysis('');
+        setStructuredResult(null);
         setError(null);
         setChat(null);
         setConversation([]);
 
-        // Hapsara Valorem: Credit deduction logic
+        // Billing
         const billingResult = await deductCredits(
             database,
             currentUser.tenantId,
@@ -95,44 +107,74 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
                 },
             };
 
+            // Intellectus: Structured Prompt
             const initialPrompt = `
-                You are an expert agricultural botanist specializing in oil palm (Elaeis guineensis).
-                Analyze the provided image of an oil palm plant/leaf.
-                Identify any potential diseases, pests, nutrient deficiencies, or other health issues.
-                Provide a structured analysis with the following sections:
-                - **Observation:** A brief description of what you see in the image.
-                - **Potential Diagnosis:** A list of possible issues, each with a confidence score (e.g., High, Medium, Low).
-                - **Recommendations:** Actionable advice for the farmer to address the identified issues. Suggest specific treatments if possible.
-                - **Disclaimer:** Include a brief disclaimer that this is an AI analysis and a professional human consultation is recommended for confirmation.
+                You are an expert agricultural botanist specializing in oil palm.
+                Analyze the image and return a JSON object with the following schema:
+                {
+                    "diagnosis": "Name of the disease/pest or 'Healthy'",
+                    "confidence": number (0-1),
+                    "severity": "LOW" | "MEDIUM" | "HIGH",
+                    "treatment": "Brief treatment recommendation"
+                }
                 
-                If the plant appears healthy, state that clearly and offer general care tips. Format your response using markdown.
+                Also provide a detailed explanation in plain text.
             `;
             
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: { parts: [imagePart, { text: initialPrompt }] },
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            diagnosis: { type: Type.STRING },
+                            confidence: { type: Type.NUMBER },
+                            severity: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH'] },
+                            treatment: { type: Type.STRING },
+                            explanation: { type: Type.STRING } // Extra field for chat context
+                        },
+                        required: ['diagnosis', 'confidence', 'severity', 'treatment']
+                    }
+                }
             });
             
-            const initialAnalysis = response.text;
-            setAnalysis(initialAnalysis);
+            const resultJson = JSON.parse(response.text);
+            setStructuredResult(resultJson);
+            setAnalysis(resultJson.explanation || resultJson.treatment);
             
+            // Intellectus: Save Structured Data for Outbreak Detection
+            await database.write(async () => {
+                 await database.get<ActivityLogModel>('activity_logs').create(log => {
+                    log.farmerId = 'unknown'; // In scanner mode, we might not have a farmer context yet.
+                    log.activityType = 'CROP_HEALTH_SCAN_COMPLETED';
+                    log.description = `Scan Result: ${resultJson.diagnosis} (${resultJson.severity})`;
+                    log.metadataJson = JSON.stringify(resultJson);
+                    log.createdBy = currentUser.id;
+                    log.tenantId = currentUser.tenantId;
+                });
+            });
+
+            // Setup Chat
             const chatSession = ai.chats.create({
                 model: 'gemini-2.5-flash',
                 history: [
-                    { role: "user", parts: [imagePart, { text: "Analyze this image of an oil palm plant and give me a report on its health." }] },
-                    { role: "model", parts: [{ text: initialAnalysis }] }
+                    { role: "user", parts: [imagePart, { text: "Analyze this image." }] },
+                    { role: "model", parts: [{ text: `Diagnosis: ${resultJson.diagnosis}. ${resultJson.treatment}` }] }
                 ],
             });
             setChat(chatSession);
 
         } catch (err: any) {
             console.error("Gemini API error:", err);
-            setError("Failed to analyze image. The AI model may be temporarily unavailable or there could be an issue with the API key.");
+            setError("Failed to analyze image.");
         } finally {
             setIsLoading(false);
         }
     };
     
+    // ... (Camera logic same as before) ...
     const handleUseCamera = async () => {
         try {
             handleClear();
@@ -142,7 +184,7 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
                 videoRef.current.srcObject = stream;
             }
         } catch (err) {
-            setError("Could not access the camera. Please ensure you have given permission in your browser settings.");
+            setError("Could not access the camera.");
         }
     };
     
@@ -174,6 +216,7 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
     const handleClear = () => {
         setImage(null);
         setAnalysis('');
+        setStructuredResult(null);
         setError(null);
         setChat(null);
         setConversation([]);
@@ -195,26 +238,19 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
             const answer = response.text;
             setConversation(prev => [...prev, { role: 'model', text: answer }]);
         } catch (err: any) {
-             console.error("Gemini follow-up error:", err);
-             setConversation(prev => [...prev, { role: 'model', text: "Sorry, I encountered an error. Please try again." }]);
+             setConversation(prev => [...prev, { role: 'model', text: "Error getting response." }]);
         } finally {
             setIsReplying(false);
         }
     };
 
-    const formatMarkdown = (text: string) => {
-        return text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .split('\n')
-            .map(line => line.trim())
-            .map(line => {
-                if (line.startsWith('- ') || line.startsWith('* ')) {
-                    return `<li class="list-disc list-inside ml-4">${line.substring(2)}</li>`;
-                }
-                return line ? `<p class="my-2">${line}</p>` : '';
-            })
-            .join('');
+    const getSeverityColor = (severity: string) => {
+        switch(severity) {
+            case 'HIGH': return 'bg-red-100 text-red-800 border-red-200';
+            case 'MEDIUM': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'LOW': return 'bg-green-100 text-green-800 border-green-200';
+            default: return 'bg-gray-100 text-gray-800';
+        }
     };
 
     return (
@@ -223,19 +259,16 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
                  <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Crop Health Scanner</h1>
-                        <p className="text-gray-500">Analyze oil palm images for potential health issues using AI.</p>
+                        <p className="text-gray-500">AI Diagnosis & Treatment Recommendations</p>
                     </div>
                     <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                        Back to Dashboard
+                        Back
                     </button>
                 </div>
                 
                 <div className="bg-white rounded-lg shadow-xl p-8">
                     {!image && !isCameraOn && (
                          <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
-                            <h2 className="text-xl font-semibold text-gray-700 mb-4">Get Started</h2>
-                            <p className="text-gray-500 mb-6">Upload a photo from your device or use your camera to take a new one.</p>
                             <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
                             <div className="flex justify-center gap-4">
                                 <button onClick={() => fileInputRef.current?.click()} className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition">Upload Image</button>
@@ -258,28 +291,37 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
                         <div className="space-y-6">
                             <div className="flex flex-col lg:flex-row gap-8">
                                 <div className="lg:w-1/2">
-                                    <h2 className="text-xl font-bold text-gray-800 mb-2">Image Preview</h2>
                                     <img src={image} alt="Crop preview" className="rounded-lg shadow-md w-full" />
                                 </div>
                                 <div className="lg:w-1/2 flex flex-col">
-                                    <h2 className="text-xl font-bold text-gray-800 mb-2">AI Analysis</h2>
-                                     <button onClick={handleAnalyze} disabled={isLoading || !!analysis} className="w-full px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition disabled:bg-green-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                        {isLoading ? (
-                                             <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                        ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
-                                        )}
-                                        <span>{isLoading ? 'Analyzing...' : (analysis ? 'Analysis Complete' : 'Analyze with AI')}</span>
+                                     <button onClick={handleAnalyze} disabled={isLoading || !!structuredResult} className="w-full px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition disabled:bg-green-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                        {isLoading ? 'Analyzing...' : (structuredResult ? 'Analysis Complete' : 'Analyze with AI')}
                                     </button>
                                      {error && <p className="mt-4 text-center text-red-600 bg-red-50 p-3 rounded-md">{error}</p>}
-                                    {analysis && (
-                                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                                            <strong>Coming Soon:</strong> Track crop health over time! In a future update, you'll be able to upload a series of images to monitor disease progression or recovery.
-                                        </div>
-                                    )}
-                                    {analysis && !isLoading && (
-                                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border flex-1 overflow-y-auto max-h-[500px]">
-                                            <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: formatMarkdown(analysis) }} />
+                                    
+                                    {structuredResult && (
+                                        <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h3 className="text-xl font-bold text-gray-800">{structuredResult.diagnosis}</h3>
+                                                <span className={`px-2 py-1 text-xs font-bold rounded border ${getSeverityColor(structuredResult.severity)}`}>
+                                                    {structuredResult.severity} RISK
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="mb-3">
+                                                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                                    <span>Confidence Score</span>
+                                                    <span>{(structuredResult.confidence * 100).toFixed(0)}%</span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div className={`h-2 rounded-full ${structuredResult.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${structuredResult.confidence * 100}%` }}></div>
+                                                </div>
+                                            </div>
+
+                                            <p className="text-sm text-gray-700 font-semibold mb-1">Recommended Action:</p>
+                                            <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">
+                                                {structuredResult.treatment}
+                                            </p>
                                         </div>
                                     )}
                                 </div>
@@ -287,26 +329,16 @@ const CropHealthScannerPage: React.FC<CropHealthScannerPageProps> = ({ onBack, c
                             
                             {chat && (
                                 <div className="mt-6 pt-6 border-t">
-                                    <h3 className="text-lg font-bold text-gray-800 mb-2">Follow-up Conversation</h3>
+                                    <h3 className="text-lg font-bold text-gray-800 mb-2">Ask AI Assistant</h3>
                                     <div className="space-y-4 max-h-64 overflow-y-auto p-4 bg-gray-100 rounded-md border">
                                         {conversation.map((msg, index) => (
                                             <div key={index} className={`flex items-start gap-2.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                                                 <div className={`flex flex-col max-w-xs md:max-w-md p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'}`}>
-                                                    <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.text) }}></div>
+                                                    <p className="text-sm">{msg.text}</p>
                                                 </div>
                                             </div>
                                         ))}
-                                        {isReplying && (
-                                            <div className="flex items-start gap-2.5">
-                                                <div className="flex flex-col max-w-xs p-3 rounded-lg bg-gray-200 rounded-bl-none">
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="w-2 h-2 rounded-full bg-gray-400 animate-pulse"></div>
-                                                        <div className="w-2 h-2 rounded-full bg-gray-400 animate-pulse [animation-delay:0.2s]"></div>
-                                                        <div className="w-2 h-2 rounded-full bg-gray-400 animate-pulse [animation-delay:0.4s]"></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                        {isReplying && <div className="text-xs text-gray-500 animate-pulse">AI is typing...</div>}
                                         <div ref={chatEndRef} />
                                     </div>
                                     <form onSubmit={handleSendFollowUp} className="mt-4 flex gap-2">

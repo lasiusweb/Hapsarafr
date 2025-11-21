@@ -16,6 +16,15 @@ interface TaskManagementPageProps {
     allTerritories: TerritoryModel[];
 }
 
+// Hapsara Catalyst: Task Templates
+const TASK_TEMPLATES = [
+    { title: 'KYC Verification', description: 'Visit farmer to collect Aadhaar and Bank Passbook copies.', priority: TaskPriority.High },
+    { title: 'Pit Digging Inspection', description: 'Verify if pits are dug according to 9x9m spacing standards.', priority: TaskPriority.Medium },
+    { title: 'Survival Rate Check', description: 'Count live plants 3 months after plantation to determine replacement needs.', priority: TaskPriority.Medium },
+    { title: 'Fertilizer Distribution', description: 'Deliver allocated fertilizer stocks and log receipt.', priority: TaskPriority.High },
+    { title: 'Pest Scouting', description: 'Inspect 10% of palms for signs of Rhinoceros Beetle or Scale insects.', priority: TaskPriority.Medium },
+];
+
 // --- TaskCard Component ---
 const TaskCard: React.FC<{
     task: TaskModel;
@@ -78,7 +87,8 @@ const TaskModal: React.FC<{
     users: UserModel[];
     farmers: FarmerModel[];
     currentUser: User;
-}> = ({ isOpen, onClose, onSave, onDelete, task, users, farmers, currentUser }) => {
+    initialData?: Partial<Task>; // New prop for templates
+}> = ({ isOpen, onClose, onSave, onDelete, task, users, farmers, currentUser, initialData }) => {
     const isEditMode = !!task;
     const isGovtTask = task?.source === 'GOVERNMENT';
     const [formState, setFormState] = useState({
@@ -108,9 +118,19 @@ const TaskModal: React.FC<{
                 ...evidence,
             });
         } else {
-            setFormState({ title: '', description: '', status: TaskStatus.ToDo, priority: TaskPriority.Medium, dueDate: '', assigneeId: '', farmerId: '', completionNotes: '', completionPhoto: '' });
+            setFormState({ 
+                title: initialData?.title || '', 
+                description: initialData?.description || '', 
+                status: TaskStatus.ToDo, 
+                priority: (initialData?.priority as TaskPriority) || TaskPriority.Medium, 
+                dueDate: '', 
+                assigneeId: '', 
+                farmerId: '', 
+                completionNotes: '', 
+                completionPhoto: '' 
+            });
         }
-    }, [task, isOpen]);
+    }, [task, isOpen, initialData]);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -172,6 +192,7 @@ const TaskModal: React.FC<{
                         <CustomSelect label="Priority" value={formState.priority} onChange={v => setFormState(s => ({...s, priority: v as TaskPriority}))} options={Object.values(TaskPriority).map(p => ({value: p, label: p}))} />
                     </div>
                     <CustomSelect label="Assign To" value={formState.assigneeId} onChange={v => setFormState(s => ({...s, assigneeId: v}))} options={[{value: '', label: 'Unassigned'}, ...userOptions]} placeholder="Select a user" />
+                    <CustomSelect label="Related Farmer (Optional)" value={formState.farmerId} onChange={v => setFormState(s => ({...s, farmerId: v}))} options={[{value: '', label: 'None'}, ...farmerOptions]} placeholder="Select a farmer" />
                     
                     {isGovtTask && (formState.status === TaskStatus.Done || task?.completionEvidenceJson) && (
                         <div className="p-4 bg-blue-50 border-l-4 border-blue-500 space-y-4">
@@ -201,7 +222,8 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
     const allDirectives = useQuery(useMemo(() => database.get<DirectiveModel>('directives').query(), [database]));
 
-    const [modalState, setModalState] = useState<{ isOpen: boolean; task?: TaskModel | null }>({ isOpen: false });
+    const [modalState, setModalState] = useState<{ isOpen: boolean; task?: TaskModel | null; initialData?: Partial<Task> }>({ isOpen: false });
+    const [showTemplateMenu, setShowTemplateMenu] = useState(false);
 
     // --- Directives Logic ---
     const myTerritoryCodes = useMemo(() => allTerritories.filter(t => t.tenantId === currentUser.tenantId).map(t => t.administrativeCode), [allTerritories, currentUser]);
@@ -316,9 +338,14 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
         title: status,
         tasks: tasksByStatus[status],
     }));
+    
+    const handleTemplateSelect = (template: typeof TASK_TEMPLATES[0]) => {
+        setShowTemplateMenu(false);
+        setModalState({ isOpen: true, initialData: template });
+    };
 
     return (
-        <div className="p-6 bg-gray-50 min-h-full">
+        <div className="p-6 bg-gray-50 min-h-full" onClick={() => setShowTemplateMenu(false)}>
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
                     <div>
@@ -326,7 +353,32 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
                         <p className="text-gray-500">Organize and track your team's work.</p>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setModalState({ isOpen: true })} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm">+ Add Task</button>
+                        {/* Template Button */}
+                        <div className="relative" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setShowTemplateMenu(!showTemplateMenu)} className="px-4 py-2 bg-white border border-green-600 text-green-600 rounded-md hover:bg-green-50 font-semibold text-sm flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                Quick Add
+                            </button>
+                            {showTemplateMenu && (
+                                <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg z-20 border">
+                                    <ul className="py-1">
+                                        {TASK_TEMPLATES.map((tpl, idx) => (
+                                            <li key={idx}>
+                                                <button 
+                                                    onClick={() => handleTemplateSelect(tpl)} 
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-green-50"
+                                                >
+                                                    <p className="font-semibold">{tpl.title}</p>
+                                                    <p className="text-xs text-gray-500 truncate">{tpl.description}</p>
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        <button onClick={() => setModalState({ isOpen: true })} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm">+ New Task</button>
                         <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
                             Back
                         </button>
@@ -386,6 +438,7 @@ const TaskManagementPage: React.FC<TaskManagementPageProps> = ({ onBack, current
                 onSave={handleSaveTask}
                 onDelete={handleDeleteTask}
                 task={modalState.task}
+                initialData={modalState.initialData}
                 users={users}
                 farmers={farmers}
                 currentUser={currentUser}

@@ -8,8 +8,11 @@ import { User, OrderStatus, Vendor } from '../types';
 import { formatCurrency, generateWhatsAppLink } from '../lib/utils';
 import DealerInsights from './DealerInsights';
 import DealerSalesView from './DealerSalesView';
+import CustomerSegmentsView from './CustomerSegmentsView';
+import ProductBundlingView from './ProductBundlingView';
 import CustomSelect from './CustomSelect';
 import KhataScreen from './KhataScreen';
+import { analyzeMarketBasket, getSalesTrends } from '../lib/businessIntelligence';
 
 interface MitraDashboardProps {
     onBack: () => void;
@@ -46,13 +49,41 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
 
     // Data Fetching
     const allOrders = useQuery(useMemo(() => database.get<OrderModel>('orders').query(Q.sortBy('created_at', 'desc')), [database]));
+    const allOrderItems = useQuery(useMemo(() => database.get<OrderItemModel>('order_items').query(), [database]));
+    const allVendorProducts = useQuery(useMemo(() => database.get<VendorProductModel>('vendor_products').query(), [database]));
     const inventorySignals = useQuery(useMemo(() => database.get<DealerInventorySignalModel>('dealer_inventory_signals').query(Q.where('dealer_id', vendor?.id || 'unknown')), [database, vendor?.id]));
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
     const products = useQuery(useMemo(() => database.get<ProductModel>('products').query(), [database]));
     
     // Mapped Data
     const farmerMap = useMemo(() => new Map(farmers.map(f => [f.id, f])), [farmers]);
-    const productMap = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
+    
+    // Filter orders specific to this vendor
+    const myOrders = useMemo(() => {
+        if (!vendor) return [];
+        const myVendorProductIds = new Set(allVendorProducts.filter(vp => vp.vendorId === vendor.id).map(vp => vp.id));
+        // Find all items that belong to this vendor
+        const myItemOrderIds = new Set(
+            allOrderItems
+                .filter(item => myVendorProductIds.has(item.vendorProductId))
+                .map(item => item.orderId)
+        );
+        return allOrders.filter(o => myItemOrderIds.has(o.id));
+    }, [allOrders, allOrderItems, allVendorProducts, vendor]);
+
+    // Sales Trends (BI)
+    // Correctly passing the raw data arrays (Models) to the BI engine
+    const salesTrends = useMemo(() => {
+        if (!vendor) return [];
+        return getSalesTrends(allOrders, allOrderItems, allVendorProducts, vendor.id);
+    }, [allOrders, allOrderItems, allVendorProducts, vendor]);
+
+    // Market Basket Analysis
+    const bundles = useMemo(() => {
+        if (myOrders.length === 0 || products.length === 0) return [];
+        return analyzeMarketBasket(myOrders, allOrderItems, allVendorProducts, products);
+    }, [myOrders, allOrderItems, allVendorProducts, products]);
+
 
     // Handlers
     const handleWhatsAppConfirmation = (order: OrderModel) => {
@@ -74,23 +105,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                 o.syncStatusLocal = 'pending'; 
             });
 
-            // Automated Inventory Decrement Logic (Samridhi)
+            // Automated Inventory Decrement Logic (Samridhi) - Future Implementation
             if (status === OrderStatus.Delivered) {
-                const orderItems = await database.get<OrderItemModel>('order_items').query(Q.where('order_id', (order as any).id)).fetch();
-                
-                for (const item of orderItems) {
-                     // In a real app, we'd join VendorProduct -> Product to get ProductID.
-                     // For MVP, assuming simple mapping or using VendorProduct ID directly if structure matches.
-                     // Let's assume we can find the signal if we had the product ID.
-                     // Since we don't easily have Product ID from OrderItem (which points to VendorProduct), 
-                     // we'd need to fetch VendorProduct first.
-                     
-                     // Skipping complex fetch for MVP, but this is where logic goes:
-                     // 1. Get VendorProduct
-                     // 2. Get ProductID
-                     // 3. Find DealerInventorySignal(ProductID)
-                     // 4. Decrement Stock
-                }
+                // Logic to decrement inventory would go here based on orderItems
             }
         });
     };
@@ -162,7 +179,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                 {activeTab === 'orders' && (
                     <div className="space-y-4">
                         <h2 className="text-lg font-bold text-gray-800">Active Orders</h2>
-                        {allOrders.map(order => {
+                        {myOrders.map(order => {
                             const farmer = farmerMap.get(order.farmerId);
                             return (
                                 <div key={order.id} className="bg-white p-4 rounded-xl shadow-md border border-gray-100">
@@ -188,7 +205,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                                 </div>
                             );
                         })}
-                        {allOrders.length === 0 && <p className="text-center text-gray-500 py-10">No active orders.</p>}
+                        {myOrders.length === 0 && <p className="text-center text-gray-500 py-10">No active orders.</p>}
                     </div>
                 )}
 
@@ -240,7 +257,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                 {activeTab === 'insights' && (
                     <div className="space-y-6">
                         <DealerInsights currentUser={currentUser} />
-                        <DealerSalesView dealerMandal={vendor.mandal} />
+                        <ProductBundlingView bundles={bundles} />
+                        <CustomerSegmentsView dealerMandal={vendor.mandal} />
+                        <DealerSalesView dealerMandal={vendor.mandal} salesTrends={salesTrends} />
                     </div>
                 )}
             </div>

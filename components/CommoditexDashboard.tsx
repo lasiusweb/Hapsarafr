@@ -6,7 +6,7 @@ import { useQuery } from '../hooks/useQuery';
 import { CommodityListingModel, FarmerModel, CommodityOfferModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
-import { getFairPriceRange, getPriceTrend, PriceAnalysis } from '../lib/priceOracle';
+import { getFairPriceRange, getPriceTrend, PriceAnalysis, getDemandForecast, getBulkPremium } from '../lib/priceOracle';
 import { formatCurrency, getGeoName, farmerModelToPlain } from '../lib/utils';
 
 interface CommoditexDashboardProps {
@@ -25,6 +25,101 @@ const MarketTicker: React.FC<{ crop: string; price: number; trend: string }> = (
         </div>
     </div>
 );
+
+const DemandForecastWidget: React.FC<{ crop: string; region: string }> = ({ crop, region }) => {
+    const forecast = useMemo(() => getDemandForecast(crop, region), [crop, region]);
+    
+    return (
+        <div className="bg-indigo-900 text-white p-4 rounded-lg shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex-1">
+                <p className="text-xs text-indigo-200 uppercase font-bold flex items-center gap-2">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    Demand Forecast: {crop}
+                </p>
+                <p className="font-bold text-lg mt-1">
+                    Expected to {forecast.trend === 'rising' ? 'Rise' : forecast.trend === 'falling' ? 'Fall' : 'Stabilize'} 
+                    {forecast.trend !== 'stable' && ` by ${forecast.percentage}%`}
+                </p>
+                <p className="text-xs text-indigo-300 mt-1">{forecast.reason}</p>
+            </div>
+            <div className={`p-3 rounded-full shadow-lg ${forecast.trend === 'rising' ? 'bg-green-500' : forecast.trend === 'falling' ? 'bg-red-500' : 'bg-gray-500'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {forecast.trend === 'rising' ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    ) : forecast.trend === 'falling' ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                    ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
+                    )}
+                </svg>
+            </div>
+        </div>
+    );
+};
+
+// --- Aggregation Helper Component ---
+const CommunityLotCard: React.FC<{ groupKey: string; listings: CommodityListingModel[]; totalQty: number; farmers: string[] }> = ({ groupKey, listings, totalQty, farmers }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    const avgPrice = listings.reduce((sum, l) => sum + (l.askPrice * l.quantity), 0) / totalQty;
+    const bulkPremium = getBulkPremium(totalQty, listings[0]?.cropName || '');
+    const potentialValue = avgPrice * totalQty;
+    const premiumValue = potentialValue * bulkPremium;
+
+    const [mandal, village] = groupKey.split('|');
+
+    return (
+        <div className="border border-purple-200 rounded-lg bg-purple-50 overflow-hidden mb-4 transition-shadow hover:shadow-md">
+            <div className="p-4 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-purple-200 p-2 rounded-lg text-purple-800">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-800 text-lg">Community Lot: {village}</h4>
+                            <p className="text-xs text-gray-600">{mandal} • {listings[0]?.cropName}</p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xl font-bold text-purple-900">{totalQty.toFixed(1)} Tons</p>
+                        <p className="text-xs text-purple-700 font-semibold">{farmers.length} Farmers Participating</p>
+                    </div>
+                </div>
+                
+                <div className="mt-3 flex gap-4 text-sm border-t border-purple-100 pt-2">
+                    <div>Avg Ask: <strong>{formatCurrency(avgPrice)}/t</strong></div>
+                    {premiumValue > 0 && (
+                        <div className="text-green-700 flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" /></svg>
+                            Bulk Premium: +{formatCurrency(premiumValue)} ({(bulkPremium * 100).toFixed(1)}%)
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {isExpanded && (
+                <div className="bg-white border-t border-gray-200 p-4">
+                    <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">Contributing Lots</h5>
+                    <div className="space-y-2">
+                        {listings.map(l => (
+                            <div key={l.id} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
+                                <span>Farmer ID: ...{l.farmerId.slice(-6)}</span>
+                                <div className="flex gap-4">
+                                    <span>{l.quantity} t</span>
+                                    <span className="font-mono">{formatCurrency(l.askPrice)}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <button className="w-full mt-4 bg-purple-600 text-white py-2 rounded font-bold hover:bg-purple-700 transition text-sm">
+                        Bid on Full Lot
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
 
 // --- Modals ---
 
@@ -114,7 +209,7 @@ const CreateListingModal: React.FC<{ onClose: () => void; onSave: (data: any) =>
                     <div className="bg-indigo-50 p-4 rounded-md border border-indigo-100 transition-all">
                         <div className="flex justify-between items-center mb-3">
                              <p className="text-xs text-indigo-800 font-bold uppercase flex items-center gap-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                                 Fair Price Logic
                              </p>
                         </div>
@@ -275,6 +370,7 @@ const ViewOffersModal: React.FC<{ onClose: () => void; listing: CommodityListing
 
 const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, currentUser }) => {
     const database = useDatabase();
+    const [viewMode, setViewMode] = useState<'individual' | 'community'>('individual');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [offerListing, setOfferListing] = useState<CommodityListingModel | null>(null);
     const [viewOffersListing, setViewOffersListing] = useState<CommodityListingModel | null>(null);
@@ -283,6 +379,33 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
     
     const farmerMap = useMemo(() => new Map(farmers.map(f => [f.id, f])), [farmers]);
+
+    // Group Listings for Community View
+    const communityGroups = useMemo(() => {
+        const groups: Record<string, { listings: CommodityListingModel[], totalQty: number, farmers: Set<string> }> = {};
+        
+        listings.filter(l => l.status === ListingStatus.Active).forEach(listing => {
+            const farmer = farmerMap.get(listing.farmerId);
+            if (!farmer) return;
+            
+            // Group key: Mandal|Village|Crop
+            const key = `${farmer.mandal}|${farmer.village}|${listing.cropName}`;
+            
+            if (!groups[key]) {
+                groups[key] = { listings: [], totalQty: 0, farmers: new Set() };
+            }
+            
+            groups[key].listings.push(listing);
+            groups[key].totalQty += listing.quantity; // Assuming tons for MVP sim
+            groups[key].farmers.add(farmer.id);
+        });
+
+        // Only return groups with aggregation potential (e.g. > 1 listing or significant volume)
+        return Object.entries(groups)
+            .filter(([_, data]) => data.listings.length > 1 || data.totalQty > 5)
+            .map(([key, data]) => ({ key, ...data, farmers: Array.from(data.farmers) }));
+    }, [listings, farmerMap]);
+
 
     const handleCreateListing = async (data: any) => {
         await database.write(async () => {
@@ -356,6 +479,8 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
         }
     }
 
+    const recentTrades = useMemo(() => listings.filter(l => l.status === ListingStatus.Sold).slice(0, 5), [listings]);
+
     return (
         <div className="p-6 bg-gray-50 min-h-full">
             <div className="max-w-7xl mx-auto">
@@ -377,17 +502,43 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
                     </div>
                 </div>
 
-                {/* Market Tickers */}
-                <div className="flex gap-4 overflow-x-auto pb-4 mb-6 scrollbar-hide">
-                    <MarketTicker crop="Oil Palm" price={14500} trend={getPriceTrend('Oil Palm')} />
-                    <MarketTicker crop="Paddy" price={2200} trend={getPriceTrend('Paddy')} />
-                    <MarketTicker crop="Maize" price={1950} trend={getPriceTrend('Maize')} />
-                    <MarketTicker crop="Cotton" price={6800} trend={getPriceTrend('Cotton')} />
-                    <MarketTicker crop="Chilli" price={18000} trend={getPriceTrend('Chilli')} />
+                {/* Demand Forecast & Tickers */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div className="lg:col-span-1">
+                        <DemandForecastWidget crop="Oil Palm" region="Warangal" />
+                    </div>
+                    <div className="lg:col-span-2">
+                        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                            <MarketTicker crop="Oil Palm" price={14500} trend={getPriceTrend('Oil Palm')} />
+                            <MarketTicker crop="Paddy" price={2200} trend={getPriceTrend('Paddy')} />
+                            <MarketTicker crop="Maize" price={1950} trend={getPriceTrend('Maize')} />
+                            <MarketTicker crop="Cotton" price={6800} trend={getPriceTrend('Cotton')} />
+                        </div>
+                    </div>
                 </div>
 
-                {/* Listings */}
-                <div className="bg-white rounded-lg shadow-md border border-gray-200">
+                {/* View Switcher */}
+                <div className="flex items-center gap-4 mb-4 bg-white p-2 rounded-lg shadow-sm w-fit">
+                    <button onClick={() => setViewMode('individual')} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${viewMode === 'individual' ? 'bg-green-100 text-green-800' : 'text-gray-600 hover:bg-gray-50'}`}>Individual Listings</button>
+                    <button onClick={() => setViewMode('community')} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors flex items-center gap-2 ${viewMode === 'community' ? 'bg-purple-100 text-purple-800' : 'text-gray-600 hover:bg-gray-50'}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.125-1.273-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.125-1.273.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        Community Lots
+                    </button>
+                </div>
+
+                {viewMode === 'community' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        {communityGroups.length > 0 ? communityGroups.map(group => (
+                            <CommunityLotCard key={group.key} groupKey={group.key} listings={group.listings} totalQty={group.totalQty} farmers={group.farmers} />
+                        )) : (
+                            <div className="col-span-full text-center py-20 bg-white rounded-lg shadow-sm border border-dashed">
+                                <p className="text-gray-500">No aggregated community lots available right now. Check back later or encourage neighbors to list together.</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                /* Listings Table */
+                <div className="bg-white rounded-lg shadow-md border border-gray-200 mb-8">
                     <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-lg">
                         <h2 className="text-xl font-bold text-gray-800">Live Listings</h2>
                         <span className="text-sm text-gray-500">{listings.length} Active Lots</span>
@@ -411,6 +562,7 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
                                     const formattedDate = listing.createdAt ? new Date(listing.createdAt).toLocaleDateString() : 'N/A';
                                     const isSold = listing.status === ListingStatus.Sold;
                                     const isBooked = listing.status === ListingStatus.BidAccepted;
+                                    const isVirtualBatch = listing.quantity < 1 && listing.unit === 'tons'; // Visual indicator
 
                                     return (
                                         <tr key={listing.id} className="hover:bg-gray-50 transition-colors">
@@ -422,7 +574,14 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
                                                 {farmer?.fullName || 'Unknown'}
                                                 <div className="text-xs text-gray-400">{farmer ? `${getGeoName('mandal', farmerModelToPlain(farmer)!)}` : ''}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700 font-semibold">{listing.quantity} {listing.unit}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700 font-semibold">
+                                                {listing.quantity} {listing.unit}
+                                                {isVirtualBatch && (
+                                                    <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-purple-100 text-purple-700 rounded border border-purple-200 font-bold">
+                                                        V-BATCH
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                 <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${listing.qualityGrade === 'Grade A+' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-800 border-gray-200'}`}>
                                                     {listing.qualityGrade}
@@ -455,6 +614,24 @@ const CommoditexDashboard: React.FC<CommoditexDashboardProps> = ({ onBack, curre
                         </table>
                     </div>
                 </div>
+                )}
+
+                {/* Recent Trades */}
+                {recentTrades.length > 0 && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Recent Trades</h3>
+                        <div className="flex flex-wrap gap-4">
+                            {recentTrades.map(trade => (
+                                <div key={trade.id} className="bg-white px-3 py-2 rounded border text-xs text-gray-600 shadow-sm flex items-center gap-2">
+                                    <span className="font-bold text-green-700">SOLD</span>
+                                    <span>{trade.cropName}</span>
+                                    <span className="text-gray-400">|</span>
+                                    <span>{trade.quantity} {trade.unit} @ {formatCurrency(trade.askPrice)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
             {isCreateModalOpen && (
                 <CreateListingModal 

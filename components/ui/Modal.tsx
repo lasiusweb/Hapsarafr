@@ -1,10 +1,16 @@
+
 import React from 'react';
 
-const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.ReactNode }> = ({ isOpen, onClose, children }) => {
+const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.ReactNode; variant?: 'default' | 'transparent' }> = ({ isOpen, onClose, children, variant = 'default' }) => {
   if (!isOpen) return null;
+  
+  const contentClasses = variant === 'transparent' 
+    ? "relative" 
+    : "bg-white rounded-lg shadow-2xl w-full max-w-md";
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]" onClick={onClose} aria-modal="true" role="dialog">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+      <div className={contentClasses} onClick={e => e.stopPropagation()}>
         {children}
       </div>
     </div>

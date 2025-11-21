@@ -1,4 +1,5 @@
 
+
 export interface District {
     code: string;
     name: string;
@@ -35,6 +36,9 @@ export interface Tenant {
     subscriptionStatus: string;
     maxFarmers?: number;
     createdAt: number;
+    // New SaaS fields
+    featuresJson?: string;
+    tier?: string;
 }
 
 export interface Group {
@@ -224,6 +228,7 @@ export enum ActivityType {
     COLLECTION_APPOINTMENT_BOOKED = 'COLLECTION_APPOINTMENT_BOOKED',
     CROP_ASSIGNED = 'CROP_ASSIGNED',
     SEED_REGISTERED = 'SEED_REGISTERED',
+    RECOMMENDATION_ACTION = 'RECOMMENDATION_ACTION'
 }
 
 export enum BillableEvent {
@@ -599,6 +604,7 @@ export interface Territory {
     tenantId: string;
     administrativeLevel: string;
     administrativeCode: string;
+    serviceType?: string; // Hapsara Aegis Update
 }
 
 export interface TerritoryTransferRequest {
@@ -639,6 +645,7 @@ export interface FarmerDealerConsent {
     isActive: boolean;
     permissionsJson: string;
     grantedBy: string;
+    consentExpiry?: string; // Hapsara Aegis Update
 }
 
 export enum DataSharingDataType {
@@ -1055,13 +1062,17 @@ export interface AgronomicRecommendation {
     description: string;
     reasoning: string;
     priority: 'High' | 'Medium' | 'Low';
-    status: string;
+    status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED'; // Added Feedback status
     createdAt: string;
     tenantId: string;
     // New rich fields
     actionJson?: string; // JSON string: { label: string, intent: string, payload: any }
     impactJson?: string; // JSON string: { metric: string, change: string, confidence: number }
     socialProofJson?: string; // JSON string: { text: string, stats: any }
+    // Added for contextual awareness
+    isFinanciallyFeasible?: boolean;
+    inventoryStatus?: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+    alternativeProductId?: string;
 }
 
 export interface DealerInsights {

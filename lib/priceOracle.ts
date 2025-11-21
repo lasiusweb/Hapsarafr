@@ -35,6 +35,15 @@ export interface PriceAnalysis {
     }[];
 }
 
+export interface DemandForecast {
+    crop: string;
+    region: string;
+    trend: 'rising' | 'falling' | 'stable';
+    percentage: number;
+    reason: string;
+    confidence: number;
+}
+
 /**
  * Calculates a fair price range based on a weighted multi-factor model.
  * Formula: Price = (Local * 0.4) + (National * 0.3) + (Quality * 0.2) + (Demand * 0.1)
@@ -125,4 +134,45 @@ export const getFairPriceRange = (
 
 export const getPriceTrend = (crop: string) => {
     return Math.random() > 0.5 ? 'up' : 'down';
+};
+
+export const getDemandForecast = (crop: string, region: string): DemandForecast => {
+    // Mock logic based on crop seasonality and random factors
+    const trends = ['rising', 'falling', 'stable'] as const;
+    const trend = trends[Math.floor(Math.random() * trends.length)];
+    let reason = '';
+    
+    if (crop === 'Oil Palm') {
+        reason = trend === 'rising' ? 'Industrial demand peaking before festival season.' : 'Processing units currently at capacity.';
+    } else if (crop === 'Paddy') {
+        reason = trend === 'rising' ? 'Government procurement targets increased.' : 'High moisture levels reported in region.';
+    } else if (crop === 'Chilli') {
+         reason = trend === 'rising' ? 'Export demand surging.' : 'Local oversupply expected.';
+    } else {
+        reason = 'Seasonal market adjustments.';
+    }
+
+    return {
+        crop,
+        region,
+        trend,
+        percentage: Math.floor(Math.random() * 15) + 5,
+        reason,
+        confidence: 0.85
+    };
+};
+
+/**
+ * Calculates the premium a buyer is willing to pay for aggregated bulk volume.
+ * Used for Community Lots.
+ */
+export const getBulkPremium = (quantity: number, commodity: string): number => {
+    if (commodity !== 'Oil Palm') return 0;
+    
+    // Oil Palm Logistics Logic:
+    // 3 tons = 1 small truck. >10 tons = 1 large truck (cheaper per ton).
+    if (quantity > 15) return 0.05; // 5% premium for very large lots
+    if (quantity > 10) return 0.03; // 3% premium
+    if (quantity > 5) return 0.015; // 1.5% premium
+    return 0;
 };

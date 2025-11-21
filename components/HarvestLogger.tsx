@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useDatabase } from '../DatabaseContext';
-import { CropAssignmentModel, HarvestLogModel, CropModel, ActivityLogModel, FarmPlotModel, FarmerModel } from '../db';
-import { User, ActivityType } from '../types';
+import { CropAssignmentModel, HarvestLogModel, CropModel, ActivityLogModel, FarmPlotModel, FarmerModel, CommodityListingModel } from '../db';
+import { User, ActivityType, ListingStatus } from '../types';
 import { useQuery } from '../hooks/useQuery';
 import { Q } from '@nozbe/watermelondb';
 import { getFairPriceRange } from '../lib/priceOracle';
@@ -31,6 +31,7 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
     const [estimatedValue, setEstimatedValue] = useState<number>(0);
     const [priceRange, setPriceRange] = useState<{low: number, high: number, fair: number} | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [listOnExchange, setListOnExchange] = useState(false);
     
     // Data Validation State
     const [validationWarning, setValidationWarning] = useState<string | null>(null);
@@ -131,9 +132,25 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
                         log.createdBy = currentUser.id;
                         log.tenantId = currentUser.tenantId;
                     });
+                    
+                    // NEW: Auto-create commodity listing if requested
+                    if (listOnExchange && priceRange) {
+                        await database.get<CommodityListingModel>('commodity_listings').create(l => {
+                            l.farmerId = farmer.id;
+                            l.cropName = crop?.name || 'Unknown';
+                            l.qualityGrade = 'Grade A'; // Default assumption for auto-list
+                            l.quantity = quantity;
+                            l.unit = formData.unit;
+                            l.askPrice = priceRange.fair; // Auto-set to fair price
+                            l.status = ListingStatus.Active;
+                            l.farmPlotId = farmPlot.id;
+                            l.tenantId = currentUser.tenantId;
+                            l.createdAt = new Date();
+                        });
+                    }
                 }
             });
-            setNotification({ message: `Harvest logged. Est. Earnings: ${formatCurrency(estimatedValue)}`, type: 'success' });
+            setNotification({ message: `Harvest logged. ${listOnExchange ? 'Listed on Exchange.' : ''} Est. Earnings: ${formatCurrency(estimatedValue)}`, type: 'success' });
             onClose();
         } catch (error) {
             console.error(error);
@@ -202,11 +219,24 @@ const HarvestLogger: React.FC<HarvestLoggerProps> = ({ cropAssignment, onClose, 
                         <label className="block text-sm font-medium text-gray-700">Notes (Optional)</label>
                         <textarea value={formData.notes} onChange={e => setFormData(s => ({...s, notes: e.target.value}))} rows={2} className="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g. Good quality, harvested early morning..."></textarea>
                     </div>
+
+                    <div className="flex items-center p-3 bg-indigo-50 border border-indigo-100 rounded-md">
+                        <input 
+                            type="checkbox" 
+                            id="listOnExchange" 
+                            checked={listOnExchange} 
+                            onChange={e => setListOnExchange(e.target.checked)} 
+                            className="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                        <label htmlFor="listOnExchange" className="ml-3 block text-sm font-medium text-indigo-900">
+                            List Immediately on Hapsara Commoditex
+                        </label>
+                    </div>
                 </div>
                 <div className="bg-gray-50 p-4 flex justify-end gap-4 rounded-b-lg">
                     <button type="button" onClick={onClose} disabled={isSubmitting} className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition">Cancel</button>
                     <button type="button" onClick={handleSave} disabled={isSubmitting} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold transition shadow-sm">
-                        {isSubmitting ? 'Saving...' : 'Log Harvest'}
+                        {isSubmitting ? 'Saving...' : listOnExchange ? 'Log & List' : 'Log Harvest'}
                     </button>
                 </div>
             </div>
