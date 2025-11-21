@@ -44,17 +44,17 @@ export const calculateBalance = (records: KhataRecord[]): number => {
  * This uses a FIFO (First-In-First-Out) allocation method for payments.
  */
 export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
-    // 1. Sort by date ascending
+    // 1. Sort by date ascending to apply payments to oldest debts first
     const sortedRecords = [...records].sort((a, b) => {
         const dateA = new Date(a.transactionDate).getTime();
         const dateB = new Date(b.transactionDate).getTime();
-        // Handle invalid dates by pushing them to the end or beginning depending on preference
-        if (isNaN(dateA)) return 1;
-        if (isNaN(dateB)) return -1;
-        return dateA - dateB;
+        // Handle invalid dates by pushing them to the end (treat as new)
+        const valA = isNaN(dateA) ? Number.MAX_SAFE_INTEGER : dateA;
+        const valB = isNaN(dateB) ? Number.MAX_SAFE_INTEGER : dateB;
+        return valA - valB;
     });
     
-    // 2. Calculate total payments
+    // 2. Calculate total payments received
     let totalPayments = sortedRecords
         .filter(r => {
             const type = r.transactionType;
@@ -67,7 +67,7 @@ export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
     const buckets: AgingBuckets = { current: 0, days30: 0, days60: 0, days90Plus: 0 };
     const now = new Date();
 
-    // 3. Apply payments to oldest credits first
+    // 3. Apply payments to oldest credits first (FIFO)
     for (const record of sortedRecords) {
         const type = record.transactionType;
         if (type === KhataTransactionType.CREDIT_GIVEN || type === 'CREDIT_GIVEN' || 
@@ -77,17 +77,19 @@ export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
 
             let outstandingAmount = record.amount;
             
+            // Deduct available payments from this credit record
             if (totalPayments > 0) {
                 const paymentCovered = Math.min(outstandingAmount, totalPayments);
                 outstandingAmount -= paymentCovered;
                 totalPayments -= paymentCovered;
             }
 
+            // If still unpaid, categorize into aging bucket
             if (outstandingAmount > 0) {
                 const txDate = new Date(record.transactionDate);
-                // Validate date
+                
+                // Robust date handling: Invalid dates default to "Current" bucket
                 if (!record.transactionDate || isNaN(txDate.getTime())) {
-                    // If date invalid, treat as current/new debt to be safe
                     buckets.current += outstandingAmount;
                     continue;
                 }
