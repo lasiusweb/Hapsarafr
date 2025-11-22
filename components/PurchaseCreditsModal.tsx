@@ -1,12 +1,14 @@
 
 import React, { useState } from 'react';
-import { Tenant, LedgerTransactionType } from '../types';
+import { Tenant, LedgerTransactionType, Vendor } from '../types';
 import { useDatabase } from '../DatabaseContext';
-import { TenantModel, CreditLedgerEntryModel } from '../db';
+import { TenantModel, CreditLedgerEntryModel, WalletModel, VendorModel } from '../db';
+import { Q } from '@nozbe/watermelondb';
 
 interface PurchaseCreditsModalProps {
     onClose: () => void;
     currentTenant: Tenant;
+    vendor?: VendorModel; // Optional vendor context for self-service
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
@@ -17,7 +19,7 @@ const creditPackages = [
     { credits: 5000, price: 5000 },
 ];
 
-const PurchaseCreditsModal: React.FC<PurchaseCreditsModalProps> = ({ onClose, currentTenant, setNotification }) => {
+const PurchaseCreditsModal: React.FC<PurchaseCreditsModalProps> = ({ onClose, currentTenant, vendor, setNotification }) => {
     const database = useDatabase();
     const [selectedPackage, setSelectedPackage] = useState(creditPackages[1]);
     const [isSimulating, setIsSimulating] = useState(false);
@@ -31,21 +33,40 @@ const PurchaseCreditsModal: React.FC<PurchaseCreditsModalProps> = ({ onClose, cu
         setIsSimulating(true);
         try {
             await database.write(async () => {
-                const tenantRecord = await database.get<TenantModel>('tenants').find(currentTenant.id);
-                
-                await tenantRecord.update(t => {
-                    t.creditBalance += selectedPackage.credits;
-                });
+                if (vendor) {
+                    // Vendor Self-Service Logic
+                    const wallets = await database.get<WalletModel>('wallets').query(Q.where('vendor_id', vendor.id)).fetch();
+                    let wallet = wallets[0];
+                    
+                    if (!wallet) {
+                        wallet = await database.get<WalletModel>('wallets').create(w => {
+                            w.vendorId = vendor.id;
+                            w.balance = 0;
+                        });
+                    }
 
-                await database.get<CreditLedgerEntryModel>('credit_ledger').create(l => {
-                    l.tenantId = currentTenant.id;
-                    l.transactionType = LedgerTransactionType.PURCHASE;
-                    l.amount = selectedPackage.credits;
-                });
-                
-                // In a real app, we'd save the auto-recharge preference to the tenant config here
+                    await wallet.update(w => { w.balance += selectedPackage.credits; });
+
+                    await database.get<CreditLedgerEntryModel>('credit_ledger').create(l => {
+                        l.vendorId = vendor.id;
+                        l.transactionType = LedgerTransactionType.PURCHASE;
+                        l.amount = selectedPackage.credits;
+                    });
+                } else {
+                    // Tenant Corporate Logic
+                    const tenantRecord = await database.get<TenantModel>('tenants').find(currentTenant.id);
+                    await tenantRecord.update(t => {
+                        t.creditBalance += selectedPackage.credits;
+                    });
+
+                    await database.get<CreditLedgerEntryModel>('credit_ledger').create(l => {
+                        l.tenantId = currentTenant.id;
+                        l.transactionType = LedgerTransactionType.PURCHASE;
+                        l.amount = selectedPackage.credits;
+                    });
+                }
             });
-            setNotification({ message: `${selectedPackage.credits} credits added successfully!`, type: 'success' });
+            setNotification({ message: `${selectedPackage.credits} credits added to ${vendor ? 'Vendor Wallet' : 'Tenant Account'} successfully!`, type: 'success' });
             onClose();
         } catch (error) {
             console.error(error);
@@ -56,11 +77,13 @@ const PurchaseCreditsModal: React.FC<PurchaseCreditsModalProps> = ({ onClose, cu
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-[80]" onClick={onClose}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl" onClick={e => e.stopPropagation()}>
                 <div className="p-6 border-b bg-gray-50 rounded-t-xl">
                     <h2 className="text-xl font-bold text-gray-800">Purchase Hapsara Credits</h2>
-                    <p className="text-sm text-gray-500 mt-1">Power your operations with flexible, prepaid credits.</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        {vendor ? `Top up for ${vendor.name} (Self-Service)` : 'Power your operations with flexible, prepaid credits.'}
+                    </p>
                 </div>
                 
                 <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">

@@ -170,7 +170,6 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
 
     // --- Dynamic Geo Data ---
     const districts = useQuery(useMemo(() => database.get<DistrictModel>('districts').query(Q.sortBy('name')), [database]));
-    const claimedTerritories = useQuery(useMemo(() => database.get<TerritoryModel>('territories').query(Q.where('tenant_id', currentUser.tenantId)), [database, currentUser.tenantId]));
     
     const [selectedDistrict, setSelectedDistrict] = useState<DistrictModel | null>(null);
     const [selectedMandal, setSelectedMandal] = useState<MandalModel | null>(null);
@@ -424,7 +423,8 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
             const { street, city, state, zip, ...finalData } = formData;
 
             if (mode === 'create') {
-                farmerData = { ...finalData, id: '', asoId, createdAt: now, updatedAt: now, createdBy: currentUser.id, tenantId: currentUser.tenantId };
+                const newId = crypto.randomUUID(); // Ground Reality: Use UUIDv4 for offline safety
+                farmerData = { ...finalData, id: newId, asoId, createdAt: now, updatedAt: now, createdBy: currentUser.id, tenantId: currentUser.tenantId };
             } else {
                 farmerData = { ...existingFarmer!, ...finalData, updatedAt: now, updatedBy: currentUser.id };
             }

@@ -1,4 +1,3 @@
-
 import { KhataRecord, Farmer, KhataTransactionType } from '../types';
 
 // --- Types ---
@@ -46,14 +45,13 @@ export const calculateBalance = (records: KhataRecord[]): number => {
 export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
     // 1. Sort by date ascending to apply payments to oldest debts first
     const sortedRecords = [...records].sort((a, b) => {
-        const timeA = a.transactionDate ? new Date(a.transactionDate).getTime() : 0;
-        const timeB = b.transactionDate ? new Date(b.transactionDate).getTime() : 0;
+        const dateA = a.transactionDate ? new Date(a.transactionDate) : new Date(0);
+        const dateB = b.transactionDate ? new Date(b.transactionDate) : new Date(0);
         
-        // Handle invalid dates (NaN) by pushing them to the end or treating as 0
-        const valA = isNaN(timeA) ? 0 : timeA;
-        const valB = isNaN(timeB) ? 0 : timeB;
+        const timeA = isNaN(dateA.getTime()) ? 0 : dateA.getTime();
+        const timeB = isNaN(dateB.getTime()) ? 0 : dateB.getTime();
         
-        return valA - valB;
+        return timeA - timeB;
     });
     
     // 2. Calculate total payments received
@@ -88,10 +86,17 @@ export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
 
             // If still unpaid, categorize into aging bucket
             if (outstandingAmount > 0) {
-                const txDate = new Date(record.transactionDate);
-                
-                // Robust date handling: Invalid dates default to "Current" bucket
-                if (!record.transactionDate || isNaN(txDate.getTime())) {
+                let txDate = new Date(0);
+                if (record.transactionDate) {
+                    const parsedDate = new Date(record.transactionDate);
+                    if (!isNaN(parsedDate.getTime())) {
+                        txDate = parsedDate;
+                    }
+                }
+
+                // If date is 0 (invalid/missing), treat as very old or current? 
+                // Let's treat invalid dates as Current to avoid false alarms on old debt
+                if (txDate.getTime() === 0) {
                     buckets.current += outstandingAmount;
                     continue;
                 }

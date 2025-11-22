@@ -2,9 +2,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { OrderModel, VendorModel, VendorProductModel, ProductModel, DealerInventorySignalModel, FarmerModel, KhataRecordModel, OrderItemModel } from '../db';
+import { OrderModel, VendorModel, VendorProductModel, ProductModel, DealerInventorySignalModel, FarmerModel, OrderItemModel, WalletModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
-import { User, OrderStatus, Vendor } from '../types';
+import { User, OrderStatus } from '../types';
 import { formatCurrency, generateWhatsAppLink } from '../lib/utils';
 import DealerInsights from './DealerInsights';
 import DealerSalesView from './DealerSalesView';
@@ -13,20 +13,12 @@ import ProductBundlingView from './ProductBundlingView';
 import CustomSelect from './CustomSelect';
 import KhataScreen from './KhataScreen';
 import { analyzeMarketBasket, getSalesTrends } from '../lib/businessIntelligence';
+import PurchaseCreditsModal from './PurchaseCreditsModal';
 
 interface MitraDashboardProps {
     onBack: () => void;
     currentUser: User;
 }
-
-// Updated to use dynamic Product IDs from DB if available, or hardcoded fallback for initial setup
-const COMMON_COMMODITIES = [
-    { id: 'urea', name: 'Urea', defaultUnit: 'kg' },
-    { id: 'dap', name: 'DAP', defaultUnit: 'kg' },
-    { id: 'mop', name: 'MOP (Potash)', defaultUnit: 'kg' },
-    { id: 'seeds_oilpalm', name: 'Oil Palm Saplings', defaultUnit: 'units' },
-    { id: 'pesticide_general', name: 'General Pesticide', defaultUnit: 'litres' },
-];
 
 const OrderStatusBadge: React.FC<{ status: string }> = ({ status }) => {
     const colors: Record<string, string> = {
@@ -39,50 +31,117 @@ const OrderStatusBadge: React.FC<{ status: string }> = ({ status }) => {
     return <span className={`px-2 py-1 text-xs font-bold rounded-full ${colors[status] || 'bg-gray-100'}`}>{status}</span>;
 };
 
+const AddProductModal: React.FC<{ 
+    onClose: () => void; 
+    onSave: (productId: string, price: number, stock: number) => void; 
+    availableProducts: ProductModel[];
+}> = ({ onClose, onSave, availableProducts }) => {
+    const [selectedProductId, setSelectedProductId] = useState('');
+    const [price, setPrice] = useState('');
+    const [stock, setStock] = useState('');
+
+    const productOptions = useMemo(() => availableProducts.map(p => ({ value: p.id, label: p.name })), [availableProducts]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedProductId && price && stock) {
+            onSave(selectedProductId, parseFloat(price), parseInt(stock));
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">
+                <div className="p-6 border-b"><h2 className="text-xl font-bold text-gray-800">Add Product to Inventory</h2></div>
+                <div className="p-8 space-y-4">
+                    <CustomSelect 
+                        label="Select Product" 
+                        options={productOptions} 
+                        value={selectedProductId} 
+                        onChange={setSelectedProductId} 
+                        placeholder="-- Choose from Catalog --"
+                    />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Selling Price (₹)</label>
+                        <input type="number" value={price} onChange={e => setPrice(e.target.value)} className="w-full p-2 border rounded-md mt-1" placeholder="0.00" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Initial Stock</label>
+                        <input type="number" value={stock} onChange={e => setStock(e.target.value)} className="w-full p-2 border rounded-md mt-1" placeholder="0" />
+                    </div>
+                </div>
+                <div className="bg-gray-100 p-4 flex justify-end gap-4 rounded-b-lg">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
+                    <button onClick={handleSubmit} className="px-6 py-2 bg-blue-600 text-white rounded-md font-semibold">Add Product</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) => {
     const database = useDatabase();
     const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'khata' | 'insights'>('orders');
-    
+    const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
+    const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+    const [editingProduct, setEditingProduct] = useState<string | null>(null); // ID of VendorProduct being edited
+    const [editValues, setEditValues] = useState({ price: '', stock: '' });
+    const [searchQuery, setSearchQuery] = useState('');
+
     // Vendor/Dealer Context
     const vendorQuery = useMemo(() => database.get<VendorModel>('vendors').query(Q.where('user_id', currentUser.id)), [database, currentUser.id]);
     const vendor = useQuery(vendorQuery)[0];
 
-    // Data Fetching
-    // Corrected: Sort by 'order_date' instead of 'created_at' which may not exist in schema
-    const allOrders = useQuery(useMemo(() => database.get<OrderModel>('orders').query(Q.sortBy('order_date', 'desc')), [database]));
-    const allOrderItems = useQuery(useMemo(() => database.get<OrderItemModel>('order_items').query(), [database]));
-    const allVendorProducts = useQuery(useMemo(() => database.get<VendorProductModel>('vendor_products').query(), [database]));
+    // Wallet Context
+    const walletQuery = useMemo(() => vendor ? database.get<WalletModel>('wallets').query(Q.where('vendor_id', vendor.id)) : database.get<WalletModel>('wallets').query(Q.where('id', 'null')), [database, vendor]);
+    const vendorWallet = useQuery(walletQuery)[0];
+
+    // Optimized Data Fetching
+    const myOrders = useQuery(useMemo(() => {
+        if (!vendor) return database.get<OrderModel>('orders').query(Q.where('id', 'null'));
+        return database.get<OrderModel>('orders').query(
+            Q.where('dealer_id', vendor.id), 
+            Q.sortBy('order_date', 'desc')
+        );
+    }, [database, vendor]));
+
+    const orderIds = useMemo(() => myOrders.map(o => o.id), [myOrders]);
+    const myOrderItems = useQuery(useMemo(() => {
+        if (orderIds.length === 0) return database.get<OrderItemModel>('order_items').query(Q.where('id', 'null'));
+        return database.get<OrderItemModel>('order_items').query(Q.where('order_id', Q.oneOf(orderIds)));
+    }, [database, orderIds]));
+
+    // Inventory Data - Optimized Query
+    const myVendorProducts = useQuery(useMemo(() => {
+        if (!vendor) return database.get<VendorProductModel>('vendor_products').query(Q.where('id', 'null'));
+        return database.get<VendorProductModel>('vendor_products').query(Q.where('vendor_id', vendor.id));
+    }, [database, vendor]));
+
+    const products = useQuery(useMemo(() => database.get<ProductModel>('products').query(), [database]));
+    const allVendorProducts = useQuery(useMemo(() => database.get<VendorProductModel>('vendor_products').query(), [database])); // Needed for global trends comparison
     const inventorySignals = useQuery(useMemo(() => database.get<DealerInventorySignalModel>('dealer_inventory_signals').query(Q.where('dealer_id', vendor?.id || 'unknown')), [database, vendor?.id]));
     const farmers = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(), [database]));
-    const products = useQuery(useMemo(() => database.get<ProductModel>('products').query(), [database]));
-    
-    // Mapped Data
+
     const farmerMap = useMemo(() => new Map(farmers.map(f => [f.id, f])), [farmers]);
-    
-    // Filter orders specific to this vendor
-    const myOrders = useMemo(() => {
-        if (!vendor) return [];
-        const myVendorProductIds = new Set(allVendorProducts.filter(vp => vp.vendorId === vendor.id).map(vp => vp.id));
-        // Find all items that belong to this vendor
-        const myItemOrderIds = new Set(
-            allOrderItems
-                .filter(item => myVendorProductIds.has(item.vendorProductId))
-                .map(item => item.orderId)
-        );
-        return allOrders.filter(o => myItemOrderIds.has(o.id));
-    }, [allOrders, allOrderItems, allVendorProducts, vendor]);
+    const productMap = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
+
+    // Filter products not yet in inventory for "Add" modal
+    const availableToAdd = useMemo(() => {
+        const myProductIds = new Set(myVendorProducts.map(vp => vp.productId));
+        return products.filter(p => !myProductIds.has(p.id));
+    }, [products, myVendorProducts]);
 
     // Sales Trends (BI)
     const salesTrends = useMemo(() => {
         if (!vendor) return [];
-        return getSalesTrends(allOrders, allOrderItems, allVendorProducts, vendor.id);
-    }, [allOrders, allOrderItems, allVendorProducts, vendor]);
+        return getSalesTrends(myOrders, myOrderItems, allVendorProducts, vendor.id);
+    }, [myOrders, myOrderItems, allVendorProducts, vendor]);
 
     // Market Basket Analysis
     const bundles = useMemo(() => {
         if (myOrders.length === 0 || products.length === 0) return [];
-        return analyzeMarketBasket(myOrders, allOrderItems, allVendorProducts, products);
-    }, [myOrders, allOrderItems, allVendorProducts, products]);
+        return analyzeMarketBasket(myOrders, myOrderItems, allVendorProducts, products);
+    }, [myOrders, myOrderItems, allVendorProducts, products]);
 
 
     // Handlers
@@ -94,7 +153,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
         const link = generateWhatsAppLink(farmer.mobileNumber, message);
         window.open(link, '_blank');
         
-        // Auto-update status to confirmed
         handleOrderStatus(order, OrderStatus.Confirmed);
     };
 
@@ -105,26 +163,21 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                 o.syncStatusLocal = 'pending'; 
             });
 
-            // Automated Inventory Decrement Logic (Samridhi Intelligence)
-            // When an order is DELIVERED, we deduct the sold items from the dealer's inventory signals.
             if (status === OrderStatus.Delivered) {
-                // 1. Find items for this order
-                const orderItems = allOrderItems.filter(item => item.orderId === (order as any).id);
-                
+                const orderItems = myOrderItems.filter(item => item.orderId === (order as any).id);
                 for (const item of orderItems) {
-                    // 2. Find Vendor Product to get generic Product ID
-                    const vp = allVendorProducts.find(v => v.id === item.vendorProductId);
+                    const vp = myVendorProducts.find(v => v.id === item.vendorProductId);
                     if (vp) {
-                        // 3. Find matching Inventory Signal for this dealer and product
-                        const signal = inventorySignals.find(s => s.productId === vp.productId);
+                        // 1. Update Actual Stock
+                        const newQty = Math.max(0, vp.stockQuantity - item.quantity);
+                        await vp.update(v => { v.stockQuantity = newQty; });
                         
+                        // 2. Update BI Signal
+                        const signal = inventorySignals.find(s => s.productId === vp.productId);
                         if (signal) {
-                            // 4. Decrement Stock safely with null checks
-                            const currentStock = signal.stockQuantity || 0;
-                            const newQuantity = Math.max(0, currentStock - item.quantity);
                             await signal.update(s => {
-                                s.stockQuantity = newQuantity;
-                                s.isAvailable = newQuantity > 0;
+                                s.stockQuantity = newQty;
+                                s.isAvailable = newQty > 0;
                                 s.updatedAt = new Date().toISOString();
                             });
                         }
@@ -134,29 +187,95 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
         });
     };
 
-    const updateStock = async (productId: string, newQuantity: number) => {
+    const handleAddProduct = async (productId: string, price: number, stock: number) => {
         if (!vendor) return;
-        
         await database.write(async () => {
+            // 1. Create VendorProduct (Commercial Record)
+            await database.get<VendorProductModel>('vendor_products').create(vp => {
+                vp.vendorId = vendor.id;
+                vp.productId = productId;
+                vp.price = price;
+                vp.stockQuantity = stock;
+                vp.unit = 'units'; // Default, can be refined from product
+            });
+
+            // 2. Create/Update Inventory Signal for BI (Intelligence Record)
+            // Ground Reality: The AI engine runs on 'DealerInventorySignal', not 'VendorProduct'
+            // to abstract away pricing and focus on availability.
             const existingSignal = inventorySignals.find(s => s.productId === productId);
             if (existingSignal) {
                 await existingSignal.update(s => {
-                    s.stockQuantity = newQuantity;
-                    // Simple logic: "Available" if stock > 0
-                    s.isAvailable = newQuantity > 0;
+                    s.stockQuantity = stock;
+                    s.isAvailable = stock > 0;
                     s.updatedAt = new Date().toISOString();
                 });
             } else {
                 await database.get<DealerInventorySignalModel>('dealer_inventory_signals').create(s => {
                     s.dealerId = vendor.id;
                     s.productId = productId;
-                    s.stockQuantity = newQuantity;
-                    s.isAvailable = newQuantity > 0;
-                    s.reorderLevel = 10; // Default
+                    s.stockQuantity = stock;
+                    s.isAvailable = stock > 0;
+                    s.reorderLevel = 10;
                     s.updatedAt = new Date().toISOString();
                 });
             }
         });
+        setIsAddProductModalOpen(false);
+    };
+
+    const handleUpdateProduct = async (vp: VendorProductModel) => {
+        const newPrice = parseFloat(editValues.price);
+        const newStock = parseInt(editValues.stock);
+        
+        if (isNaN(newPrice) || isNaN(newStock)) return;
+
+        await database.write(async () => {
+            // 1. Update VendorProduct
+            await (vp as any).update((v: VendorProductModel) => {
+                v.price = newPrice;
+                v.stockQuantity = newStock;
+            });
+
+            // 2. Update Signal (Atomic update for BI consistency)
+            const signal = inventorySignals.find(s => s.productId === vp.productId);
+            if (signal) {
+                await signal.update(s => {
+                    s.stockQuantity = newStock;
+                    s.isAvailable = newStock > 0;
+                    s.updatedAt = new Date().toISOString();
+                });
+            } else if (vendor) {
+                 // If signal missing for some reason, create it
+                await database.get<DealerInventorySignalModel>('dealer_inventory_signals').create(s => {
+                    s.dealerId = vendor.id;
+                    s.productId = vp.productId;
+                    s.stockQuantity = newStock;
+                    s.isAvailable = newStock > 0;
+                    s.reorderLevel = 10;
+                    s.updatedAt = new Date().toISOString();
+                });
+            }
+        });
+        setEditingProduct(null);
+    };
+
+    const startEditing = (vp: VendorProductModel) => {
+        setEditingProduct((vp as any).id);
+        setEditValues({ price: String(vp.price), stock: String(vp.stockQuantity) });
+    };
+
+    const handleVoiceSearch = () => {
+        if (!('webkitSpeechRecognition' in window)) {
+            alert("Voice search not supported in this browser.");
+            return;
+        }
+        const recognition = new (window as any).webkitSpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            setSearchQuery(transcript);
+        };
+        recognition.start();
     };
 
     if (!vendor) return (
@@ -169,18 +288,42 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
         </div>
     );
 
+    const filteredInventory = useMemo(() => {
+        if (!searchQuery) return myVendorProducts;
+        return myVendorProducts.filter(vp => {
+            const product = productMap.get(vp.productId);
+            return product?.name.toLowerCase().includes(searchQuery.toLowerCase());
+        });
+    }, [myVendorProducts, searchQuery, productMap]);
+
     return (
         <div className="min-h-screen bg-gray-50 font-sans pb-20">
              {/* Header */}
              <div className="bg-indigo-900 text-white p-4 sticky top-0 z-10 shadow-md">
-                <div className="max-w-md mx-auto flex justify-between items-center">
-                    <div>
-                        <h1 className="text-lg font-bold flex items-center gap-2">
-                            Hapsara Mitra
-                        </h1>
-                        <p className="text-xs text-indigo-200">{vendor.name}</p>
+                <div className="max-w-md mx-auto">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h1 className="text-lg font-bold flex items-center gap-2">
+                                Hapsara Mitra
+                            </h1>
+                            <p className="text-xs text-indigo-200">{vendor.name}</p>
+                        </div>
+                        <button onClick={onBack} className="text-xs bg-indigo-800 px-3 py-1 rounded hover:bg-indigo-700">Exit</button>
                     </div>
-                    <button onClick={onBack} className="text-xs bg-indigo-800 px-3 py-1 rounded hover:bg-indigo-700">Exit</button>
+                    
+                    <div className="bg-indigo-800/50 p-3 rounded-lg flex justify-between items-center">
+                        <div className="flex flex-col">
+                             <span className="text-xs text-indigo-200 uppercase font-semibold">My Wallet Balance</span>
+                             <span className="text-xl font-bold font-mono">{formatCurrency(vendorWallet?.balance || 0)}</span>
+                        </div>
+                        <button 
+                            onClick={() => setIsTopUpModalOpen(true)}
+                            className="px-3 py-1.5 bg-white text-indigo-900 text-xs font-bold rounded shadow-sm hover:bg-indigo-50 flex items-center gap-1"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
+                            Add Credits
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -200,6 +343,19 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
 
                 {activeTab === 'orders' && (
                     <div className="space-y-4">
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search orders..." 
+                                className="flex-1 p-2 border rounded-lg text-sm"
+                            />
+                            <button onClick={handleVoiceSearch} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300">
+                                🎤
+                            </button>
+                        </div>
+
                         <h2 className="text-lg font-bold text-gray-800">Active Orders</h2>
                         {myOrders.map(order => {
                             const farmer = farmerMap.get(order.farmerId);
@@ -244,41 +400,72 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
 
                 {activeTab === 'inventory' && (
                     <div className="space-y-4">
-                         <h2 className="text-lg font-bold text-gray-800">My Stock</h2>
-                         <p className="text-xs text-gray-500">Track stock levels for business intelligence.</p>
+                         <div className="flex justify-between items-center">
+                            <h2 className="text-lg font-bold text-gray-800">Inventory ({filteredInventory.length})</h2>
+                            <button onClick={() => setIsAddProductModalOpen(true)} className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-bold shadow-sm hover:bg-green-700">+ Add Product</button>
+                         </div>
+                         
+                         <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search inventory..." 
+                                className="flex-1 p-2 border rounded-lg text-sm"
+                            />
+                             <button onClick={handleVoiceSearch} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300">
+                                🎤
+                            </button>
+                        </div>
+                         
                          <div className="space-y-3">
-                            {COMMON_COMMODITIES.map(item => {
-                                // Find existing signal or create mock one for common items
-                                const signal = inventorySignals.find(s => s.productId === item.id);
-                                const currentStock = signal ? signal.stockQuantity || 0 : 0;
-                                
+                            {filteredInventory.map(vp => {
+                                const product = productMap.get(vp.productId);
+                                const isEditing = editingProduct === vp.id;
+
                                 return (
-                                    <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-gray-800">{item.name}</p>
-                                            <p className="text-xs text-gray-500">Unit: {item.defaultUnit}</p>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-3">
-                                            <button 
-                                                onClick={() => updateStock(item.id, Math.max(0, currentStock - 10))}
-                                                className="w-8 h-8 rounded-full bg-red-50 text-red-600 border border-red-200 flex items-center justify-center text-lg font-bold"
-                                            >
-                                                -
-                                            </button>
-                                            <div className="text-center min-w-[60px]">
-                                                <span className="font-mono font-bold text-lg">{currentStock}</span>
+                                    <div key={vp.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <p className="font-bold text-gray-800">{product?.name || 'Unknown Product'}</p>
+                                                <p className="text-xs text-gray-500">Unit: {vp.unit}</p>
                                             </div>
                                             <button 
-                                                onClick={() => updateStock(item.id, currentStock + 10)}
-                                                className="w-8 h-8 rounded-full bg-green-50 text-green-600 border border-green-200 flex items-center justify-center text-lg font-bold"
+                                                onClick={() => isEditing ? handleUpdateProduct(vp) : startEditing(vp)}
+                                                className={`text-xs px-3 py-1 rounded font-semibold ${isEditing ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}
                                             >
-                                                +
+                                                {isEditing ? 'Save' : 'Edit'}
                                             </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] uppercase text-gray-400 font-bold">Price (₹)</label>
+                                                {isEditing ? (
+                                                    <input type="number" value={editValues.price} onChange={e => setEditValues(v => ({...v, price: e.target.value}))} className="w-full p-1 border rounded text-sm" />
+                                                ) : (
+                                                    <p className="font-semibold text-gray-800">{formatCurrency(vp.price)}</p>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] uppercase text-gray-400 font-bold">Stock</label>
+                                                {isEditing ? (
+                                                    <input type="number" value={editValues.stock} onChange={e => setEditValues(v => ({...v, stock: e.target.value}))} className="w-full p-1 border rounded text-sm" />
+                                                ) : (
+                                                    <p className={`font-mono font-bold ${vp.stockQuantity === 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                                                        {vp.stockQuantity}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 );
                             })}
+                            {filteredInventory.length === 0 && (
+                                <p className="text-center text-gray-500 py-8 bg-white rounded-lg border border-dashed">
+                                    {searchQuery ? 'No products match your search.' : 'Your inventory is empty. Add products to start selling.'}
+                                </p>
+                            )}
                          </div>
                     </div>
                 )}
@@ -296,6 +483,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                     </div>
                 )}
             </div>
+            
+            {isTopUpModalOpen && (
+                <PurchaseCreditsModal 
+                    onClose={() => setIsTopUpModalOpen(false)} 
+                    currentTenant={{ id: '', name: 'Self', credit_balance: 0, subscriptionStatus: '', createdAt: 0 }} 
+                    vendor={vendor} 
+                    setNotification={(n) => alert(n?.message)} 
+                />
+            )}
+            
+            {isAddProductModalOpen && (
+                <AddProductModal 
+                    onClose={() => setIsAddProductModalOpen(false)}
+                    availableProducts={availableToAdd}
+                    onSave={handleAddProduct}
+                />
+            )}
         </div>
     );
 };

@@ -16,6 +16,8 @@ import BulkImportModal from './BulkImportModal';
 import RawDataView from './RawDataView';
 import PrintView from './PrintView';
 import MapView from './MapView';
+import RegistrationForm from './RegistrationForm';
+import { getSupabase } from '../lib/supabase';
 
 // Libs
 import { exportToExcel, exportToCsv } from '../lib/export';
@@ -64,6 +66,7 @@ const FarmerDirectoryPage: React.FC<FarmerDirectoryPageProps & { farmers: Farmer
     const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
     const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
     const [isRawDataViewOpen, setIsRawDataViewOpen] = useState(false);
+    const [isRegistrationModalOpen, setIsRegistrationModalOpen] = useState(false);
     
     // Print & PDF states
     const [farmerToPrint, setFarmerToPrint] = useState<Farmer | null>(null);
@@ -176,6 +179,74 @@ const FarmerDirectoryPage: React.FC<FarmerDirectoryPageProps & { farmers: Farmer
         setIsBatchUpdateModalOpen(false);
     };
 
+    const handleRegisterFarmer = async (farmerData: Farmer, photoFile?: File) => {
+        const supabase = getSupabase();
+        let photoUrl = farmerData.photo;
+
+        if (photoFile && supabase) {
+            try {
+                const fileName = `farmers/${farmerData.id}/${Date.now()}.jpg`;
+                const { error: uploadError } = await supabase.storage
+                    .from('farmer-photos') // Ground Reality: Use dedicated bucket
+                    .upload(fileName, photoFile);
+                
+                if (!uploadError) {
+                    const { data } = supabase.storage.from('farmer-photos').getPublicUrl(fileName);
+                    photoUrl = data.publicUrl;
+                } else {
+                    console.error("Upload failed:", uploadError);
+                }
+            } catch (e) {
+                console.error("Image upload exception", e);
+                // Fallback: photoUrl remains empty or base64 if provided (avoid storing base64 in DB if possible)
+            }
+        }
+
+        await database.write(async () => {
+            await database.get<FarmerModel>('farmers').create(f => {
+                f._raw.id = farmerData.id; // Use the UUID generated in RegistrationForm
+                f.fullName = farmerData.fullName;
+                f.fatherHusbandName = farmerData.fatherHusbandName;
+                f.aadhaarNumber = farmerData.aadhaarNumber;
+                f.mobileNumber = farmerData.mobileNumber;
+                f.gender = farmerData.gender;
+                f.address = farmerData.address;
+                f.district = farmerData.district;
+                f.mandal = farmerData.mandal;
+                f.village = farmerData.village;
+                f.photo = photoUrl;
+                f.bankAccountNumber = farmerData.bankAccountNumber;
+                f.ifscCode = farmerData.ifscCode;
+                f.accountVerified = farmerData.accountVerified;
+                f.approvedExtent = farmerData.approvedExtent;
+                f.appliedExtent = farmerData.appliedExtent;
+                f.numberOfPlants = farmerData.numberOfPlants;
+                f.methodOfPlantation = farmerData.methodOfPlantation;
+                f.plantType = farmerData.plantType;
+                f.plantationDate = farmerData.plantationDate;
+                f.status = farmerData.status;
+                f.registrationDate = farmerData.registrationDate;
+                f.latitude = farmerData.latitude;
+                f.longitude = farmerData.longitude;
+                f.gov_application_id = farmerData.gov_application_id;
+                f.gov_farmer_id = farmerData.gov_farmer_id;
+                f.ppbRofrId = farmerData.ppbRofrId;
+                f.is_in_ne_region = farmerData.is_in_ne_region;
+                f.proposedYear = farmerData.proposedYear;
+                f.syncStatus = 'pending';
+                f.syncStatusLocal = 'pending';
+                f.createdBy = currentUser.id;
+                f.tenantId = currentUser.tenantId;
+                f.primary_crop = farmerData.primary_crop;
+                f.mlrdPlants = farmerData.mlrdPlants;
+                f.fullCostPlants = farmerData.fullCostPlants;
+                f.asoId = farmerData.asoId;
+            });
+        });
+        setIsRegistrationModalOpen(false);
+        setNotification({ message: 'Farmer registered successfully.', type: 'success' });
+    };
+
     // Print & PDF
     const prepareForPrint = async (farmerId: string) => {
         const farmerModel = rawFarmers.find(f => f.id === farmerId);
@@ -226,7 +297,15 @@ const FarmerDirectoryPage: React.FC<FarmerDirectoryPageProps & { farmers: Farmer
     
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-gray-800">Farmer Directory</h1>
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold text-gray-800">Farmer Directory</h1>
+                {permissions.has(Permission.CAN_REGISTER_FARMER) && (
+                    <button onClick={() => setIsRegistrationModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm shadow-sm flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
+                        Register Farmer
+                    </button>
+                )}
+            </div>
             <FilterBar filters={filters} onFilterChange={handleFilterChange} />
             
             {/* Action Bar */}
@@ -278,6 +357,7 @@ const FarmerDirectoryPage: React.FC<FarmerDirectoryPageProps & { farmers: Farmer
             )}
             
             {/* Modals */}
+             {isRegistrationModalOpen && <RegistrationForm onSubmit={handleRegisterFarmer} onCancel={() => setIsRegistrationModalOpen(false)} existingFarmers={processedFarmers} currentUser={currentUser} setNotification={setNotification} />}
              {isBatchUpdateModalOpen && <BatchUpdateStatusModal selectedCount={selectedFarmerIds.length} onUpdate={handleConfirmBatchUpdate} onCancel={() => setIsBatchUpdateModalOpen(false)} />}
              {isDeleteConfirmationOpen && <ConfirmationModal isOpen={isDeleteConfirmationOpen} title="Delete Farmers?" message={`Are you sure you want to delete ${selectedFarmerIds.length} farmer(s)? This action cannot be undone.`} onConfirm={handleConfirmDelete} onCancel={() => setIsDeleteConfirmationOpen(false)} confirmText="Delete" confirmButtonVariant="destructive" />}
              {isBulkImportModalOpen && <BulkImportModal onClose={() => setIsBulkImportModalOpen(false)} onSubmit={async () => {}} existingFarmers={processedFarmers} />}

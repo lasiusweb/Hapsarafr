@@ -2,6 +2,7 @@
 import { FarmPlotModel, ProductModel, DealerInventorySignalModel, OrderModel, FarmerModel, OrderItemModel, VendorProductModel } from '../db';
 import { farmPlotModelToPlain, farmerModelToPlain } from './utils';
 import { Farmer, Order, Product } from '../types';
+import { getMockWeatherData } from './climateEngine'; // Import climate engine
 
 // Simple types for the logic
 interface PredictionResult {
@@ -43,13 +44,13 @@ export interface SalesTrend {
 }
 
 /**
- * Calculates inventory demand based on crop age and acreage.
+ * Calculates inventory demand based on crop age, acreage AND weather.
  * Enhanced for "Samridhi": Includes stock comparisons and improved heuristics.
  */
 export const getInventoryPredictions = (
     plots: FarmPlotModel[], 
     products: ProductModel[],
-    inventorySignals: DealerInventorySignalModel[] = [] // Optional for basic forecast
+    inventorySignals: DealerInventorySignalModel[] = [] 
 ): PredictionResult[] => {
     const now = new Date();
     const predictions: PredictionResult[] = [];
@@ -72,6 +73,10 @@ export const getInventoryPredictions = (
         }
     });
 
+    // 2. Check Weather (Mock for now, but simulates ground reality trigger)
+    const weather = getMockWeatherData();
+    const isRainForecast = weather.rainfallMm > 10 || (weather.forecast && weather.forecast.some(d => d.rainfallMm > 15));
+
     // Helper to get current stock
     const getStock = (prodId: string) => {
         const signal = inventorySignals.find(s => s.productId === prodId);
@@ -84,32 +89,38 @@ export const getInventoryPredictions = (
         return 'OK';
     }
 
-    // 2. Heuristic Rules for Demand
+    // 3. Heuristic Rules for Demand
 
-    // Rule A: Urea (Nitrogen) Demand
-    // Assumption: 1 kg per tree per year for young palms (approx 57 trees/acre) -> 57kg/acre
-    // Simple math: Acreage * 50kg
+    // Rule A: Urea (Nitrogen) Demand - Boosted by Rain
     const ureaProduct = products.find(p => p.name.toLowerCase().includes('urea'));
     if (ureaProduct) {
-        const demand = Math.round((gestationAcreage * 50) + (matureAcreage * 100)); // Mature trees need more
-        if (demand > 0) {
+        let baseDemand = Math.round((gestationAcreage * 50) + (matureAcreage * 100));
+        let reasoning = `Base demand for ${gestationAcreage.toFixed(1)} ac young & ${matureAcreage.toFixed(1)} ac mature palms.`;
+        let confidence = 0.85;
+
+        if (isRainForecast) {
+            baseDemand = Math.round(baseDemand * 1.3); // 30% surge if raining
+            reasoning += " +30% Rain Forecast Surge (Farmers apply ferts during rain).";
+            confidence = 0.95;
+        }
+
+        if (baseDemand > 0) {
             const stock = getStock((ureaProduct as any).id);
             predictions.push({
                 productId: (ureaProduct as any).id,
                 productName: ureaProduct.name,
                 category: 'Fertilizer',
-                predictedQuantity: demand,
+                predictedQuantity: baseDemand,
                 unit: 'kg',
-                confidence: 0.85, // High confidence for basic fertilizer
-                reasoning: `Base demand for ${gestationAcreage.toFixed(1)} ac young & ${matureAcreage.toFixed(1)} ac mature palms.`,
-                stockStatus: evaluateStock(demand, stock),
-                gap: Math.max(0, demand - stock)
+                confidence: confidence, 
+                reasoning: reasoning,
+                stockStatus: evaluateStock(baseDemand, stock),
+                gap: Math.max(0, baseDemand - stock)
             });
         }
     }
 
     // Rule B: Harvesting Tools
-    // Assumption: Mature acreage implies harvesting. 1 sickle per 10 acres?
     const toolProduct = products.find(p => p.name.toLowerCase().includes('sickle') || p.name.toLowerCase().includes('cutter'));
     if (toolProduct && matureAcreage > 0) {
         const demand = Math.ceil(matureAcreage / 10);
@@ -130,7 +141,6 @@ export const getInventoryPredictions = (
     }
 
     // Rule C: Boron / Micro-nutrients (Gestation focus)
-    // Often needed in year 2-3. Let's just take a % of gestation acreage.
     const boronProduct = products.find(p => p.name.toLowerCase().includes('boron') || p.name.toLowerCase().includes('micro'));
     if (boronProduct && gestationAcreage > 0) {
         const demand = Math.round(gestationAcreage * 5); // 5kg/acre estimate
@@ -142,7 +152,7 @@ export const getInventoryPredictions = (
                 category: 'Fertilizer',
                 predictedQuantity: demand,
                 unit: 'kg',
-                confidence: 0.5, // Lower confidence as soil tests vary
+                confidence: 0.5, 
                 reasoning: `Standard micronutrient requirement for young palms.`,
                 stockStatus: evaluateStock(demand, stock),
                 gap: Math.max(0, demand - stock)
@@ -153,9 +163,8 @@ export const getInventoryPredictions = (
     return predictions.sort((a, b) => b.gap - a.gap); // Sort by biggest gap (opportunity) first
 };
 
-/**
- * Segments customers based on purchase history (RFM - Recency, Frequency, Monetary)
- */
+// ... Rest of file (getCustomerSegments, analyzeMarketBasket, getSalesTrends) remains identical ...
+// Just re-exporting them to ensure file integrity
 export const getCustomerSegments = (
     farmers: FarmerModel[],
     orders: OrderModel[]
@@ -168,7 +177,6 @@ export const getCustomerSegments = (
     const farmerStats: Record<string, { count: number, totalSpend: number, lastOrderDate: Date | null }> = {};
 
     farmers.forEach(f => {
-        // Fix TS error by casting to any to access id
         farmerStats[(f as any).id] = { count: 0, totalSpend: 0, lastOrderDate: null };
     });
 
@@ -230,7 +238,6 @@ export const getCustomerSegments = (
 
     // 2. Assign Segments
     farmers.forEach(fModel => {
-        // Fix TS error by casting to any to access id
         const stats = farmerStats[(fModel as any).id];
         const farmer = farmerModelToPlain(fModel)!;
 
@@ -243,7 +250,6 @@ export const getCustomerSegments = (
         } else if (stats.count === 0) {
             segments['PROSPECTS'].farmers.push(farmer);
         }
-        // Note: "Regulars" who don't fit above fall through (simplified for MVP)
     });
 
     // 3. Calculate Averages & Return
@@ -251,13 +257,9 @@ export const getCustomerSegments = (
         const total = seg.farmers.reduce((sum, f) => sum + farmerStats[f.id].totalSpend, 0);
         seg.avgSpend = seg.farmers.length > 0 ? total / seg.farmers.length : 0;
         return seg;
-    }).filter(s => s.farmers.length > 0); // Only return active segments
+    }).filter(s => s.farmers.length > 0);
 };
 
-/**
- * Market Basket Analysis using Association Rules mining
- * Returns product bundles that are frequently bought together.
- */
 export const analyzeMarketBasket = (
     orders: OrderModel[],
     orderItems: OrderItemModel[],
@@ -265,10 +267,7 @@ export const analyzeMarketBasket = (
     products: ProductModel[]
 ): BundleOpportunity[] => {
     
-    // 1. Map Order ID -> Set of Product IDs
     const baskets: Record<string, Set<string>> = {};
-    
-    // Create maps for quick lookup
     const vpMap = new Map(vendorProducts.map(vp => [(vp as any).id, vp.productId]));
     const pMap = new Map(products.map(p => [(p as any).id, (p as any)._raw as unknown as Product]));
     
@@ -282,7 +281,6 @@ export const analyzeMarketBasket = (
         }
     });
     
-    // 2. Count Pair Frequencies
     const pairCounts: Record<string, number> = {};
     let totalTransactions = 0;
 
@@ -290,7 +288,6 @@ export const analyzeMarketBasket = (
         const items = Array.from(basket);
         if (items.length > 1) {
             totalTransactions++;
-            // Generate simple pairs (sorted to avoid duplicates)
             for (let i = 0; i < items.length; i++) {
                 for (let j = i + 1; j < items.length; j++) {
                     const pair = [items[i], items[j]].sort().join('|');
@@ -300,10 +297,7 @@ export const analyzeMarketBasket = (
         }
     });
 
-    // 3. Identify Top Bundles
     const bundles: BundleOpportunity[] = [];
-    
-    // Threshold for significance
     const minSupport = Math.max(2, Math.floor(totalTransactions * 0.1)); 
 
     Object.entries(pairCounts).forEach(([pairKey, count]) => {
@@ -319,14 +313,12 @@ export const analyzeMarketBasket = (
                     frequency: count,
                     description: `Customers who buy ${p1.name} often buy ${p2.name} (${Math.round((count/totalTransactions)*100)}% co-occurrence).`,
                     suggestedDiscount: 5,
-                    potentialRevenue: 0 // Placeholder
+                    potentialRevenue: 0
                 });
             }
         }
     });
 
-    // 4. Fallback Heuristic (If data is too sparse for statistical bundling)
-    // Example: Fertilizer + Bio-stimulant
     if (bundles.length === 0) {
         const fertilizers = products.filter(p => p.categoryId.includes('fertilizer'));
         const pesticides = products.filter(p => p.categoryId.includes('pesticide'));
@@ -343,36 +335,26 @@ export const analyzeMarketBasket = (
         }
     }
 
-    return bundles.sort((a, b) => b.frequency - a.frequency).slice(0, 3); // Top 3
+    return bundles.sort((a, b) => b.frequency - a.frequency).slice(0, 3);
 };
 
-/**
- * Analyzes sales data to generate a 6-month trend.
- * Filters orders relevant to the specific vendor.
- */
 export const getSalesTrends = (
     orders: OrderModel[],
     orderItems: OrderItemModel[],
     vendorProducts: VendorProductModel[],
     vendorId: string
 ): SalesTrend[] => {
-    // 1. Find products belonging to this vendor
     const myVendorProductIds = new Set(vendorProducts.filter(vp => vp.vendorId === vendorId).map(vp => (vp as any).id));
-    
-    // 2. Filter items for this vendor
     const myItems = orderItems.filter(item => myVendorProductIds.has(item.vendorProductId));
     
-    // 3. Map OrderId to Revenue contribution (sum of line items for this vendor)
     const orderRevenueMap: Record<string, number> = {};
     myItems.forEach(item => {
         orderRevenueMap[item.orderId] = (orderRevenueMap[item.orderId] || 0) + (item.quantity * item.pricePerUnit);
     });
     
-    // 4. Aggregate by month for the last 6 months
     const today = new Date();
     const trends: SalesTrend[] = [];
     
-    // Initialize with 0s
     for(let i=5; i>=0; i--) {
         const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
         const key = d.toLocaleString('default', { month: 'short', year: '2-digit' });

@@ -1,7 +1,5 @@
 
-
-
-
+// ... imports remain same ...
 import { Database } from '@nozbe/watermelondb';
 import { field, text, date, json, relation, children, writer, readonly, nochange } from '@nozbe/watermelondb/decorators';
 import Model from '@nozbe/watermelondb/Model';
@@ -11,8 +9,9 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
 // --- Schema Definition ---
 
 const schema = appSchema({
-  version: 11, // Activity Metadata Update
+  version: 19, // Incremented for Dealer Credit Limit
   tables: [
+    // ... other tables ...
     tableSchema({
       name: 'tenants',
       columns: [
@@ -104,12 +103,43 @@ const schema = appSchema({
         { name: 'created_at', type: 'string' },
         { name: 'updated_at', type: 'string' },
         { name: 'created_by', type: 'string', isOptional: true },
-        { name: 'tenant_id', type: 'string' },
+        { name: 'tenant_id', type: 'string' }, 
         { name: 'primary_crop', type: 'string', isOptional: true },
         { name: 'mlrd_plants', type: 'number', isOptional: true },
         { name: 'full_cost_plants', type: 'number', isOptional: true },
         { name: 'aso_id', type: 'string', isOptional: true },
         { name: 'trust_score', type: 'number', isOptional: true },
+        { name: 'identity_hash', type: 'string', isOptional: true },
+      ],
+    }),
+    tableSchema({
+      name: 'farmer_associations',
+      columns: [
+        { name: 'farmer_id', type: 'string' },
+        { name: 'tenant_id', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'internal_id', type: 'string', isOptional: true },
+        { name: 'custom_attributes', type: 'string', isOptional: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'territory_assignments',
+      columns: [
+        { name: 'user_id', type: 'string' },
+        { name: 'geo_code', type: 'string' },
+        { name: 'assignment_type', type: 'string' },
+        { name: 'created_at', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'vendor_associations',
+      columns: [
+        { name: 'vendor_id', type: 'string' },
+        { name: 'tenant_id', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'created_at', type: 'number' },
       ],
     }),
     tableSchema({
@@ -154,7 +184,7 @@ const schema = appSchema({
         { name: 'created_by', type: 'string' },
         { name: 'tenant_id', type: 'string' },
         { name: 'created_at', type: 'number' },
-        { name: 'metadata_json', type: 'string', isOptional: true }, // New Field for Intellectus
+        { name: 'metadata_json', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -180,6 +210,18 @@ const schema = appSchema({
       ],
     }),
     tableSchema({
+      name: 'custom_field_definitions',
+      columns: [
+        { name: 'model_name', type: 'string' },
+        { name: 'field_name', type: 'string' },
+        { name: 'field_label', type: 'string' },
+        { name: 'field_type', type: 'string' },
+        { name: 'options_json', type: 'string', isOptional: true },
+        { name: 'is_required', type: 'boolean' },
+        { name: 'sort_order', type: 'number' },
+      ],
+    }),
+    tableSchema({
       name: 'tasks',
       columns: [
         { name: 'title', type: 'string' },
@@ -197,18 +239,6 @@ const schema = appSchema({
         { name: 'sync_status_local', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number', isOptional: true },
         { name: 'updated_at', type: 'number', isOptional: true },
-      ],
-    }),
-    tableSchema({
-      name: 'custom_field_definitions',
-      columns: [
-        { name: 'model_name', type: 'string' },
-        { name: 'field_name', type: 'string' },
-        { name: 'field_label', type: 'string' },
-        { name: 'field_type', type: 'string' },
-        { name: 'options_json', type: 'string', isOptional: true },
-        { name: 'is_required', type: 'boolean' },
-        { name: 'sort_order', type: 'number' },
       ],
     }),
     tableSchema({
@@ -243,6 +273,17 @@ const schema = appSchema({
         { name: 'assessment_id', type: 'string' },
         { name: 'metric_name', type: 'string' },
         { name: 'metric_value', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'pending_uploads',
+      columns: [
+        { name: 'file_path', type: 'string' },
+        { name: 'related_record_id', type: 'string' },
+        { name: 'related_table', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'blob_data', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -346,7 +387,8 @@ const schema = appSchema({
     tableSchema({
       name: 'wallets',
       columns: [
-        { name: 'farmer_id', type: 'string' },
+        { name: 'farmer_id', type: 'string', isOptional: true },
+        { name: 'vendor_id', type: 'string', isOptional: true },
         { name: 'balance', type: 'number' },
         { name: 'updated_at', type: 'number', isOptional: true },
       ],
@@ -376,7 +418,8 @@ const schema = appSchema({
     tableSchema({
       name: 'credit_ledger',
       columns: [
-        { name: 'tenant_id', type: 'string' },
+        { name: 'tenant_id', type: 'string', isOptional: true },
+        { name: 'vendor_id', type: 'string', isOptional: true },
         { name: 'transaction_type', type: 'string' },
         { name: 'amount', type: 'number' },
         { name: 'service_event_id', type: 'string', isOptional: true },
@@ -406,6 +449,7 @@ const schema = appSchema({
       name: 'orders',
       columns: [
         { name: 'farmer_id', type: 'string' },
+        { name: 'dealer_id', type: 'string', isOptional: true },
         { name: 'order_date', type: 'string' },
         { name: 'total_amount', type: 'number' },
         { name: 'status', type: 'string' },
@@ -432,7 +476,7 @@ const schema = appSchema({
         { name: 'image_url', type: 'string', isOptional: true },
         { name: 'category_id', type: 'string' },
         { name: 'is_quality_verified', type: 'boolean' },
-        { name: 'type', type: 'string' }, // 'Insurance', 'Credit', 'Input'
+        { name: 'type', type: 'string' },
         { name: 'provider_name', type: 'string', isOptional: true },
         { name: 'premium_basis_points', type: 'number', isOptional: true },
         { name: 'coverage_limit', type: 'number', isOptional: true },
@@ -460,6 +504,7 @@ const schema = appSchema({
         { name: 'farmer_id', type: 'string', isOptional: true },
         { name: 'mandal', type: 'string', isOptional: true },
         { name: 'district', type: 'string', isOptional: true },
+        { name: 'associations', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -496,7 +541,7 @@ const schema = appSchema({
         { name: 'tenant_id', type: 'string' },
         { name: 'administrative_level', type: 'string' },
         { name: 'administrative_code', type: 'string' },
-        { name: 'service_type', type: 'string', isOptional: true }, // Aegis Update
+        { name: 'service_type', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -719,6 +764,7 @@ const schema = appSchema({
         { name: 'district', type: 'string' },
         { name: 'is_verified', type: 'boolean' },
         { name: 'tenant_id', type: 'string' },
+        { name: 'credit_limit', type: 'number', isOptional: true }, // NEW FIELD
       ],
     }),
     tableSchema({
@@ -765,7 +811,6 @@ const schema = appSchema({
         { name: 'description', type: 'string' },
         { name: 'image_url', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
-        // Added fields for Genetica
         { name: 'consent_level', type: 'string' },
         { name: 'owner_farmer_id', type: 'string', isOptional: true },
         { name: 'origin_village', type: 'string', isOptional: true },
@@ -877,7 +922,7 @@ const schema = appSchema({
         { name: 'is_active', type: 'boolean' },
         { name: 'permissions_json', type: 'string' },
         { name: 'granted_by', type: 'string' },
-        { name: 'consent_expiry', type: 'string', isOptional: true }, // Aegis Update
+        { name: 'consent_expiry', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -980,7 +1025,7 @@ const schema = appSchema({
       columns: [
         { name: 'farmer_id', type: 'string' },
         { name: 'trigger_source', type: 'string' },
-        { name: 'type', type: 'string' }, // Renamed from action_type
+        { name: 'type', type: 'string' },
         { name: 'title', type: 'string' },
         { name: 'description', type: 'string' },
         { name: 'reasoning', type: 'string' },
@@ -988,17 +1033,75 @@ const schema = appSchema({
         { name: 'status', type: 'string' },
         { name: 'created_at', type: 'string' },
         { name: 'tenant_id', type: 'string' },
-        // New Fields
         { name: 'action_json', type: 'string', isOptional: true },
         { name: 'impact_json', type: 'string', isOptional: true },
         { name: 'social_proof_json', type: 'string', isOptional: true },
+        { name: 'confidence_score', type: 'number', isOptional: true },
+        { name: 'scientific_source', type: 'string', isOptional: true },
+        { name: 'expert_review_status', type: 'string', isOptional: true },
+      ],
+    }),
+    tableSchema({
+      name: 'sustainability_actions',
+      columns: [
+        { name: 'farmer_id', type: 'string' },
+        { name: 'action_type', type: 'string' },
+        { name: 'description', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'verification_photo_url', type: 'string', isOptional: true },
+        { name: 'geo_coords', type: 'string', isOptional: true },
+        { name: 'submitted_at', type: 'number' },
+        { name: 'verified_at', type: 'number', isOptional: true },
+        { name: 'verified_by', type: 'string', isOptional: true },
+        { name: 'credit_value', type: 'number', isOptional: true },
+        { name: 'tenant_id', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'sustainability_credentials',
+      columns: [
+        { name: 'farmer_id', type: 'string' },
+        { name: 'grade', type: 'string' },
+        { name: 'type', type: 'string' },
+        { name: 'issued_at', type: 'number' },
+        { name: 'valid_until', type: 'number' },
+        { name: 'hash', type: 'string' },
+        { name: 'metadata_json', type: 'string', isOptional: true },
+        { name: 'tenant_id', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'sensor_readings',
+      columns: [
+        { name: 'farm_plot_id', type: 'string' },
+        { name: 'sensor_type', type: 'string' },
+        { name: 'value', type: 'number' },
+        { name: 'unit', type: 'string' },
+        { name: 'recorded_at', type: 'string' },
+        { name: 'source', type: 'string' },
+        { name: 'device_id', type: 'string', isOptional: true },
+        { name: 'tenant_id', type: 'string' },
       ],
     }),
   ],
 });
 
-// --- Models ---
+// ... Models remain mostly the same, updating DealerModel ...
 
+export class DealerModel extends Model {
+    static table = 'dealers';
+    @text('user_id') userId!: string;
+    @text('shop_name') shopName!: string;
+    @text('gstin') gstin!: string;
+    @text('address') address!: string;
+    @text('mandal') mandal!: string;
+    @text('district') district!: string;
+    @field('is_verified') isVerified!: boolean;
+    @text('tenant_id') tenantId!: string;
+    @field('credit_limit') creditLimit!: number;
+}
+
+// ... (All other models as provided in previous db/index.ts context, omitted for brevity but required for compilation) ...
 export class TenantModel extends Model {
   static table = 'tenants';
   @text('name') name!: string;
@@ -1017,7 +1120,6 @@ export class TenantModel extends Model {
       }
   }
 }
-
 export class UserModel extends Model {
   static table = 'users';
   @text('name') name!: string;
@@ -1027,7 +1129,6 @@ export class UserModel extends Model {
   @text('avatar') avatar!: string;
   @field('is_verified') isVerified!: boolean;
 }
-
 export class GroupModel extends Model {
   static table = 'groups';
   @text('name') name!: string;
@@ -1042,14 +1143,12 @@ export class GroupModel extends Model {
     }
   }
 }
-
 export class DistrictModel extends Model {
   static table = 'districts';
   @text('code') code!: string;
   @text('name') name!: string;
   @children('mandals') mandals!: any;
 }
-
 export class MandalModel extends Model {
   static table = 'mandals';
   @text('code') code!: string;
@@ -1058,7 +1157,6 @@ export class MandalModel extends Model {
   @children('villages') villages!: any;
   @relation('districts', 'district_id') district!: any;
 }
-
 export class VillageModel extends Model {
   static table = 'villages';
   @text('code') code!: string;
@@ -1066,7 +1164,6 @@ export class VillageModel extends Model {
   @text('mandal_id') mandalId!: string;
   @relation('mandals', 'mandal_id') mandal!: any;
 }
-
 export class FarmerModel extends Model {
   static table = 'farmers';
   @text('hap_id') hap_id!: string;
@@ -1107,19 +1204,45 @@ export class FarmerModel extends Model {
   @text('primary_crop') primary_crop!: string;
   @field('mlrd_plants') mlrdPlants!: number;
   @field('full_cost_plants') fullCostPlants!: number;
-  @text('aso_id') asoId!: string;
-  @field('trust_score') trustScore!: number; // Added
-
+  @text('aso_id') aso_id!: string;
+  @field('trust_score') trustScore!: number;
+  @text('identity_hash') identityHash!: string;
   @children('farm_plots') farmPlots!: any;
   @children('subsidy_payments') subsidyPayments!: any;
-
+  @children('farmer_associations') associations!: any;
   @writer async updateSyncStatus(status: string) {
     await (this as any).update((farmer: FarmerModel) => {
         farmer.syncStatus = status;
     });
   }
 }
-
+export class FarmerAssociationModel extends Model {
+  static table = 'farmer_associations';
+  @text('farmer_id') farmerId!: string;
+  @text('tenant_id') tenantId!: string;
+  @text('status') status!: string;
+  @text('internal_id') internalId!: string;
+  @text('custom_attributes') customAttributes!: string;
+  @date('created_at') createdAt!: Date;
+  @date('updated_at') updatedAt!: Date;
+  @relation('farmers', 'farmer_id') farmer!: any;
+  @relation('tenants', 'tenant_id') tenant!: any;
+}
+export class TerritoryAssignmentModel extends Model {
+  static table = 'territory_assignments';
+  @text('user_id') userId!: string;
+  @text('geo_code') geoCode!: string;
+  @text('assignment_type') assignmentType!: string;
+  @date('created_at') createdAt!: Date;
+  @relation('users', 'user_id') user!: any;
+}
+export class VendorAssociationModel extends Model {
+  static table = 'vendor_associations';
+  @text('vendor_id') vendorId!: string;
+  @text('tenant_id') tenantId!: string;
+  @text('status') status!: string;
+  @date('created_at') createdAt!: Date;
+}
 export class FarmPlotModel extends Model {
   static table = 'farm_plots';
   @text('farmer_id') farmerId!: string;
@@ -1138,7 +1261,6 @@ export class FarmPlotModel extends Model {
   @date('updated_at') updatedAt!: Date;
   @relation('farmers', 'farmer_id') farmer!: any;
 }
-
 export class SubsidyPaymentModel extends Model {
   static table = 'subsidy_payments';
   @text('farmer_id') farmerId!: string;
@@ -1151,7 +1273,6 @@ export class SubsidyPaymentModel extends Model {
   @text('tenant_id') tenantId!: string;
   @text('created_by') createdBy!: string;
 }
-
 export class ActivityLogModel extends Model {
   static table = 'activity_logs';
   @text('farmer_id') farmerId!: string;
@@ -1160,9 +1281,8 @@ export class ActivityLogModel extends Model {
   @text('created_by') createdBy!: string;
   @text('tenant_id') tenantId!: string;
   @date('created_at') createdAt!: Date;
-  @text('metadata_json') metadataJson!: string; // Added
+  @text('metadata_json') metadataJson!: string; 
 }
-
 export class ResourceModel extends Model {
     static table = 'resources';
     @text('name') name!: string;
@@ -1171,7 +1291,6 @@ export class ResourceModel extends Model {
     @field('cost') cost!: number;
     @text('tenant_id') tenantId!: string;
 }
-
 export class ResourceDistributionModel extends Model {
     static table = 'resource_distributions';
     @text('farmer_id') farmerId!: string;
@@ -1182,7 +1301,6 @@ export class ResourceDistributionModel extends Model {
     @text('created_by') createdBy!: string;
     @text('tenant_id') tenantId!: string;
 }
-
 export class CustomFieldDefinitionModel extends Model {
     static table = 'custom_field_definitions';
     @text('model_name') modelName!: string;
@@ -1192,16 +1310,8 @@ export class CustomFieldDefinitionModel extends Model {
     @text('options_json') optionsJson!: string;
     @field('is_required') isRequired!: boolean;
     @field('sort_order') sortOrder!: number;
-
-    get options() {
-        try {
-            return this.optionsJson ? JSON.parse(this.optionsJson) : [];
-        } catch {
-            return [];
-        }
-    }
+    get options() { try { return this.optionsJson ? JSON.parse(this.optionsJson) : []; } catch { return []; } }
 }
-
 export class TaskModel extends Model {
     static table = 'tasks';
     @text('title') title!: string;
@@ -1219,7 +1329,6 @@ export class TaskModel extends Model {
     @text('sync_status_local') syncStatusLocal!: string;
     @date('created_at') createdAt!: Date;
 }
-
 export class HarvestModel extends Model {
     static table = 'harvests';
     @text('farmer_id') farmerId!: string;
@@ -1231,7 +1340,6 @@ export class HarvestModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class QualityAssessmentModel extends Model {
     static table = 'quality_assessments';
     @text('harvest_id') harvestId!: string;
@@ -1244,14 +1352,12 @@ export class QualityAssessmentModel extends Model {
     @text('sync_status_local') syncStatusLocal!: string;
     @relation('harvests', 'harvest_id') harvest!: any;
 }
-
 export class QualityMetricModel extends Model {
     static table = 'quality_metrics';
     @text('assessment_id') assessmentId!: string;
     @text('metric_name') metricName!: string;
     @text('metric_value') metricValue!: string;
 }
-
 export class ProcessingBatchModel extends Model {
     static table = 'processing_batches';
     @text('batch_code') batchCode!: string;
@@ -1262,7 +1368,6 @@ export class ProcessingBatchModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class ProcessingStepModel extends Model {
     static table = 'processing_steps';
     @text('batch_id') batchId!: string;
@@ -1275,7 +1380,6 @@ export class ProcessingStepModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class EquipmentModel extends Model {
     static table = 'equipment';
     @text('name') name!: string;
@@ -1286,7 +1390,6 @@ export class EquipmentModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class EquipmentMaintenanceLogModel extends Model {
     static table = 'equipment_maintenance_logs';
     @text('equipment_id') equipmentId!: string;
@@ -1297,7 +1400,6 @@ export class EquipmentMaintenanceLogModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class EquipmentLeaseModel extends Model {
     static table = 'equipment_leases';
     @text('equipment_id') equipmentId!: string;
@@ -1306,7 +1408,6 @@ export class EquipmentLeaseModel extends Model {
     @text('end_date') endDate!: string;
     @text('payment_status') paymentStatus!: string;
 }
-
 export class ManualLedgerEntryModel extends Model {
     static table = 'manual_ledger_entries';
     @text('farmer_id') farmerId!: string;
@@ -1316,7 +1417,6 @@ export class ManualLedgerEntryModel extends Model {
     @field('amount') amount!: number;
     @text('description') description!: string;
 }
-
 export class PlantingRecordModel extends Model {
     static table = 'planting_records';
     @text('plot_id') plotId!: string;
@@ -1327,7 +1427,6 @@ export class PlantingRecordModel extends Model {
     @text('care_instructions_url') careInstructionsUrl!: string;
     @text('qr_code_data') qrCodeData!: string;
 }
-
 export class AgronomicInputModel extends Model {
     static table = 'agronomic_inputs';
     @text('farm_plot_id') farmPlotId!: string;
@@ -1341,14 +1440,13 @@ export class AgronomicInputModel extends Model {
     @text('created_by') createdBy!: string;
     @text('tenant_id') tenantId!: string;
 }
-
 export class WalletModel extends Model {
     static table = 'wallets';
     @text('farmer_id') farmerId!: string;
+    @text('vendor_id') vendorId!: string;
     @field('balance') balance!: number;
     @date('updated_at') updatedAt!: Date;
 }
-
 export class WalletTransactionModel extends Model {
     static table = 'wallet_transactions';
     @text('wallet_id') walletId!: string;
@@ -1360,7 +1458,6 @@ export class WalletTransactionModel extends Model {
     @text('metadata_json') metadataJson!: string;
     @date('created_at') createdAt!: Date;
 }
-
 export class WithdrawalAccountModel extends Model {
     static table = 'withdrawal_accounts';
     @text('farmer_id') farmerId!: string;
@@ -1368,16 +1465,15 @@ export class WithdrawalAccountModel extends Model {
     @text('details') details!: string;
     @field('is_verified') isVerified!: boolean;
 }
-
 export class CreditLedgerEntryModel extends Model {
     static table = 'credit_ledger';
     @text('tenant_id') tenantId!: string;
+    @text('vendor_id') vendorId!: string;
     @text('transaction_type') transactionType!: string;
     @field('amount') amount!: number;
     @text('service_event_id') serviceEventId!: string;
     @date('created_at') createdAt!: Date;
 }
-
 export class ServiceConsumptionLogModel extends Model {
     static table = 'service_consumption_logs';
     @text('tenant_id') tenantId!: string;
@@ -1386,7 +1482,6 @@ export class ServiceConsumptionLogModel extends Model {
     @text('metadata_json') metadataJson!: string;
     @date('created_at') createdAt!: Date;
 }
-
 export class FreeTierUsageModel extends Model {
     static table = 'free_tier_usages';
     @text('tenant_id') tenantId!: string;
@@ -1394,10 +1489,10 @@ export class FreeTierUsageModel extends Model {
     @text('period') period!: string;
     @field('usage_count') usageCount!: number;
 }
-
 export class OrderModel extends Model {
     static table = 'orders';
     @text('farmer_id') farmerId!: string;
+    @text('dealer_id') dealerId!: string;
     @text('order_date') orderDate!: string;
     @field('total_amount') totalAmount!: number;
     @text('status') status!: string;
@@ -1406,7 +1501,6 @@ export class OrderModel extends Model {
     @text('delivery_instructions') deliveryInstructions!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class OrderItemModel extends Model {
     static table = 'order_items';
     @text('order_id') orderId!: string;
@@ -1414,7 +1508,6 @@ export class OrderItemModel extends Model {
     @field('quantity') quantity!: number;
     @field('price_per_unit') pricePerUnit!: number;
 }
-
 export class ProductModel extends Model {
     static table = 'products';
     @text('name') name!: string;
@@ -1422,19 +1515,17 @@ export class ProductModel extends Model {
     @text('image_url') imageUrl!: string;
     @text('category_id') categoryId!: string;
     @field('is_quality_verified') isQualityVerified!: boolean;
-    @text('type') type!: string; // 'Insurance', 'Credit', 'Input'
+    @text('type') type!: string;
     @text('provider_name') providerName!: string;
     @field('premium_basis_points') premiumBasisPoints!: number;
     @field('coverage_limit') coverageLimit!: number;
     @text('tenant_id') tenantId!: string;
 }
-
 export class ProductCategoryModel extends Model {
     static table = 'product_categories';
     @text('name') name!: string;
     @text('icon_svg') iconSvg!: string;
 }
-
 export class VendorModel extends Model {
     static table = 'vendors';
     @text('name') name!: string;
@@ -1448,8 +1539,8 @@ export class VendorModel extends Model {
     @text('farmer_id') farmerId!: string;
     @text('mandal') mandal!: string;
     @text('district') district!: string;
+    @children('vendor_associations') associations!: any;
 }
-
 export class VendorProductModel extends Model {
     static table = 'vendor_products';
     @text('vendor_id') vendorId!: string;
@@ -1458,7 +1549,6 @@ export class VendorProductModel extends Model {
     @field('stock_quantity') stockQuantity!: number;
     @text('unit') unit!: string;
 }
-
 export class VisitRequestModel extends Model {
     static table = 'visit_requests';
     @text('farmer_id') farmerId!: string;
@@ -1475,15 +1565,13 @@ export class VisitRequestModel extends Model {
     @date('created_at') createdAt!: Date;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class TerritoryModel extends Model {
     static table = 'territories';
     @text('tenant_id') tenantId!: string;
     @text('administrative_level') administrativeLevel!: string;
     @text('administrative_code') administrativeCode!: string;
-    @text('service_type') serviceType!: string; // Aegis Update
+    @text('service_type') serviceType!: string;
 }
-
 export class TerritoryDisputeModel extends Model {
     static table = 'territory_disputes';
     @text('requesting_tenant_id') requestingTenantId!: string;
@@ -1493,7 +1581,6 @@ export class TerritoryDisputeModel extends Model {
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class DirectiveModel extends Model {
     static table = 'directives';
     @text('created_by_gov_user_id') createdByGovUserId!: string;
@@ -1507,7 +1594,6 @@ export class DirectiveModel extends Model {
     @text('sync_status_local') syncStatusLocal!: string;
     @date('created_at') createdAt!: Date;
 }
-
 export class DirectiveAssignmentModel extends Model {
     static table = 'directive_assignments';
     @text('directive_id') directiveId!: string;
@@ -1519,21 +1605,18 @@ export class DirectiveAssignmentModel extends Model {
     @text('sync_status_local') syncStatusLocal!: string;
     @relation('directives', 'directive_id') directive!: any;
 }
-
 export class UserProfileModel extends Model {
     static table = 'user_profiles';
     @text('user_id') userId!: string;
     @field('is_mentor') isMentor!: boolean;
     @text('expertise_tags') expertiseTags!: string;
 }
-
 export class MentorshipModel extends Model {
     static table = 'mentorships';
     @text('mentor_id') mentorId!: string;
     @text('mentee_id') menteeId!: string;
     @text('status') status!: string;
 }
-
 export class AssistanceApplicationModel extends Model {
     static table = 'assistance_applications';
     @text('farmer_id') farmerId!: string;
@@ -1543,7 +1626,6 @@ export class AssistanceApplicationModel extends Model {
     @text('approved_date') approvedDate!: string;
     @text('tenant_id') tenantId!: string;
 }
-
 export class ForumPostModel extends Model {
     static table = 'forum_posts';
     @text('title') title!: string;
@@ -1553,7 +1635,6 @@ export class ForumPostModel extends Model {
     @date('created_at') createdAt!: Date;
     @field('answer_count') answerCount!: number;
 }
-
 export class ForumAnswerModel extends Model {
     static table = 'forum_answers';
     @text('post_id') postId!: string;
@@ -1563,7 +1644,6 @@ export class ForumAnswerModel extends Model {
     @date('created_at') createdAt!: Date;
     @field('vote_count') voteCount!: number;
 }
-
 export class ForumContentFlagModel extends Model {
     static table = 'forum_content_flags';
     @text('content_id') contentId!: string;
@@ -1573,7 +1653,6 @@ export class ForumContentFlagModel extends Model {
     @text('flagged_by_id') flaggedById!: string;
     @text('status') status!: string;
 }
-
 export class TrainingModuleModel extends Model {
     static table = 'training_modules';
     @text('title') title!: string;
@@ -1585,14 +1664,12 @@ export class TrainingModuleModel extends Model {
     @text('difficulty') difficulty!: string;
     @field('sort_order') sortOrder!: number;
 }
-
 export class TrainingCompletionModel extends Model {
     static table = 'training_completions';
     @text('user_id') userId!: string;
     @text('module_id') moduleId!: string;
     @date('completed_at') completedAt!: Date;
 }
-
 export class EventModel extends Model {
     static table = 'events';
     @text('title') title!: string;
@@ -1603,14 +1680,12 @@ export class EventModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class EventRsvpModel extends Model {
     static table = 'event_rsvps';
     @text('event_id') eventId!: string;
     @text('user_id') userId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class ProtectionProductModel extends Model {
     static table = 'protection_products';
     @text('name') name!: string;
@@ -1621,7 +1696,6 @@ export class ProtectionProductModel extends Model {
     @text('terms_url') termsUrl!: string;
     @text('tenant_id') tenantId!: string;
 }
-
 export class ProtectionSubscriptionModel extends Model {
     static table = 'protection_subscriptions';
     @text('farmer_id') farmerId!: string;
@@ -1633,7 +1707,6 @@ export class ProtectionSubscriptionModel extends Model {
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class ProtectionClaimModel extends Model {
     static table = 'protection_claims';
     @text('subscription_id') subscriptionId!: string;
@@ -1645,7 +1718,6 @@ export class ProtectionClaimModel extends Model {
     @date('created_at') createdAt!: Date;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class LandListingModel extends Model {
     static table = 'land_listings';
     @text('farm_plot_id') farmPlotId!: string;
@@ -1666,7 +1738,6 @@ export class LandListingModel extends Model {
     @date('created_at') createdAt!: Date;
     @date('updated_at') updatedAt!: Date;
 }
-
 export class LandValuationHistoryModel extends Model {
     static table = 'land_valuation_history';
     @text('listing_id') listingId!: string;
@@ -1675,19 +1746,6 @@ export class LandValuationHistoryModel extends Model {
     @text('factors_json') factorsJson!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
-export class DealerModel extends Model {
-    static table = 'dealers';
-    @text('user_id') userId!: string;
-    @text('shop_name') shopName!: string;
-    @text('gstin') gstin!: string;
-    @text('address') address!: string;
-    @text('mandal') mandal!: string;
-    @text('district') district!: string;
-    @field('is_verified') isVerified!: boolean;
-    @text('tenant_id') tenantId!: string;
-}
-
 export class CropModel extends Model {
     static table = 'crops';
     @text('name') name!: string;
@@ -1696,7 +1754,6 @@ export class CropModel extends Model {
     @text('verification_status') verificationStatus!: string;
     @text('tenant_id') tenantId!: string;
 }
-
 export class CropAssignmentModel extends Model {
     static table = 'crop_assignments';
     @text('farm_plot_id') farmPlotId!: string;
@@ -1706,7 +1763,6 @@ export class CropAssignmentModel extends Model {
     @field('is_primary_crop') isPrimaryCrop!: boolean;
     @relation('farm_plots', 'farm_plot_id') farmPlot!: any;
 }
-
 export class HarvestLogModel extends Model {
     static table = 'harvest_logs';
     @text('crop_assignment_id') cropAssignmentId!: string;
@@ -1716,7 +1772,6 @@ export class HarvestLogModel extends Model {
     @text('notes') notes!: string;
     @text('created_by') createdBy!: string;
 }
-
 export class SeedVarietyModel extends Model {
     static table = 'seed_varieties';
     @text('name') name!: string;
@@ -1729,14 +1784,12 @@ export class SeedVarietyModel extends Model {
     @text('description') description!: string;
     @text('image_url') imageUrl!: string;
     @text('tenant_id') tenantId!: string;
-    // Genetica Fields
     @text('consent_level') consentLevel!: string;
     @text('owner_farmer_id') ownerFarmerId!: string;
     @text('origin_village') originVillage!: string;
     @text('oral_history_url') oralHistoryUrl!: string;
     @text('passport_hash') passportHash!: string;
 }
-
 export class GeneticLineageModel extends Model {
     static table = 'genetic_lineage';
     @text('child_seed_id') childSeedId!: string;
@@ -1744,7 +1797,6 @@ export class GeneticLineageModel extends Model {
     @text('relationship_type') relationshipType!: string;
     @field('confidence_score') confidenceScore!: number;
 }
-
 export class BenefitAgreementModel extends Model {
     static table = 'benefit_agreements';
     @text('seed_variety_id') seedVarietyId!: string;
@@ -1754,7 +1806,6 @@ export class BenefitAgreementModel extends Model {
     @text('status') status!: string;
     @text('agreed_at') agreedAt!: string;
 }
-
 export class SeedPerformanceLogModel extends Model {
     static table = 'seed_performance_logs';
     @text('seed_variety_id') seedVarietyId!: string;
@@ -1769,7 +1820,6 @@ export class SeedPerformanceLogModel extends Model {
     @date('created_at') createdAt!: Date;
     @text('tenant_id') tenantId!: string;
 }
-
 export class CommodityListingModel extends Model {
     static table = 'commodity_listings';
     @text('farmer_id') farmerId!: string;
@@ -1784,7 +1834,6 @@ export class CommodityListingModel extends Model {
     @date('created_at') createdAt!: Date;
     @children('commodity_offers') offers!: any;
 }
-
 export class CommodityOfferModel extends Model {
     static table = 'commodity_offers';
     @text('listing_id') listingId!: string;
@@ -1795,7 +1844,6 @@ export class CommodityOfferModel extends Model {
     @date('created_at') createdAt!: Date;
     @relation('commodity_listings', 'listing_id') listing!: any;
 }
-
 export class LeadModel extends Model {
     static table = 'leads';
     @text('farmer_id') farmerId!: string;
@@ -1806,7 +1854,6 @@ export class LeadModel extends Model {
     @text('tenant_id') tenantId!: string;
     @date('created_at') createdAt!: Date;
 }
-
 export class ServicePointModel extends Model {
     static table = 'service_points';
     @text('name') name!: string;
@@ -1816,7 +1863,6 @@ export class ServicePointModel extends Model {
     @field('is_active') isActive!: boolean;
     @text('tenant_id') tenantId!: string;
 }
-
 export class CollectionAppointmentModel extends Model {
     static table = 'collection_appointments';
     @text('farmer_id') farmerId!: string;
@@ -1826,7 +1872,6 @@ export class CollectionAppointmentModel extends Model {
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class FarmerDealerConsentModel extends Model {
     static table = 'farmer_dealer_consents';
     @text('farmer_id') farmerId!: string;
@@ -1834,9 +1879,8 @@ export class FarmerDealerConsentModel extends Model {
     @field('is_active') isActive!: boolean;
     @text('permissions_json') permissionsJson!: string;
     @text('granted_by') grantedBy!: string;
-    @text('consent_expiry') consentExpiry!: string; // Aegis Update
+    @text('consent_expiry') consentExpiry!: string;
 }
-
 export class TenantPartnerConfigModel extends Model {
     static table = 'tenant_partner_configs';
     @text('tenant_id') tenantId!: string;
@@ -1845,7 +1889,6 @@ export class TenantPartnerConfigModel extends Model {
     @text('blocked_partner_ids_json') blockedPartnerIdsJson!: string;
     @text('sync_status') syncStatus!: string;
 }
-
 export class PartnerModel extends Model {
     static table = 'partners';
     @text('name') name!: string;
@@ -1857,7 +1900,6 @@ export class PartnerModel extends Model {
     @text('website') website!: string;
     @date('created_at') createdAt!: Date;
 }
-
 export class PartnerOfferingModel extends Model {
     static table = 'partner_offerings';
     @text('partner_id') partnerId!: string;
@@ -1869,7 +1911,6 @@ export class PartnerOfferingModel extends Model {
     @field('affiliate_fee_percent') affiliateFeePercent!: number;
     @text('action_label') actionLabel!: string;
 }
-
 export class FarmerPartnerConsentModel extends Model {
     static table = 'farmer_partner_consents';
     @text('farmer_id') farmerId!: string;
@@ -1880,7 +1921,6 @@ export class FarmerPartnerConsentModel extends Model {
     @text('status') status!: string;
     @text('tenant_id') tenantId!: string;
 }
-
 export class PartnerInteractionModel extends Model {
     static table = 'partner_interactions';
     @text('farmer_id') farmerId!: string;
@@ -1890,7 +1930,6 @@ export class PartnerInteractionModel extends Model {
     @date('timestamp') timestamp!: Date;
     @text('tenant_id') tenantId!: string;
 }
-
 export class DealerInventorySignalModel extends Model {
     static table = 'dealer_inventory_signals';
     @text('dealer_id') dealerId!: string;
@@ -1900,7 +1939,6 @@ export class DealerInventorySignalModel extends Model {
     @field('reorder_level') reorderLevel!: number;
     @text('updated_at') updatedAt!: string;
 }
-
 export class KhataRecordModel extends Model {
     static table = 'khata_records';
     @text('dealer_id') dealerId!: string;
@@ -1915,7 +1953,6 @@ export class KhataRecordModel extends Model {
     @date('created_at') createdAt!: Date;
     @text('sync_status_local') syncStatusLocal!: string;
 }
-
 export class DealerFarmerConnectionModel extends Model {
     static table = 'dealer_farmer_connections';
     @text('dealer_id') dealerId!: string;
@@ -1923,12 +1960,11 @@ export class DealerFarmerConnectionModel extends Model {
     @text('status') status!: string;
     @text('last_transaction_date') lastTransactionDate!: string;
 }
-
 export class AgronomicRecommendationModel extends Model {
     static table = 'agronomic_recommendations';
     @text('farmer_id') farmerId!: string;
     @text('trigger_source') triggerSource!: string;
-    @text('type') type!: string; // Renamed from action_type
+    @text('type') type!: string; 
     @text('title') title!: string;
     @text('description') description!: string;
     @text('reasoning') reasoning!: string;
@@ -1936,13 +1972,59 @@ export class AgronomicRecommendationModel extends Model {
     @text('status') status!: string;
     @text('created_at') createdAt!: string;
     @text('tenant_id') tenantId!: string;
-    // New Fields
     @text('action_json') actionJson!: string;
     @text('impact_json') impactJson!: string;
     @text('social_proof_json') socialProofJson!: string;
+    @field('confidence_score') confidenceScore!: number;
+    @text('scientific_source') scientificSource!: string;
+    @text('expert_review_status') expertReviewStatus!: string;
+}
+export class SustainabilityActionModel extends Model {
+    static table = 'sustainability_actions';
+    @text('farmer_id') farmerId!: string;
+    @text('action_type') actionType!: string;
+    @text('description') description!: string;
+    @text('status') status!: string;
+    @text('verification_photo_url') verificationPhotoUrl!: string;
+    @text('geo_coords') geoCoords!: string;
+    @field('submitted_at') submittedAt!: number;
+    @field('verified_at') verifiedAt!: number;
+    @text('verified_by') verifiedBy!: string;
+    @field('credit_value') creditValue!: number;
+    @text('tenant_id') tenantId!: string;
+}
+export class SustainabilityCredentialModel extends Model {
+    static table = 'sustainability_credentials';
+    @text('farmer_id') farmerId!: string;
+    @text('grade') grade!: string;
+    @text('type') type!: string;
+    @field('issued_at') issuedAt!: number;
+    @field('valid_until') validUntil!: number;
+    @text('hash') hash!: string;
+    @text('metadata_json') metadataJson!: string;
+    @text('tenant_id') tenantId!: string;
+}
+export class SensorReadingModel extends Model {
+    static table = 'sensor_readings';
+    @text('farm_plot_id') farmPlotId!: string;
+    @text('sensor_type') sensorType!: string;
+    @field('value') value!: number;
+    @text('unit') unit!: string;
+    @text('recorded_at') recordedAt!: string;
+    @text('source') source!: string;
+    @text('device_id') deviceId!: string;
+    @text('tenant_id') tenantId!: string;
+}
+export class PendingUploadModel extends Model {
+  static table = 'pending_uploads';
+  @text('file_path') filePath!: string;
+  @text('related_record_id') relatedRecordId!: string;
+  @text('related_table') relatedTable!: string;
+  @text('status') status!: string;
+  @date('created_at') createdAt!: Date;
+  @text('blob_data') blobData!: string;
 }
 
-// --- Database Setup ---
 const adapter = new LokiJSAdapter({
   schema,
   useWebWorker: false,
@@ -1969,7 +2051,9 @@ const database = new Database({
     FarmerDealerConsentModel, TenantPartnerConfigModel, PartnerModel, PartnerOfferingModel,
     FarmerPartnerConsentModel, PartnerInteractionModel, DealerInventorySignalModel, KhataRecordModel,
     DealerFarmerConnectionModel, AgronomicRecommendationModel, AssistanceApplicationModel,
-    GeneticLineageModel, BenefitAgreementModel // Added new models
+    GeneticLineageModel, BenefitAgreementModel, PendingUploadModel, 
+    FarmerAssociationModel, TerritoryAssignmentModel, VendorAssociationModel,
+    SustainabilityActionModel, SustainabilityCredentialModel, SensorReadingModel
   ],
 });
 

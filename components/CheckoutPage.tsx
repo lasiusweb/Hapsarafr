@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useCart } from '../CartContext';
+import { useCart, CartItem } from '../CartContext';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
 import { FarmerModel, OrderModel, OrderItemModel } from '../db';
@@ -40,32 +40,49 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
 
         setIsSubmitting(true);
         try {
-            let newOrder: OrderModel | null = null;
-            await database.write(async () => {
-                newOrder = await database.get<OrderModel>('orders').create(order => {
-                    order.farmerId = selectedFarmerId;
-                    order.orderDate = new Date().toISOString();
-                    order.status = OrderStatus.Pending;
-                    order.totalAmount = totalPrice;
-                    order.paymentMethod = paymentMethod;
-                    order.deliveryAddress = deliveryAddress;
-                    order.deliveryInstructions = deliveryInstructions;
-                    order.syncStatusLocal = 'pending';
-                });
+            // Group items by Vendor ID to split orders
+            const itemsByVendor = items.reduce((acc, item) => {
+                const vId = item.vendor.id;
+                if (!acc[vId]) acc[vId] = [];
+                acc[vId].push(item);
+                return acc;
+            }, {} as Record<string, CartItem[]>);
 
-                const orderItemsPromises = items.map(item => 
-                    database.get<OrderItemModel>('order_items').create(orderItem => {
-                        orderItem.orderId = (newOrder as any).id;
-                        orderItem.vendorProductId = item.vendorProduct.id;
-                        orderItem.quantity = item.quantity;
-                        orderItem.pricePerUnit = item.vendorProduct.price;
-                    })
-                );
-                await Promise.all(orderItemsPromises);
+            let lastOrderId = '';
+
+            await database.write(async () => {
+                for (const [vendorId, vendorItems] of Object.entries(itemsByVendor)) {
+                     const vendorTotal = vendorItems.reduce((sum, item) => sum + (item.vendorProduct.price * item.quantity), 0);
+                     
+                     const newOrder = await database.get<OrderModel>('orders').create(order => {
+                        order.farmerId = selectedFarmerId;
+                        order.dealerId = vendorId; // Assign correct vendor
+                        order.orderDate = new Date().toISOString();
+                        order.status = OrderStatus.Pending;
+                        order.totalAmount = vendorTotal;
+                        order.paymentMethod = paymentMethod;
+                        order.deliveryAddress = deliveryAddress;
+                        order.deliveryInstructions = deliveryInstructions;
+                        order.syncStatusLocal = 'pending';
+                    });
+                    
+                    lastOrderId = newOrder.id;
+
+                    const orderItemsPromises = vendorItems.map(item => 
+                        database.get<OrderItemModel>('order_items').create(orderItem => {
+                            orderItem.orderId = newOrder.id;
+                            orderItem.vendorProductId = item.vendorProduct.id;
+                            orderItem.quantity = item.quantity;
+                            orderItem.pricePerUnit = item.vendorProduct.price;
+                        })
+                    );
+                    await Promise.all(orderItemsPromises);
+                }
             });
+            
             clearCart();
-            if (newOrder) {
-                onOrderPlaced((newOrder as any).id);
+            if (lastOrderId) {
+                onOrderPlaced(lastOrderId); // Just navigate to confirmation of the last one for now
             }
         } catch (error) {
             console.error('Failed to place order:', error);
@@ -128,6 +145,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
                                             <div>
                                                 <p className="font-semibold">{item.product.name}</p>
                                                 <p className="text-xs text-gray-500">{item.quantity} x {formatCurrency(item.vendorProduct.price)}</p>
+                                                <p className="text-[10px] text-gray-400">Sold by: {item.vendor.name}</p>
                                             </div>
                                             <p className="font-semibold">{formatCurrency(item.quantity * item.vendorProduct.price)}</p>
                                         </div>
@@ -138,6 +156,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack, onOrderPlaced }) =>
                                         <span>Total</span>
                                         <span>{formatCurrency(totalPrice)}</span>
                                     </div>
+                                </div>
+                                <div className="mb-4 p-3 bg-blue-50 border border-blue-100 text-xs text-blue-800 rounded-md">
+                                    Note: Orders will be split by vendor automatically.
                                 </div>
                                 <button onClick={handlePlaceOrder} disabled={!selectedFarmerId || isSubmitting} className="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition disabled:bg-gray-400">
                                     {isSubmitting ? 'Placing Order...' : 'Place Order'}

@@ -1,4 +1,5 @@
 
+
 import { Farmer } from '../types';
 
 // Mock external market data (In prod, this comes from Gov APIs like Agmarknet)
@@ -13,6 +14,8 @@ const BASE_MARKET_RATES: Record<string, number> = {
     'Green Gram': 7200,
     'Black Gram': 6500
 };
+
+export const getMandiPrices = () => BASE_MARKET_RATES;
 
 export interface PriceComponent {
     label: string;

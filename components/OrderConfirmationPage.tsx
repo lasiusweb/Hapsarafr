@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -52,7 +53,7 @@ const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({ orderId, 
         <div className="p-6 bg-gray-50 min-h-full flex items-center justify-center">
             <div className="max-w-2xl w-full bg-white rounded-lg shadow-xl p-8 text-center">
                 <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-green-100 mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
                 <h1 className="text-3xl font-bold text-gray-800">Thank You!</h1>
                 <p className="text-gray-600 mt-2">Your order has been placed successfully.</p>

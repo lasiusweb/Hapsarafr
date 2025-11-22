@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Farmer, FarmerStatus, Filters } from '../types';
 import { GEO_DATA } from '../data/geoData';

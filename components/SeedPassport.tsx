@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { SeedVariety, ConsentLevel } from '../types';
 import { generateVisualFingerprint } from '../lib/genetics';

@@ -74,13 +74,14 @@ const PinLock: React.FC<{ onUnlock: () => void }> = ({ onUnlock }) => {
 };
 
 const CalculatorInput: React.FC<{
-    onConfirm: (amount: number, notes: string) => void;
+    onConfirm: (amount: number, notes: string, dueDate: string) => void;
     mode: 'CREDIT' | 'PAYMENT';
     onCancel: () => void;
     farmerName: string;
 }> = ({ onConfirm, mode, onCancel, farmerName }) => {
     const [amountStr, setAmountStr] = useState('');
     const [notes, setNotes] = useState('');
+    const [dueDate, setDueDate] = useState('');
     
     const handlePress = (val: string) => {
         if (val === 'back') setAmountStr(prev => prev.slice(0, -1));
@@ -117,13 +118,26 @@ const CalculatorInput: React.FC<{
                     ))}
                 </div>
                 
-                <input 
-                    type="text" 
-                    value={notes} 
-                    onChange={e => setNotes(e.target.value)} 
-                    placeholder="Add a note..." 
-                    className="w-full p-2 bg-gray-50 rounded-md border border-gray-200 text-sm mb-4"
-                />
+                <div className="space-y-3 mb-4">
+                    <input 
+                        type="text" 
+                        value={notes} 
+                        onChange={e => setNotes(e.target.value)} 
+                        placeholder="Add a note..." 
+                        className="w-full p-2 bg-gray-50 rounded-md border border-gray-200 text-sm"
+                    />
+                    {mode === 'CREDIT' && (
+                        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-md border border-gray-200">
+                            <label className="text-xs font-bold text-gray-500 whitespace-nowrap">Due Date:</label>
+                            <input 
+                                type="date" 
+                                value={dueDate} 
+                                onChange={e => setDueDate(e.target.value)} 
+                                className="w-full bg-transparent text-sm text-gray-700 outline-none"
+                            />
+                        </div>
+                    )}
+                </div>
 
                 <div className="grid grid-cols-3 gap-3 flex-1">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map(num => (
@@ -137,7 +151,7 @@ const CalculatorInput: React.FC<{
                 </div>
 
                 <button 
-                    onClick={() => onConfirm(parseFloat(amountStr), notes)} 
+                    onClick={() => onConfirm(parseFloat(amountStr), notes, dueDate)} 
                     disabled={!amountStr || parseFloat(amountStr) <= 0}
                     className={`w-full mt-4 py-4 rounded-lg text-white font-bold text-lg shadow-md bg-${themeColor}-600 hover:bg-${themeColor}-700 disabled:bg-gray-300`}
                 >
@@ -203,7 +217,7 @@ const KhataScreen: React.FC<KhataScreenProps> = ({ currentUser, vendor }) => {
     }, [allRecords]);
 
     // Handlers
-    const handleTransaction = async (amount: number, notes: string) => {
+    const handleTransaction = async (amount: number, notes: string, dueDate: string) => {
         if (!selectedFarmerId) return;
         
         await database.write(async () => {
@@ -214,18 +228,24 @@ const KhataScreen: React.FC<KhataScreenProps> = ({ currentUser, vendor }) => {
                 r.transactionType = entryMode === 'CREDIT' ? KhataTransactionType.CREDIT_GIVEN : KhataTransactionType.PAYMENT_RECEIVED;
                 r.description = notes || (entryMode === 'CREDIT' ? 'Credit' : 'Payment');
                 r.transactionDate = new Date().toISOString();
+                r.dueDate = dueDate || undefined;
                 r.status = 'SYNCED'; // In offline-first, this means locally saved. Sync happens in bg.
                 r.syncStatusLocal = 'pending';
             });
         });
 
-        // Send SMS (Simulated)
+        // Send Digital Receipt (WhatsApp)
         const farmer = farmerMap.get(selectedFarmerId);
         if (farmer) {
             const action = entryMode === 'CREDIT' ? 'Added Credit' : 'Received Payment';
-            const msg = `Hapsara Khata: ${action} of ${formatCurrency(amount)} for ${farmer.fullName}. Current Balance: ${formatCurrency(calculateBalance(allRecords.map(r => r._raw as any).filter(r => r.farmerId === selectedFarmerId)) + (entryMode === 'CREDIT' ? amount : -amount))}.`;
-            // In prod: trigger backend SMS API. Here: Alert
-            // alert(`SMS Sent to ${farmer.mobileNumber}: ${msg}`);
+            const newBalance = calculateBalance(allRecords.map(r => r._raw as any).filter(r => r.farmerId === selectedFarmerId)) + (entryMode === 'CREDIT' ? amount : -amount);
+            
+            const msg = `🧾 *Hapsara Digital Khata*\n\nNamaste ${farmer.fullName},\n\n${action}: *${formatCurrency(amount)}*\nFor: ${notes || 'General'}\n\n💰 *Current Balance: ${formatCurrency(newBalance)}*\n\nView your full ledger on the Hapsara App.`;
+            
+            const link = generateWhatsAppLink(farmer.mobileNumber, msg);
+            
+            // In a real mobile app, we would use Share API. For PWA/Web:
+            window.open(link, '_blank');
         }
 
         setView('LIST');
@@ -233,7 +253,6 @@ const KhataScreen: React.FC<KhataScreenProps> = ({ currentUser, vendor }) => {
     };
 
     const handleSendReminder = (farmer: FarmerModel, balance: number) => {
-        // FIX: Cast farmer to any to access _raw property and then to Farmer
         const { message } = generateSmartReminder((farmer as any)._raw as unknown as Farmer, balance);
         if (message) {
             const link = generateWhatsAppLink(farmer.mobileNumber, message);
@@ -329,7 +348,7 @@ const KhataScreen: React.FC<KhataScreenProps> = ({ currentUser, vendor }) => {
                         <div key={r.id} className="bg-white p-3 rounded border border-gray-200 flex justify-between">
                             <div>
                                 <p className="text-sm font-semibold text-gray-800">{r.description}</p>
-                                <p className="text-xs text-gray-500">{new Date(r.transactionDate).toLocaleDateString()}</p>
+                                <p className="text-xs text-gray-500">{new Date(r.transactionDate).toLocaleDateString()} {r.dueDate ? `| Due: ${new Date(r.dueDate).toLocaleDateString()}` : ''}</p>
                             </div>
                             <span className={`font-bold ${r.transactionType.includes('CREDIT') ? 'text-red-600' : 'text-green-600'}`}>
                                 {r.transactionType.includes('CREDIT') ? '+' : '-'}{formatCurrency(r.amount)}

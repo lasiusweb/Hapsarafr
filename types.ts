@@ -1,5 +1,28 @@
 
+export interface Dealer {
+    id: string;
+    userId: string;
+    shopName: string;
+    gstin?: string;
+    address: string;
+    mandal: string;
+    district: string;
+    isVerified: boolean;
+    tenantId: string;
+    creditLimit?: number; // New field for credit risk management
+}
 
+export interface DealerInventorySignal {
+    id: string;
+    dealerId: string;
+    productId: string;
+    isAvailable: boolean;
+    stockQuantity: number;
+    reorderLevel: number;
+    updatedAt: string;
+}
+
+// ... rest of the file remains unchanged, only updating Dealer interface
 export interface District {
     code: string;
     name: string;
@@ -123,6 +146,7 @@ export interface Farmer {
     fullCostPlants?: number;
     asoId?: string;
     trustScore?: number; // 0-100 Data Fidelity Score
+    identity_hash?: string; // For Federated Identity Deduplication
 }
 
 export interface FarmPlot {
@@ -228,7 +252,9 @@ export enum ActivityType {
     COLLECTION_APPOINTMENT_BOOKED = 'COLLECTION_APPOINTMENT_BOOKED',
     CROP_ASSIGNED = 'CROP_ASSIGNED',
     SEED_REGISTERED = 'SEED_REGISTERED',
-    RECOMMENDATION_ACTION = 'RECOMMENDATION_ACTION'
+    RECOMMENDATION_ACTION = 'RECOMMENDATION_ACTION',
+    SUSTAINABILITY_ACTION_LOGGED = 'SUSTAINABILITY_ACTION_LOGGED',
+    SENSOR_DATA_LOGGED = 'SENSOR_DATA_LOGGED'
 }
 
 export enum BillableEvent {
@@ -237,9 +263,18 @@ export enum BillableEvent {
     TRANSACTION_PROCESSED = 'TRANSACTION_PROCESSED'
 }
 
+export interface Wallet {
+    id: string;
+    farmerId?: string;
+    vendorId?: string; // New: Vendor Wallet Support
+    balance: number;
+    updatedAt: number;
+}
+
 export interface CreditLedgerEntry {
     id: string;
-    tenantId: string;
+    tenantId?: string; // Can be null if paid by Vendor
+    vendorId?: string; // New: Vendor Wallet
     transactionType: string;
     amount: number;
     serviceEventId?: string;
@@ -739,13 +774,21 @@ export interface Vendor {
     address: string;
     status: VendorStatus;
     rating: number;
-    tenantId: string;
+    tenantId?: string; // Optional now, as vendors can be independent
     sellerType: string;
     farmerId?: string;
     documentsJson?: string;
     // Add these
     mandal?: string;
     district?: string;
+}
+
+export interface VendorAssociation {
+    id: string;
+    vendorId: string;
+    tenantId: string;
+    status: 'Active' | 'Pending' | 'Inactive';
+    createdAt: number;
 }
 
 export enum VendorStatus {
@@ -950,6 +993,13 @@ export interface LegacyProfile {
     needsScholarship?: boolean;
 }
 
+export enum RoadAccessType {
+    Highway = 'HIGHWAY',
+    PavedRoad = 'PAVED_ROAD',
+    DirtRoad = 'DIRT_ROAD',
+    NoAccess = 'NO_ACCESS'
+}
+
 export interface LandListing {
     id: string;
     farmPlotId: string;
@@ -958,7 +1008,7 @@ export interface LandListing {
     status: string;
     soilOrganicCarbon: number;
     waterTableDepth: number;
-    roadAccess: string;
+    roadAccess: RoadAccessType;
     avgYieldHistory: number;
     hapsaraValueScore: number;
     askPrice: number;
@@ -989,35 +1039,6 @@ export enum ListingStatus {
     Sold = 'SOLD',
     Expired = 'EXPIRED',
     Withdrawn = 'WITHDRAWN'
-}
-
-export enum RoadAccessType {
-    Highway = 'HIGHWAY',
-    PavedRoad = 'PAVED_ROAD',
-    DirtRoad = 'DIRT_ROAD',
-    NoAccess = 'NO_ACCESS'
-}
-
-export interface Dealer {
-    id: string;
-    userId: string;
-    shopName: string;
-    gstin?: string;
-    address: string;
-    mandal: string;
-    district: string;
-    isVerified: boolean;
-    tenantId: string;
-}
-
-export interface DealerInventorySignal {
-    id: string;
-    dealerId: string;
-    productId: string;
-    isAvailable: boolean;
-    stockQuantity: number;
-    reorderLevel: number;
-    updatedAt: string;
 }
 
 // Enhanced Khata Types for Hapsara Khata v2.0
@@ -1051,7 +1072,7 @@ export interface DealerFarmerConnection {
     lastTransactionDate: string;
 }
 
-// Expanded for Hapsara Intellectus
+// Expanded for Hapsara Scientia
 export interface AgronomicRecommendation {
     id: string;
     farmerId: string;
@@ -1073,6 +1094,10 @@ export interface AgronomicRecommendation {
     isFinanciallyFeasible?: boolean;
     inventoryStatus?: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
     alternativeProductId?: string;
+    // Hapsara Scientia Fields
+    confidenceScore?: number; // 0-100, calculated based on data completeness
+    scientificSource?: string; // e.g., "IIOPR Guidelines 2024", "ICAR Research"
+    expertReviewStatus?: 'NOT_REQUIRED' | 'PENDING_REVIEW' | 'APPROVED' | 'MODIFIED';
 }
 
 export interface DealerInsights {
@@ -1106,22 +1131,40 @@ export interface ClimateRiskCache {
 export interface SustainabilityAction {
     id: string;
     farmerId: string;
-    actionType: string;
-    status: string;
+    actionType: string; // 'Mulching', 'CoverCropping', 'DripIrrigation', 'OrganicInput', 'BioControl'
+    description: string;
+    status: 'Pending' | 'Verified' | 'Rejected';
     verificationPhotoUrl?: string;
     geoCoords?: string;
     submittedAt: number;
     verifiedAt?: number;
+    verifiedBy?: string;
+    creditValue?: number; // Estimated Carbon Credit Value
+    tenantId: string;
 }
 
 export interface SustainabilityCredential {
     id: string;
     farmerId: string;
-    grade: string;
+    grade: string; // 'Gold', 'Silver', 'Bronze' based on actions
+    type: 'CARBON_CREDIT' | 'WATER_STEWARD' | 'BIODIVERSITY_GUARDIAN';
     issuedAt: number;
     validUntil: number;
     hash: string;
     metadataJson?: string;
+    tenantId: string;
+}
+
+export interface SensorReading {
+    id: string;
+    farmPlotId: string;
+    sensorType: 'SOIL_MOISTURE' | 'WATER_FLOW' | 'TEMPERATURE' | 'HUMIDITY';
+    value: number;
+    unit: string;
+    recordedAt: string;
+    source: 'IOT_DEVICE' | 'MANUAL_ENTRY';
+    deviceId?: string;
+    tenantId: string;
 }
 
 export interface DealerProfile {
