@@ -18,14 +18,14 @@ export interface AgingBuckets {
 // --- Core Logic ---
 
 /**
- * Calculates the current outstanding balance for a farmer with a specific dealer.
- * Formula: Sum(Credit Given) - Sum(Payments Received)
+ * Calculates the current outstanding balance for a farmer.
+ * Formula: Sum(Credit Given + Interest) - Sum(Payments Received + Discounts)
  */
 export const calculateBalance = (records: KhataRecord[]): number => {
     return records.reduce((total, record) => {
         if (record.status === 'DISPUTED') return total; // Ignore disputed records for balance
         
-        // Normalize transaction type check to handle both Enum and string literals if they come from DB
+        // Normalize transaction type check
         const type = record.transactionType;
         
         if (type === KhataTransactionType.CREDIT_GIVEN || type === 'CREDIT_GIVEN' || 
@@ -40,23 +40,19 @@ export const calculateBalance = (records: KhataRecord[]): number => {
 };
 
 /**
- * Analyzes debt age based on transaction dates of unpaid credit.
- * This uses a FIFO (First-In-First-Out) allocation method for payments.
+ * Analyzes debt age using FIFO (First-In-First-Out) allocation.
+ * Payments clear the oldest debts first. Remaining debt is aged based on its original transaction date.
  */
 export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
     // 1. Sort by date ascending to apply payments to oldest debts first
     const sortedRecords = [...records].sort((a, b) => {
         const dateA = a.transactionDate ? new Date(a.transactionDate) : new Date(0);
         const dateB = b.transactionDate ? new Date(b.transactionDate) : new Date(0);
-        
-        const timeA = isNaN(dateA.getTime()) ? 0 : dateA.getTime();
-        const timeB = isNaN(dateB.getTime()) ? 0 : dateB.getTime();
-        
-        return timeA - timeB;
+        return dateA.getTime() - dateB.getTime();
     });
     
     // 2. Calculate total payments received
-    let totalPayments = sortedRecords
+    let totalPaymentsPool = sortedRecords
         .filter(r => {
             const type = r.transactionType;
             return (type === KhataTransactionType.PAYMENT_RECEIVED || type === 'PAYMENT_RECEIVED' || 
@@ -68,7 +64,7 @@ export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
     const buckets: AgingBuckets = { current: 0, days30: 0, days60: 0, days90Plus: 0 };
     const now = new Date();
 
-    // 3. Apply payments to oldest credits first (FIFO)
+    // 3. Apply payments pool to oldest credits first (FIFO)
     for (const record of sortedRecords) {
         const type = record.transactionType;
         if (type === KhataTransactionType.CREDIT_GIVEN || type === 'CREDIT_GIVEN' || 
@@ -76,17 +72,17 @@ export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
             
             if (record.status === 'DISPUTED') continue;
 
-            let outstandingAmount = record.amount;
+            let outstandingAmountOnThisRecord = record.amount;
             
-            // Deduct available payments from this credit record
-            if (totalPayments > 0) {
-                const paymentCovered = Math.min(outstandingAmount, totalPayments);
-                outstandingAmount -= paymentCovered;
-                totalPayments -= paymentCovered;
+            // Deduct available payments from this specific credit record
+            if (totalPaymentsPool > 0) {
+                const paymentCovered = Math.min(outstandingAmountOnThisRecord, totalPaymentsPool);
+                outstandingAmountOnThisRecord -= paymentCovered;
+                totalPaymentsPool -= paymentCovered;
             }
 
-            // If still unpaid, categorize into aging bucket
-            if (outstandingAmount > 0) {
+            // If this specific credit record is still unpaid/partially unpaid, categorize the *remaining* amount
+            if (outstandingAmountOnThisRecord > 0) {
                 let txDate = new Date(0);
                 if (record.transactionDate) {
                     const parsedDate = new Date(record.transactionDate);
@@ -95,19 +91,19 @@ export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
                     }
                 }
 
-                // If date is 0 (invalid/missing), treat as very old or current? 
-                // Let's treat invalid dates as Current to avoid false alarms on old debt
+                // If date is invalid, treat as Current
                 if (txDate.getTime() === 0) {
-                    buckets.current += outstandingAmount;
+                    buckets.current += outstandingAmountOnThisRecord;
                     continue;
                 }
 
-                const daysOld = Math.floor((now.getTime() - txDate.getTime()) / (1000 * 3600 * 24));
+                const diffTime = Math.abs(now.getTime() - txDate.getTime());
+                const daysOld = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
                 
-                if (daysOld < 30) buckets.current += outstandingAmount;
-                else if (daysOld < 60) buckets.days30 += outstandingAmount;
-                else if (daysOld < 90) buckets.days60 += outstandingAmount;
-                else buckets.days90Plus += outstandingAmount;
+                if (daysOld < 30) buckets.current += outstandingAmountOnThisRecord;
+                else if (daysOld < 60) buckets.days30 += outstandingAmountOnThisRecord;
+                else if (daysOld < 90) buckets.days60 += outstandingAmountOnThisRecord;
+                else buckets.days90Plus += outstandingAmountOnThisRecord;
             }
         }
     }
@@ -116,25 +112,31 @@ export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
 };
 
 /**
- * Generates a smart reminder message based on harvest data.
+ * Generates a smart reminder message based on context (harvest season, aging).
  */
 export const generateSmartReminder = (farmer: Farmer, balance: number): { shouldRemind: boolean, message: string, urgency: 'LOW' | 'MEDIUM' | 'HIGH' } => {
     if (balance <= 0) return { shouldRemind: false, message: '', urgency: 'LOW' };
 
-    // Heuristic: Check if it's harvest season (simplified for demo)
-    // In real app, cross-reference Crop Calendar
     const currentMonth = new Date().getMonth(); // 0-11
-    // Harvest Seasons: Oct-Dec (Kharif), Mar-May (Rabi)
+    // Heuristic: Harvest Seasons (Oct-Dec for Kharif / Mar-May for Rabi/Oil Palm Peak)
     const isHarvestSeason = (currentMonth >= 9 && currentMonth <= 11) || (currentMonth >= 2 && currentMonth <= 4); 
     
     if (isHarvestSeason) {
         return {
             shouldRemind: true,
-            message: `Namaste ${farmer.fullName}. Hope the harvest is going well. A gentle reminder of the pending balance: ₹${balance}.`,
+            message: `Namaste ${farmer.fullName}. We hope the harvest is going well. This is a gentle reminder of the pending balance: ₹${balance.toLocaleString()}. Please visit the store to settle at your earliest convenience.`,
             urgency: 'MEDIUM'
         };
     }
     
+    if (balance > 50000) {
+        return {
+             shouldRemind: true,
+             message: `Namaste ${farmer.fullName}. Your account balance has exceeded ₹50,000. Please make a partial payment to ensure uninterrupted credit for inputs.`,
+             urgency: 'HIGH'
+        };
+    }
+
     return {
         shouldRemind: false,
         message: '',

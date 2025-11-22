@@ -1,10 +1,10 @@
 
-import { FarmPlotModel, ProductModel, DealerInventorySignalModel, OrderModel, FarmerModel, OrderItemModel, VendorProductModel } from '../db';
+import { FarmPlotModel, ProductModel, DealerInventorySignalModel, OrderModel, OrderItemModel, VendorProductModel, FarmerModel } from '../db';
 import { farmPlotModelToPlain, farmerModelToPlain } from './utils';
-import { Farmer, Order, Product } from '../types';
-import { getMockWeatherData } from './climateEngine'; // Import climate engine
+import { Farmer, Product } from '../types';
+import { getMockWeatherData } from './climateEngine';
 
-// Simple types for the logic
+// --- Types ---
 interface PredictionResult {
     productId: string;
     productName: string;
@@ -43,9 +43,11 @@ export interface SalesTrend {
     count: number;
 }
 
+// --- Core Logic ---
+
 /**
- * Calculates inventory demand based on crop age, acreage AND weather.
- * Enhanced for "Samridhi": Includes stock comparisons and improved heuristics.
+ * Inventory Demand Forecasting Engine
+ * Combines Crop Lifecycle + Weather Forecasts + Historical Data
  */
 export const getInventoryPredictions = (
     plots: FarmPlotModel[], 
@@ -56,8 +58,8 @@ export const getInventoryPredictions = (
     const predictions: PredictionResult[] = [];
     
     // 1. Calculate Total Acreage by Age Cohort
-    let gestationAcreage = 0; // < 4 years
-    let matureAcreage = 0;    // > 4 years
+    let gestationAcreage = 0; // < 4 years (Needs growth inputs)
+    let matureAcreage = 0;    // > 4 years (Needs yield inputs)
 
     plots.forEach(plotModel => {
         const plot = farmPlotModelToPlain(plotModel);
@@ -73,7 +75,8 @@ export const getInventoryPredictions = (
         }
     });
 
-    // 2. Check Weather (Simulates ground reality trigger)
+    // 2. Check Weather (Ground Reality Trigger)
+    // If rain is forecast, farmers apply Urea/Fertilizer immediately.
     const weather = getMockWeatherData();
     const isRainForecast = weather.rainfallMm > 10 || (weather.forecast && weather.forecast.some(d => d.rainfallMm > 15));
 
@@ -85,22 +88,24 @@ export const getInventoryPredictions = (
 
     const evaluateStock = (demand: number, stock: number) : 'OK' | 'LOW' | 'CRITICAL_OUT' => {
         if (stock <= 0) return 'CRITICAL_OUT';
-        if (stock < demand * 0.5) return 'LOW'; // Less than 50% of demand covered
+        if (stock < demand * 0.5) return 'LOW'; // Less than 50% of predicted demand covered
         return 'OK';
     }
 
-    // 3. Heuristic Rules for Demand
+    // 3. Heuristic Rules
 
-    // Rule A: Urea (Nitrogen) Demand - Boosted by Rain
+    // Rule A: Urea (Nitrogen) Demand
+    // Logic: Young palms need N for growth. Mature need it for yield. Rain increases application probability.
     const ureaProduct = products.find(p => p.name.toLowerCase().includes('urea'));
     if (ureaProduct) {
+        // Base demand: 50kg/ac for young, 100kg/ac for mature (per season proxy)
         let baseDemand = Math.round((gestationAcreage * 50) + (matureAcreage * 100));
-        let reasoning = `Base demand for ${gestationAcreage.toFixed(1)} ac young & ${matureAcreage.toFixed(1)} ac mature palms.`;
+        let reasoning = `Base demand for ${gestationAcreage.toFixed(1)}ac young & ${matureAcreage.toFixed(1)}ac mature palms.`;
         let confidence = 0.85;
 
         if (isRainForecast) {
-            baseDemand = Math.round(baseDemand * 1.3); // 30% surge if raining
-            reasoning += " +30% Rain Forecast Surge (Farmers apply ferts during rain).";
+            baseDemand = Math.round(baseDemand * 1.4); // 40% surge if raining
+            reasoning += " +40% SURGE due to Rain Forecast (Ideal application window).";
             confidence = 0.95;
         }
 
@@ -120,10 +125,11 @@ export const getInventoryPredictions = (
         }
     }
 
-    // Rule B: Harvesting Tools
+    // Rule B: Harvesting Tools (Sickles/Chisels)
+    // Logic: Linked purely to mature acreage.
     const toolProduct = products.find(p => p.name.toLowerCase().includes('sickle') || p.name.toLowerCase().includes('cutter'));
     if (toolProduct && matureAcreage > 0) {
-        const demand = Math.ceil(matureAcreage / 10);
+        const demand = Math.ceil(matureAcreage / 15); // 1 sickle per 15 acres replacement
         if (demand > 0) {
             const stock = getStock((toolProduct as any).id);
              predictions.push({
@@ -141,9 +147,10 @@ export const getInventoryPredictions = (
     }
 
     // Rule C: Boron / Micro-nutrients (Gestation focus)
+    // Logic: Young palms in sandy soils need Boron.
     const boronProduct = products.find(p => p.name.toLowerCase().includes('boron') || p.name.toLowerCase().includes('micro'));
     if (boronProduct && gestationAcreage > 0) {
-        const demand = Math.round(gestationAcreage * 5); // 5kg/acre estimate
+        const demand = Math.round(gestationAcreage * 2); // 2kg/acre estimate
         if (demand > 0) {
              const stock = getStock((boronProduct as any).id);
              predictions.push({
@@ -152,17 +159,20 @@ export const getInventoryPredictions = (
                 category: 'Fertilizer',
                 predictedQuantity: demand,
                 unit: 'kg',
-                confidence: 0.5, 
-                reasoning: `Standard micronutrient requirement for young palms.`,
+                confidence: 0.6, 
+                reasoning: `Essential micronutrient requirement for young palms (prevent hook leaf).`,
                 stockStatus: evaluateStock(demand, stock),
                 gap: Math.max(0, demand - stock)
             });
         }
     }
 
-    return predictions.sort((a, b) => b.gap - a.gap); // Sort by biggest gap (opportunity) first
+    return predictions.sort((a, b) => b.gap - a.gap); // Prioritize big gaps
 };
 
+/**
+ * RFM (Recency, Frequency, Monetary) Analysis for Farmers
+ */
 export const getCustomerSegments = (
     farmers: FarmerModel[],
     orders: OrderModel[]
@@ -171,7 +181,7 @@ export const getCustomerSegments = (
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(now.getMonth() - 6);
 
-    // 1. Aggregate Order Data per Farmer
+    // 1. Aggregate Stats
     const farmerStats: Record<string, { count: number, totalSpend: number, lastOrderDate: Date | null }> = {};
 
     farmers.forEach(f => {
@@ -210,7 +220,7 @@ export const getCustomerSegments = (
             avgSpend: 0,
             color: 'bg-green-100 text-green-800 border-green-200',
             icon: '🌟',
-            suggestedAction: 'Send Loyalty Reward / New Arrival Alert'
+            suggestedAction: 'Send Loyalty Reward'
         },
         'DORMANT': {
             id: 'DORMANT',
@@ -225,7 +235,7 @@ export const getCustomerSegments = (
         'PROSPECTS': {
             id: 'PROSPECTS',
             label: 'New Prospects',
-            description: 'Registered but zero orders. Convert them now.',
+            description: 'Registered but zero orders. Convert them.',
             farmers: [],
             avgSpend: 0,
             color: 'bg-blue-100 text-blue-800 border-blue-200',
@@ -234,7 +244,7 @@ export const getCustomerSegments = (
         }
     };
 
-    // 2. Assign Segments
+    // 2. Assign
     farmers.forEach(fModel => {
         const stats = farmerStats[(fModel as any).id];
         const farmer = farmerModelToPlain(fModel)!;
@@ -250,14 +260,19 @@ export const getCustomerSegments = (
         }
     });
 
-    // 3. Calculate Averages & Return
-    return Object.values(segments).map(seg => {
-        const total = seg.farmers.reduce((sum, f) => sum + farmerStats[f.id].totalSpend, 0);
-        seg.avgSpend = seg.farmers.length > 0 ? total / seg.farmers.length : 0;
-        return seg;
-    }).filter(s => s.farmers.length > 0);
+    return Object.values(segments)
+        .map(seg => {
+            const total = seg.farmers.reduce((sum, f) => sum + farmerStats[f.id].totalSpend, 0);
+            seg.avgSpend = seg.farmers.length > 0 ? total / seg.farmers.length : 0;
+            return seg;
+        })
+        .filter(s => s.farmers.length > 0);
 };
 
+/**
+ * Market Basket Analysis (Apriori simplified)
+ * Finds products often purchased together.
+ */
 export const analyzeMarketBasket = (
     orders: OrderModel[],
     orderItems: OrderItemModel[],
@@ -309,28 +324,27 @@ export const analyzeMarketBasket = (
                     id: `bundle_${pairKey}`,
                     products: [p1, p2],
                     frequency: count,
-                    description: `Customers who buy ${p1.name} often buy ${p2.name} (${Math.round((count/totalTransactions)*100)}% co-occurrence).`,
+                    description: `Customers often buy ${p1.name} with ${p2.name} (${Math.round((count/totalTransactions)*100)}% overlap).`,
                     suggestedDiscount: 5,
                     potentialRevenue: 0
                 });
             }
         }
     });
-
+    
+    // Fallback for demo if no transactions
     if (bundles.length === 0) {
-        const fertilizers = products.filter(p => p.categoryId.includes('fertilizer'));
-        const pesticides = products.filter(p => p.categoryId.includes('pesticide'));
-        
-        if (fertilizers.length > 0 && pesticides.length > 0) {
-            bundles.push({
-                id: 'bundle_heuristic_1',
-                products: [fertilizers[0] as unknown as Product, pesticides[0] as unknown as Product],
+         const fertilizers = products.filter(p => p.categoryId.includes('fertilizer') || p.name.includes('Fertilizer'));
+         if (fertilizers.length >= 2) {
+              bundles.push({
+                id: 'bundle_suggest_1',
+                products: [fertilizers[0] as unknown as Product, fertilizers[1] as unknown as Product],
                 frequency: 0,
-                description: 'Suggested Bundle: Essential Care Kit (Nutrient + Protection)',
-                suggestedDiscount: 7,
+                description: 'Suggested: Bundle primary nutrients for higher AOV.',
+                suggestedDiscount: 5,
                 potentialRevenue: 0
             });
-        }
+         }
     }
 
     return bundles.sort((a, b) => b.frequency - a.frequency).slice(0, 3);
@@ -364,7 +378,6 @@ export const getSalesTrends = (
         if (revenue && revenue > 0) {
             const d = new Date(o.orderDate);
             const key = d.toLocaleString('default', { month: 'short', year: '2-digit' });
-            
             const trend = trends.find(t => t.period === key);
             if (trend) {
                 trend.revenue += revenue;
