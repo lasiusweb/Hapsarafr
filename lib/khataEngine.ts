@@ -46,11 +46,13 @@ export const calculateBalance = (records: KhataRecord[]): number => {
 export const getDebtAging = (records: KhataRecord[]): AgingBuckets => {
     // 1. Sort by date ascending to apply payments to oldest debts first
     const sortedRecords = [...records].sort((a, b) => {
-        const dateA = new Date(a.transactionDate).getTime();
-        const dateB = new Date(b.transactionDate).getTime();
-        // Handle invalid dates by pushing them to the end (treat as new)
-        const valA = isNaN(dateA) ? Number.MAX_SAFE_INTEGER : dateA;
-        const valB = isNaN(dateB) ? Number.MAX_SAFE_INTEGER : dateB;
+        const timeA = a.transactionDate ? new Date(a.transactionDate).getTime() : 0;
+        const timeB = b.transactionDate ? new Date(b.transactionDate).getTime() : 0;
+        
+        // Handle invalid dates (NaN) by pushing them to the end or treating as 0
+        const valA = isNaN(timeA) ? 0 : timeA;
+        const valB = isNaN(timeB) ? 0 : timeB;
+        
         return valA - valB;
     });
     

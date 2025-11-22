@@ -48,7 +48,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
     const vendor = useQuery(vendorQuery)[0];
 
     // Data Fetching
-    const allOrders = useQuery(useMemo(() => database.get<OrderModel>('orders').query(Q.sortBy('created_at', 'desc')), [database]));
+    // Corrected: Sort by 'order_date' instead of 'created_at' which may not exist in schema
+    const allOrders = useQuery(useMemo(() => database.get<OrderModel>('orders').query(Q.sortBy('order_date', 'desc')), [database]));
     const allOrderItems = useQuery(useMemo(() => database.get<OrderItemModel>('order_items').query(), [database]));
     const allVendorProducts = useQuery(useMemo(() => database.get<VendorProductModel>('vendor_products').query(), [database]));
     const inventorySignals = useQuery(useMemo(() => database.get<DealerInventorySignalModel>('dealer_inventory_signals').query(Q.where('dealer_id', vendor?.id || 'unknown')), [database, vendor?.id]));
@@ -108,7 +109,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
             // When an order is DELIVERED, we deduct the sold items from the dealer's inventory signals.
             if (status === OrderStatus.Delivered) {
                 // 1. Find items for this order
-                // FIX: Cast order to any to access id property which might be hidden by type definitions
                 const orderItems = allOrderItems.filter(item => item.orderId === (order as any).id);
                 
                 for (const item of orderItems) {
@@ -119,8 +119,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                         const signal = inventorySignals.find(s => s.productId === vp.productId);
                         
                         if (signal) {
-                            // 4. Decrement Stock safely
-                            const newQuantity = Math.max(0, signal.stockQuantity - item.quantity);
+                            // 4. Decrement Stock safely with null checks
+                            const currentStock = signal.stockQuantity || 0;
+                            const newQuantity = Math.max(0, currentStock - item.quantity);
                             await signal.update(s => {
                                 s.stockQuantity = newQuantity;
                                 s.isAvailable = newQuantity > 0;

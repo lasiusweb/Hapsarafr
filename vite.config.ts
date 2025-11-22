@@ -6,17 +6,18 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
-  // FIX: Cast process to any to avoid TS error 'Property cwd does not exist on type Process'
   const env = loadEnv(mode, (process as any).cwd(), '');
   
   return {
     plugins: [react()],
     define: {
-      // Polyfill process.env for the Gemini SDK and legacy code compatibility
+      // Polyfill process.env for the Gemini SDK and WatermelonDB
+      // We specifically define the object to allow 'process.env.KEY' access
       'process.env': {
-        API_KEY: env.API_KEY || process.env.API_KEY
+        API_KEY: env.API_KEY || process.env.API_KEY,
+        NODE_ENV: mode
       },
-      // Some libraries might expect global to be defined
+      // Polyfill global object if needed by legacy libs
       global: 'window',
     },
     optimizeDeps: {
