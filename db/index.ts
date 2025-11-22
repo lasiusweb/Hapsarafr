@@ -1,4 +1,5 @@
 
+
 // ... imports remain same ...
 import { Database } from '@nozbe/watermelondb';
 import { field, text, date, json, relation, children, writer, readonly, nochange } from '@nozbe/watermelondb/decorators';
@@ -9,7 +10,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb/Schema';
 // --- Schema Definition ---
 
 const schema = appSchema({
-  version: 19, // Incremented for Dealer Credit Limit
+  version: 20, // Incremented for Dealer Credit Limit update
   tables: [
     // ... other tables ...
     tableSchema({
@@ -1025,7 +1026,7 @@ const schema = appSchema({
       columns: [
         { name: 'farmer_id', type: 'string' },
         { name: 'trigger_source', type: 'string' },
-        { name: 'type', type: 'string' },
+        { name: 'type', type: 'string' }, 
         { name: 'title', type: 'string' },
         { name: 'description', type: 'string' },
         { name: 'reasoning', type: 'string' },

@@ -73,7 +73,7 @@ export const getInventoryPredictions = (
         }
     });
 
-    // 2. Check Weather (Mock for now, but simulates ground reality trigger)
+    // 2. Check Weather (Simulates ground reality trigger)
     const weather = getMockWeatherData();
     const isRainForecast = weather.rainfallMm > 10 || (weather.forecast && weather.forecast.some(d => d.rainfallMm > 15));
 
@@ -163,8 +163,6 @@ export const getInventoryPredictions = (
     return predictions.sort((a, b) => b.gap - a.gap); // Sort by biggest gap (opportunity) first
 };
 
-// ... Rest of file (getCustomerSegments, analyzeMarketBasket, getSalesTrends) remains identical ...
-// Just re-exporting them to ensure file integrity
 export const getCustomerSegments = (
     farmers: FarmerModel[],
     orders: OrderModel[]

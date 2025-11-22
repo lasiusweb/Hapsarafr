@@ -87,6 +87,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
     const [editingProduct, setEditingProduct] = useState<string | null>(null); // ID of VendorProduct being edited
     const [editValues, setEditValues] = useState({ price: '', stock: '' });
     const [searchQuery, setSearchQuery] = useState('');
+    const [isListening, setIsListening] = useState(false);
 
     // Vendor/Dealer Context
     const vendorQuery = useMemo(() => database.get<VendorModel>('vendors').query(Q.where('user_id', currentUser.id)), [database, currentUser.id]);
@@ -269,12 +270,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
             alert("Voice search not supported in this browser.");
             return;
         }
+        setIsListening(true);
         const recognition = new (window as any).webkitSpeechRecognition();
         recognition.lang = 'en-US';
         recognition.onresult = (event: any) => {
             const transcript = event.results[0][0].transcript;
             setSearchQuery(transcript);
+            setIsListening(false);
         };
+        recognition.onerror = () => setIsListening(false);
+        recognition.onend = () => setIsListening(false);
         recognition.start();
     };
 
@@ -343,7 +348,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
 
                 {activeTab === 'orders' && (
                     <div className="space-y-4">
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 relative">
                             <input 
                                 type="text" 
                                 value={searchQuery}
@@ -351,9 +356,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                                 placeholder="Search orders..." 
                                 className="flex-1 p-2 border rounded-lg text-sm"
                             />
-                            <button onClick={handleVoiceSearch} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300">
-                                🎤
+                            <button onClick={handleVoiceSearch} className={`p-2 rounded-lg transition-all ${isListening ? 'bg-red-100 text-red-600 animate-pulse ring-2 ring-red-400' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`} title="Voice Search">
+                                {isListening ? '🛑' : '🎤'}
                             </button>
+                            {isListening && <span className="absolute -bottom-5 right-0 text-xs text-red-500 font-bold">Listening...</span>}
                         </div>
 
                         <h2 className="text-lg font-bold text-gray-800">Active Orders</h2>
@@ -405,7 +411,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                             <button onClick={() => setIsAddProductModalOpen(true)} className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-bold shadow-sm hover:bg-green-700">+ Add Product</button>
                          </div>
                          
-                         <div className="flex gap-2">
+                         <div className="flex gap-2 relative">
                             <input 
                                 type="text" 
                                 value={searchQuery}
@@ -413,9 +419,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ onBack, currentUser }) 
                                 placeholder="Search inventory..." 
                                 className="flex-1 p-2 border rounded-lg text-sm"
                             />
-                             <button onClick={handleVoiceSearch} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300">
-                                🎤
+                             <button onClick={handleVoiceSearch} className={`p-2 rounded-lg transition-all ${isListening ? 'bg-red-100 text-red-600 animate-pulse ring-2 ring-red-400' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`} title="Voice Search">
+                                {isListening ? '🛑' : '🎤'}
                             </button>
+                            {isListening && <span className="absolute -bottom-5 right-0 text-xs text-red-500 font-bold">Listening...</span>}
                         </div>
                          
                          <div className="space-y-3">

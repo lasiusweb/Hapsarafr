@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Farmer, KhataRecord, KhataTransactionType } from '../types';
 import { useDatabase } from '../DatabaseContext';
@@ -240,7 +242,13 @@ const KhataScreen: React.FC<KhataScreenProps> = ({ currentUser, vendor }) => {
             const action = entryMode === 'CREDIT' ? 'Added Credit' : 'Received Payment';
             const newBalance = calculateBalance(allRecords.map(r => r._raw as any).filter(r => r.farmerId === selectedFarmerId)) + (entryMode === 'CREDIT' ? amount : -amount);
             
-            const msg = `🧾 *Hapsara Digital Khata*\n\nNamaste ${farmer.fullName},\n\n${action}: *${formatCurrency(amount)}*\nFor: ${notes || 'General'}\n\n💰 *Current Balance: ${formatCurrency(newBalance)}*\n\nView your full ledger on the Hapsara App.`;
+            let msg = `🧾 *Hapsara Digital Khata*\n\nNamaste ${farmer.fullName},\n\n${action}: *${formatCurrency(amount)}*\nFor: ${notes || 'General'}`;
+            
+            if (dueDate) {
+                msg += `\n📅 *Due Date: ${new Date(dueDate).toLocaleDateString()}*`;
+            }
+            
+            msg += `\n\n💰 *Current Balance: ${formatCurrency(newBalance)}*\n\nView your full ledger on the Hapsara App.`;
             
             const link = generateWhatsAppLink(farmer.mobileNumber, msg);
             

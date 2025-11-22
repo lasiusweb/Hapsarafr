@@ -1,3 +1,4 @@
+
 import { KhataRecord, Farmer, KhataTransactionType } from '../types';
 
 // --- Types ---
@@ -139,20 +140,4 @@ export const generateSmartReminder = (farmer: Farmer, balance: number): { should
         message: '',
         urgency: 'LOW'
     };
-};
-
-// --- Security Helpers (Simulation) ---
-// In production, use Web Crypto API (SubtleCrypto)
-export const encryptData = (text: string, pin: string): string => {
-    // Mock XOR encryption for demo "Ground Reality"
-    // DO NOT USE IN PRODUCTION
-    return btoa(text.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ pin.charCodeAt(i % pin.length))).join(''));
-};
-
-export const decryptData = (cipher: string, pin: string): string => {
-    try {
-        return atob(cipher).split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ pin.charCodeAt(i % pin.length))).join('');
-    } catch (e) {
-        return "Error Decrypting";
-    }
 };
