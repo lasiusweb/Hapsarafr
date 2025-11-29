@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod } from '../types';
 import { GEO_DATA } from '../data/geoData';

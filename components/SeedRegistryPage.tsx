@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
@@ -143,80 +144,4 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
                 </div>
 
                 <div className="bg-white rounded-lg shadow-md p-4 mb-8">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input 
-                            type="text" 
-                            placeholder="Search varieties..." 
-                            value={searchQuery} 
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-md"
-                        />
-                         <CustomSelect 
-                            options={[{value: '', label: 'All Types'}, ...Object.values(SeedType).map(t => ({ value: t, label: t.replace('_', ' ') }))]} 
-                            value={filterType} 
-                            onChange={setFilterType} 
-                            placeholder="Filter by Seed Type"
-                        />
-                        <div className="flex items-center text-sm text-gray-500 px-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
-                            Scores are based on real-world farmer feedback.
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredSeeds.map(seed => (
-                        <SeedCard 
-                            key={seed.id} 
-                            seed={seed as any} 
-                            performanceScore={seedScores[seed.id] || 0} 
-                            onClick={() => setSelectedSeed(seed as any)} 
-                        />
-                    ))}
-                     {filteredSeeds.length === 0 && (
-                        <div className="col-span-full text-center py-20 bg-white rounded-lg shadow-sm border border-dashed">
-                            <p className="text-gray-500">No seed varieties found. Be the first to add one!</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-            
-            {selectedSeed && (
-                <SeedPassport 
-                    seed={selectedSeed} 
-                    onClose={() => setSelectedSeed(null)} 
-                    isEditable={selectedSeed.ownerFarmerId === currentUser.id || currentUser.groupId.includes('admin')}
-                />
-            )}
-            
-            {isRegistrationOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6">
-                        <h2 className="text-xl font-bold mb-4">Register Indigenous Variety</h2>
-                        <form onSubmit={(e) => { e.preventDefault(); handleRegistration({ name: (e.target as any).name.value, seedType: SeedType.Traditional, description: (e.target as any).description.value, daysToMaturity: '120' }); }}>
-                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Variety Name</label>
-                                    <input name="name" required className="w-full p-2 border rounded" placeholder="e.g. Warangal Red Rice" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Description / History</label>
-                                    <textarea name="description" required className="w-full p-2 border rounded" rows={3} placeholder="Describe characteristics and history..." />
-                                </div>
-                                <div className="bg-blue-50 p-3 rounded text-sm text-blue-800">
-                                    AI Analysis: In a future update, you will be able to upload a photo here to auto-fill traits using Gemini Vision.
-                                </div>
-                             </div>
-                             <div className="mt-6 flex justify-end gap-2">
-                                 <button type="button" onClick={() => setIsRegistrationOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-                                 <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded">Register Passport</button>
-                             </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-export default SeedRegistryPage;
+                    <div className="grid grid-cols-1 md:grid-cols-3

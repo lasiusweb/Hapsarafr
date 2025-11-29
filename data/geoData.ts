@@ -1,4 +1,4 @@
-// FIX: Import from the newly created types.ts file
+
 import { District } from '../types';
 
 export const GEO_DATA: District[] = [
@@ -436,52 +436,4 @@ export const GEO_DATA: District[] = [
             { code: '08', name: 'Edjarlapalle (G)' },
             { code: '09', name: 'Edjarlapalle (Z)' },
             { code: '10', name: 'Gumm' },
-            { code: '11', name: 'Janagalapalli (G)' },
-            { code: '12', name: 'Kacharam (G)' },
-            { code: '13', name: 'Kongala (G)' },
-            { code: '14', name: 'Koppusuru' },
-            { code: '15', name: 'Koyaveerapuram (G)' },
-            { code: '16', name: 'Laksh' },
-            { code: '17', name: 'Lingapeta' },
-            { code: '18', name: 'Morumuru (G)' },
-            { code: '19', name: 'Mutharam (Chowk)' },
-            { code: '20', name: 'Nagaram (G)' },
-            { code: '21', name: 'Padigapuram (Z)' },
-            { code: '22', name: 'Peddagollagu' },
-            { code: '23', name: 'Pragallapalle (Z)' },
-            { code: '24', name: 'Pusur Patch - I' },
-            { code: '25', name: 'Wazeed (G)' },
-            { code: '26', name: 'Ippagudem (G)' },
-        ],
-      },
-    ],
-  },
-  {
-    code: 'W',
-    name: 'Warangal',
-    mandals: [
-      {
-        code: '01',
-        name: 'Khila Warangal',
-        villages: [
-          { code: '01', name: 'Bollikunta' },
-          { code: '02', name: 'Gadepalli' },
-          { code: '03', name: 'Mamnoor' },
-          { code: '04', name: 'Stambampalle' },
-          { code: '05', name: 'Thimmapur (haveli)' },
-          { code: '06', name: 'Vasanthapur' },
-          { code: '07', name: 'Waranagal Fort' },
-        ],
-      },
-      {
-        code: '02',
-        name: 'Warangal',
-        villages: [
-          { code: '01', name: 'Enumamula' },
-          { code: '02', name: 'Kothapet' },
-          { code: '03', name: 'Paidipalle' },
-        ],
-      },
-    ],
-  },
-];
+            { code: '11',

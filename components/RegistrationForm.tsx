@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType, User } from '../types';
 import ConfirmationModal from './ConfirmationModal';
@@ -419,12 +420,25 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
             const regYear = new Date(formData.registrationDate).getFullYear().toString().slice(-2);
             const asoId = `SO${regYear}${formData.district}${formData.mandal}${Math.floor(100 + Math.random() * 900)}`;
             
+            // Generate a unique Hapsara ID (HAP ID)
+            // Format: HAP + Year(2) + District + Mandal + Village + Random(4)
+            const hapId = `HAP${regYear}${formData.district}${formData.mandal}${formData.village}${Math.floor(1000 + Math.random() * 9000)}`;
+            
             // Clean up temporary address fields before preparing final data object
             const { street, city, state, zip, ...finalData } = formData;
 
             if (mode === 'create') {
                 const newId = crypto.randomUUID(); // Ground Reality: Use UUIDv4 for offline safety
-                farmerData = { ...finalData, id: newId, asoId, createdAt: now, updatedAt: now, createdBy: currentUser.id, tenantId: currentUser.tenantId };
+                farmerData = { 
+                    ...finalData, 
+                    id: newId, 
+                    asoId, 
+                    hap_id: hapId, // Assign the generated HAP ID
+                    createdAt: now, 
+                    updatedAt: now, 
+                    createdBy: currentUser.id, 
+                    tenantId: currentUser.tenantId 
+                };
             } else {
                 farmerData = { ...existingFarmer!, ...finalData, updatedAt: now, updatedBy: currentUser.id };
             }
@@ -551,6 +565,7 @@ export default function RegistrationForm({ onSubmit, onCancel, existingFarmers, 
                     {/* Personal Details */}
                     <div className="mb-4">
                         <h4 className="font-bold text-gray-800 mb-2">Personal Details</h4>
+                        <DetailItem label="Generated HAP ID" value={preparedFarmerData.hap_id} />
                         <DetailItem label="Full Name" value={preparedFarmerData.fullName} />
                         <DetailItem label="Father/Husband Name" value={preparedFarmerData.fatherHusbandName} />
                         <DetailItem label="Gender" value={preparedFarmerData.gender} />

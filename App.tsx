@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -72,6 +74,7 @@ const SamridhiDashboard = lazy(() => import('./components/SamridhiDashboard'));
 const SeedRegistryPage = lazy(() => import('./components/SeedRegistryPage'));
 const PerformanceTracker = lazy(() => import('./components/PerformanceTracker'));
 const CommoditexDashboard = lazy(() => import('./components/CommoditexDashboard'));
+const IoTManagementPage = lazy(() => import('./components/IoTManagementPage'));
 
 // Wrapper to provide navigation prop to existing components and handle params
 const RouteWrapper = ({ 
@@ -214,6 +217,14 @@ const AppContent = () => {
         return (
             <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading Hapsara Mitra...</div>}>
                 <MitraDashboard onBack={() => navigate('/')} currentUser={currentUser} />
+            </Suspense>
+        );
+    }
+    
+    if (location.pathname === '/pulse') {
+        return (
+            <Suspense fallback={<div className="flex items-center justify-center h-screen text-white bg-gray-900">Loading Pulse Command...</div>}>
+                <IoTManagementPage onBack={() => navigate('/')} currentUser={currentUser} />
             </Suspense>
         );
     }

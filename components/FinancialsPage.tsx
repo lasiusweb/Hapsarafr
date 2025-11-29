@@ -1,19 +1,25 @@
 
 
 
-import React, { useState, useMemo, useCallback } from 'react';
+
+
+
+
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import withObservables from '@nozbe/with-observables';
-import { User, Farmer, EntrySource, TransactionStatus, WithdrawalAccount } from '../types';
+import { User, Farmer, EntrySource, TransactionStatus, WithdrawalAccount, LoanApplication, LoanStatus } from '../types';
 import { useDatabase } from '../DatabaseContext';
 import { useQuery } from '../hooks/useQuery';
-import { FarmerModel, WalletModel, WalletTransactionModel, WithdrawalAccountModel, KhataRecordModel, DealerModel } from '../db';
+import { FarmerModel, WalletModel, WalletTransactionModel, WithdrawalAccountModel, KhataRecordModel, DealerModel, FarmPlotModel, HarvestLogModel, TaskModel, LoanApplicationModel } from '../db';
 import { Q } from '@nozbe/watermelondb';
 import CustomSelect from './CustomSelect';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import SendMoneyModal from './SendMoneyModal';
 import WithdrawMoneyModal from './WithdrawMoneyModal';
-import { formatCurrency, calculateReputationScore } from '../lib/utils';
+import { formatCurrency } from '../lib/utils';
 import SubsidyDisbursementModal from './SubsidyDisbursementModal';
+import { calculateCreditScore, CreditScoreResult } from '../lib/financeEngine';
+import LoanApplicationModal from './LoanApplicationModal';
 
 interface FinancialsPageProps {
     allFarmers: Farmer[];
@@ -23,28 +29,69 @@ interface FinancialsPageProps {
     onNavigate: (view: string, param?: string) => void;
 }
 
-const ReputationGauge: React.FC<{ score: number }> = ({ score }) => {
+// --- Credit Score Component ---
+const CreditScorePanel: React.FC<{ result: CreditScoreResult }> = ({ result }) => {
+    const { totalScore, breakdown, rating, maxLoanEligibility } = result;
+    
     let color = 'text-gray-400';
-    let label = 'Unknown';
-    if (score >= 80) { color = 'text-green-600'; label = 'Excellent'; }
-    else if (score >= 60) { color = 'text-blue-600'; label = 'Good'; }
-    else if (score >= 40) { color = 'text-yellow-600'; label = 'Fair'; }
-    else { color = 'text-red-600'; label = 'At Risk'; }
+    let ringColor = 'stroke-gray-200';
+    if (totalScore >= 750) { color = 'text-green-600'; ringColor = 'stroke-green-500'; }
+    else if (totalScore >= 650) { color = 'text-blue-600'; ringColor = 'stroke-blue-500'; }
+    else if (totalScore >= 550) { color = 'text-yellow-600'; ringColor = 'stroke-yellow-500'; }
+    else { color = 'text-red-600'; ringColor = 'stroke-red-500'; }
+
+    // SVG Arc calc
+    const radius = 45;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (totalScore / 850) * circumference;
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 text-center">
-            <p className="text-sm text-gray-500 uppercase tracking-wide font-bold mb-2">Reputation Capital</p>
-            <div className="relative h-32 w-32 mx-auto flex items-center justify-center">
-                <svg className="h-full w-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path className="text-gray-200" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                    <path className={color} strokeDasharray={`${score}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                </svg>
-                <div className="absolute flex flex-col items-center">
-                    <span className={`text-3xl font-extrabold ${color}`}>{score}</span>
-                    <span className="text-xs font-medium text-gray-500">{label}</span>
+        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h3 className="font-bold text-gray-800 text-lg">Credit Health</h3>
+                    <p className="text-xs text-gray-500">Hapsara Proprietary Score</p>
+                </div>
+                <span className={`px-2 py-1 text-xs font-bold rounded border ${color.replace('text', 'bg').replace('600', '100')} ${color.replace('text', 'border').replace('600', '200')} ${color}`}>
+                    {rating}
+                </span>
+            </div>
+
+            <div className="flex items-center gap-6">
+                {/* Gauge */}
+                <div className="relative w-32 h-32 flex-shrink-0">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="8" />
+                        <circle cx="50" cy="50" r={radius} fill="none" className={ringColor} strokeWidth="8" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className={`text-3xl font-extrabold ${color}`}>{totalScore}</span>
+                        <span className="text-[10px] text-gray-400 uppercase">Score</span>
+                    </div>
+                </div>
+
+                {/* Breakdown */}
+                <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    {Object.entries(breakdown).map(([key, val]) => {
+                        const v = val as { score: number; max: number; label: string };
+                        return (
+                            <div key={key}>
+                                <p className="text-gray-500">{v.label}</p>
+                                <div className="w-full bg-gray-100 h-1.5 rounded-full mt-1">
+                                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(v.score / v.max) * 100}%` }}></div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
-            <p className="text-xs text-gray-400 mt-3">Based on on-time payments & verified khata.</p>
+            
+            <div className="mt-4 pt-4 border-t border-dashed">
+                <p className="text-sm text-gray-600 flex justify-between">
+                    <span>Loan Eligibility:</span>
+                    <span className="font-bold text-indigo-700">{formatCurrency(maxLoanEligibility)}</span>
+                </p>
+            </div>
         </div>
     );
 };
@@ -57,11 +104,13 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
 })((props: { 
     farmerId: string, 
     wallets: WalletModel[], 
+    currentUser: User,
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
     onOpenSendMoney: () => void;
     onOpenWithdrawMoney: () => void;
+    onRefresh: () => void;
 }) => {
-    const { farmerId, wallets, setNotification, onOpenSendMoney, onOpenWithdrawMoney } = props;
+    const { farmerId, wallets, currentUser, setNotification, onOpenSendMoney, onOpenWithdrawMoney, onRefresh } = props;
     const wallet = wallets?.[0];
     const database = useDatabase();
     
@@ -69,21 +118,40 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
         wallet ? database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('wallet_id', (wallet as any).id), Q.sortBy('created_at', 'desc')) : database.get<WalletTransactionModel>('wallet_transactions').query(Q.where('id', 'null')),
     [database, wallet]));
     
-    // Fetch Khata Records
-    const khataRecords = useQuery(useMemo(() => database.get<KhataRecordModel>('khata_records').query(Q.where('farmer_id', farmerId), Q.sortBy('created_at', 'desc')), [database, farmerId]));
-    const dealers = useQuery(useMemo(() => database.get<DealerModel>('dealers').query(), [database]));
-    const dealerMap = useMemo(() => new Map(dealers.map(d => [d.id, d.shopName])), [dealers]);
+    // Fetch Data for Credit Engine
+    const farmer = useQuery(useMemo(() => database.get<FarmerModel>('farmers').query(Q.where('id', farmerId)), [database, farmerId]))[0];
+    const plots = useQuery(useMemo(() => database.get<FarmPlotModel>('farm_plots').query(Q.where('farmer_id', farmerId)), [database, farmerId]));
+    // Harvest Logs via Crop Assignments is complex to query directly in one go without heavy joining. 
+    // For MVP, we fetch all harvest logs and filter in JS (assuming local DB isn't huge) or optimize later.
+    // Better: Fetch crop assignments for farmer, then harvest logs for those assignments.
+    const cropAssignments = useQuery(useMemo(() => 
+        plots.length > 0 ? database.get('crop_assignments').query(Q.where('farm_plot_id', Q.oneOf(plots.map(p => p.id)))) : database.get('crop_assignments').query(Q.where('id', 'null')),
+    [database, plots]));
+    const caIds = useMemo(() => cropAssignments.map(ca => ca.id), [cropAssignments]);
+    const harvestLogs = useQuery(useMemo(() => 
+        caIds.length > 0 ? database.get<HarvestLogModel>('harvest_logs').query(Q.where('crop_assignment_id', Q.oneOf(caIds))) : database.get<HarvestLogModel>('harvest_logs').query(Q.where('id', 'null')),
+    [database, caIds]));
+    
+    const tasks = useQuery(useMemo(() => database.get<TaskModel>('tasks').query(Q.where('farmer_id', farmerId)), [database, farmerId]));
+    const khataRecords = useQuery(useMemo(() => database.get<KhataRecordModel>('khata_records').query(Q.where('farmer_id', farmerId)), [database, farmerId]));
+    const loanApplications = useQuery(useMemo(() => database.get<LoanApplicationModel>('loan_applications').query(Q.where('farmer_id', farmerId)), [database, farmerId]));
 
-    const reputationScore = useMemo(() => calculateReputationScore(khataRecords.map(k => k._raw as any)), [khataRecords]);
+    const dealerMap = useMemo(() => new Map(), []); // Simplified for now
 
-    const handleAcknowledgeKhata = async (record: KhataRecordModel) => {
-        await database.write(async () => {
-            await (record as any).update((r: any) => {
-                r.status = 'ACKNOWLEDGED';
-            });
-        });
-        setNotification({ message: 'Debt acknowledged. Reputation updated.', type: 'success' });
-    };
+    // Calculate Credit Score
+    const creditResult = useMemo(() => {
+        if (!farmer) return null;
+        // FIX: Cast raw records to expected types for calculation engine
+        return calculateCreditScore(
+            farmer._raw as unknown as Farmer, 
+            plots.map(p => p._raw as any), 
+            harvestLogs.map(h => h._raw as any), 
+            tasks.map(t => t._raw as any), 
+            khataRecords.map(k => k._raw as any)
+        );
+    }, [farmer, plots, harvestLogs, tasks, khataRecords]);
+
+    const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
 
     const handleCreateWallet = async () => {
         if (!farmerId) return;
@@ -131,34 +199,26 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
                     </div>
                 </div>
                 
-                {/* Khata / Pending Approvals */}
-                <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-                     <div className="p-4 border-b bg-orange-50 flex justify-between items-center">
-                        <h3 className="font-bold text-orange-800 flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            Pending Approvals
-                        </h3>
-                        <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-1 rounded-full">
-                            {khataRecords.filter(r => r.status === 'PENDING').length}
-                        </span>
-                    </div>
-                    <div className="divide-y">
-                        {khataRecords.filter(r => r.status === 'PENDING').map(record => (
-                            <div key={record.id} className="p-4 flex justify-between items-center">
-                                <div>
-                                    <p className="font-bold text-gray-800">{dealerMap.get(record.dealerId) || 'Unknown Dealer'}</p>
-                                    <p className="text-sm text-gray-500">{record.description} • {formatCurrency(record.amount)}</p>
+                {/* Active Loans */}
+                {loanApplications.length > 0 && (
+                     <div className="bg-white rounded-lg shadow-md border border-indigo-100 p-4">
+                        <h3 className="font-bold text-indigo-900 mb-3">Loan Applications</h3>
+                        <div className="space-y-2">
+                            {loanApplications.map(loan => (
+                                <div key={loan.id} className="flex justify-between items-center bg-indigo-50 p-3 rounded">
+                                    <div>
+                                        <p className="font-semibold text-indigo-800">{loan.loanType.replace('_', ' ')}</p>
+                                        <p className="text-xs text-indigo-600">{new Date(loan.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-gray-800">{formatCurrency(loan.amountRequested)}</p>
+                                        <span className="text-xs bg-white px-2 py-0.5 rounded border border-indigo-200 font-bold">{loan.status}</span>
+                                    </div>
                                 </div>
-                                <button onClick={() => handleAcknowledgeKhata(record)} className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 shadow-sm">
-                                    Acknowledge
-                                </button>
-                            </div>
-                        ))}
-                         {khataRecords.filter(r => r.status === 'PENDING').length === 0 && (
-                            <p className="p-6 text-center text-gray-500 text-sm">No pending approvals.</p>
-                         )}
-                    </div>
-                </div>
+                            ))}
+                        </div>
+                     </div>
+                )}
 
                 {/* Transactions */}
                 <div>
@@ -184,19 +244,33 @@ const WalletView = withObservables(['farmerId'], ({ farmerId }: { farmerId: stri
             </div>
 
             <div className="lg:col-span-1 space-y-6">
-                 <ReputationGauge score={reputationScore} />
+                 {creditResult && <CreditScorePanel result={creditResult} />}
                  
-                 {/* Offers based on Reputation */}
-                 {reputationScore > 70 && (
-                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-                        <h4 className="font-bold text-blue-900 mb-2">Offers Unlocked! 🎉</h4>
-                        <ul className="space-y-2 text-sm text-blue-800">
-                            <li className="flex items-center gap-2">✅ <strong>Low Interest BNPL</strong> available at Agri-Store.</li>
-                            <li className="flex items-center gap-2">✅ <strong>Priority Processing</strong> for crop loans.</li>
-                        </ul>
-                     </div>
-                 )}
+                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                     <h4 className="font-bold text-gray-700 mb-3">Financial Actions</h4>
+                     <button 
+                        onClick={() => setIsLoanModalOpen(true)}
+                        className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2 mb-3"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Apply for Loan
+                     </button>
+                     <p className="text-xs text-gray-500 text-center">
+                         Apply for KCC, Equipment finance, or Input credit based on your Hapsara Score.
+                     </p>
+                 </div>
             </div>
+
+            {isLoanModalOpen && farmer && creditResult && (
+                <LoanApplicationModal 
+                    onClose={() => setIsLoanModalOpen(false)}
+                    farmer={farmer._raw as unknown as Farmer}
+                    creditScore={creditResult.totalScore}
+                    maxEligibility={creditResult.maxLoanEligibility}
+                    currentUser={currentUser}
+                    onSuccess={onRefresh}
+                />
+            )}
         </div>
     );
 });
@@ -302,6 +376,11 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
         }
     }, [database, senderWallet, plainWithdrawalAccounts, setNotification]);
     
+    // Refresh handler simply forces re-render by toggling ID slightly if needed, but observables handle it mostly.
+    const handleRefresh = () => {
+         // No-op, observables handle updates
+    };
+
     if (!isOnline) {
          return (
             <div className="p-6 bg-gray-50 min-h-full">
@@ -334,7 +413,14 @@ const FinancialsPage: React.FC<FinancialsPageProps> = ({ allFarmers, onBack, cur
                 </div>
                 
                 {selectedFarmerId ? (
-                    <WalletView farmerId={selectedFarmerId} setNotification={setNotification} onOpenSendMoney={() => setIsSendMoneyModalOpen(true)} onOpenWithdrawMoney={() => setIsWithdrawMoneyModalOpen(true)} />
+                    <WalletView 
+                        farmerId={selectedFarmerId} 
+                        currentUser={currentUser}
+                        setNotification={setNotification} 
+                        onOpenSendMoney={() => setIsSendMoneyModalOpen(true)} 
+                        onOpenWithdrawMoney={() => setIsWithdrawMoneyModalOpen(true)}
+                        onRefresh={handleRefresh}
+                    />
                 ) : (
                     <div className="text-center py-20 text-gray-500 bg-white rounded-lg shadow-md">
                         <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>

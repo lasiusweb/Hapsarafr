@@ -3,6 +3,8 @@
 
 
 
+
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Farmer, FarmerStatus, Filters } from '../types';
 import { GEO_DATA } from '../data/geoData';
@@ -128,7 +130,7 @@ const IntellectusAlerts: React.FC = () => {
     useEffect(() => {
         const checkAlerts = async () => {
             setLoading(true);
-            const newAlerts = [];
+            const newAlerts: { type: 'PEST' | 'WEATHER', title: string, desc: string }[] = [];
 
             // 1. Weather Check (Mocked)
             const weather = getMockWeatherData();
@@ -173,7 +175,7 @@ const IntellectusAlerts: React.FC = () => {
                 console.error("Failed to check pest logs", e);
             }
 
-            setAlerts(newAlerts as any);
+            setAlerts(newAlerts);
             setLoading(false);
         };
         checkAlerts();

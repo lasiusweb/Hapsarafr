@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useMemo } from 'react';
 import { User, Permission, Tenant } from '../types';
 import { withObservables } from '@nozbe/watermelondb/react';
@@ -149,6 +151,12 @@ const SidebarComponent: React.FC<SidebarProps> = ({ currentUser, tenant, permiss
                 <div>
                     <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">System</h3>
                     <ul className="space-y-1">
+                         <li>
+                            <button onClick={() => navigate('/pulse')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${currentPath === '/pulse' ? 'bg-green-900 text-green-400 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
+                                <span className="flex-1 text-left">Hapsara Pulse (IoT)</span>
+                            </button>
+                        </li>
                          {currentUser.groupId === 'group-super-admin' && (
                             <li>
                                 <button onClick={() => navigate('/state-craft')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${currentPath === '/state-craft' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>

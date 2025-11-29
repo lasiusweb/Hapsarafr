@@ -1,6 +1,8 @@
 
 
 
+
+
 import { synchronize } from '@nozbe/watermelondb/sync';
 import database from '../db';
 import { getSupabase } from './supabase';
@@ -89,7 +91,14 @@ export const SYNC_TABLE_ORDER = [
   'benefit_agreements',
   'farmer_associations',
   'territory_assignments',
-  'vendor_associations'
+  'vendor_associations',
+  // New tables
+  'personnel',
+  'interactions',
+  'farmer_crm_profiles',
+  'loan_applications',
+  'credit_score_history',
+  'iot_devices'
 ];
 
 // Helper to process array in chunks (Network Optimization)

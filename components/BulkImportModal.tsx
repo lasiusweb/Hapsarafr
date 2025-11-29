@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod, PlantType } from '../types';
 import { GEO_DATA } from '../data/geoData';
@@ -140,8 +141,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         bankAccountNumber: String(row.bankAccountNumber || '').trim(),
                         ifscCode: String(row.ifscCode || '').trim(),
                         accountVerified: false,
-                        appliedExtent: Number(row.appliedExtent) || 0,
                         approvedExtent: Number(row.approvedExtent) || 0,
+                        appliedExtent: Number(row.appliedExtent) || 0,
                         numberOfPlants: Number(row.numberOfPlants) || 0,
                         methodOfPlantation: (Object.values(PlantationMethod).includes(row.methodOfPlantation) ? row.methodOfPlantation : PlantationMethod.Square) as PlantationMethod,
                         plantType: (Object.values(PlantType).includes(row.plantType) ? row.plantType : PlantType.Imported) as PlantType,
@@ -162,6 +163,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                         createdAt: now,
                         updatedAt: now,
                         tenantId: '', // Will be filled by parent
+                        createdBy: '', // Placeholder, filled by parent/system
                         is_in_ne_region: false,
                         primary_crop: 'Oil Palm',
                         hap_id: '',
@@ -213,7 +215,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                     `;
                     
                     const response = await ai.models.generateContent({
-                        model: 'gemini-2.5-flash', contents: prompt,
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
                         config: { responseMimeType: 'application/json', responseSchema },
                     });
                     
@@ -369,10 +372,10 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onSubmit, ex
                 </div>
                 <div className="bg-gray-900 p-4 flex justify-end gap-4 rounded-b-lg">
                     {step === 'summary' ? (
-                         <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition">Close</button>
+                         <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-50 transition">Close</button>
                     ) : (
                         <>
-                            <button type="button" onClick={onClose} disabled={isProcessing} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition">Cancel</button>
+                            <button type="button" onClick={onClose} disabled={isProcessing} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-50 transition">Cancel</button>
                             {step === 'upload' && <button type="button" onClick={processFile} disabled={!file || isProcessing} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed">Process File</button>}
                             {step === 'review' && <button type="button" onClick={handleConfirmImport} disabled={isProcessing} className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed">Confirm Import</button>}
                         </>
