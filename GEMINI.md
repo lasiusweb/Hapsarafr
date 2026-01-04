@@ -67,4 +67,31 @@ This command compiles the TypeScript code and bundles the assets into the `dist`
 *   **Environment Variables:** Vite's `loadEnv` mechanism is utilized to securely inject environment variables, ensuring that sensitive keys like `API_KEY` are handled correctly during the build process.
 *   **Security Features:** A "kill switch" mechanism is implemented in `App.tsx` that automatically resets the local database and clears `localStorage` after a prolonged period of inactivity (30 days), enhancing data security.
 
-This `GEMINI.md` file provides an overview of the project, its technical stack, how to run it, and key development practices.
+## Inferred Architectural Components and Practices (Based on additional snippets):
+
+Based on analysis of external code snippets provided to Gemini, the Hapsara application likely incorporates the following architectural components and development practices beyond the core React frontend:
+
+### Python Backend (Inferred)
+There are strong indications of a separate Python Flask backend coexisting with or complementing the React frontend and Supabase services. Key characteristics inferred are:
+*   **Framework:** Flask
+*   **Database:** Likely utilizes SQLite or PostgreSQL via SQLAlchemy (given mentions of `SQLALCHEMY_DATABASE_URI`).
+*   **Middleware:** Implements robust security measures including CSRF protection (potentially with Flask-WTF), comprehensive CORS handling, and Content Security Policy (CSP) headers.
+*   **Real-time Communication:** Features Socket.IO integration, suggesting real-time functionalities like chat, notifications, or collaborative tools.
+*   **File Serving:** Capable of serving files, potentially for static assets, user uploads, or documentation.
+*   **Initialization:** Employs a structured `AppInitializer` for managing application paths, environment variables (`.env`), and database configuration, indicating a well-organized Python project structure for backend services or CLI tools.
+*   **Role:** This backend likely handles complex business logic, data processing, integrations with external systems, or provides APIs that are not directly served by Supabase.
+
+### Deployment Strategy (Inferred)
+The presence of a Kubernetes manifest generation tool suggests a sophisticated, containerized deployment strategy for the Hapsara application's various components.
+*   **Containerization:** Both the React frontend (after `npm run build`) and the Python Flask backend would likely be deployed as Docker containers.
+*   **Orchestration:** Kubernetes is used for orchestrating these containers, managing deployments, services, and scaling.
+*   **Manifests:** The `generate_app_manifest` tool is used to create deployment and service YAML files, defining application resources, image URIs, port mappings, resource requests (CPU, memory), replica counts, namespaces, and load balancer schemes (e.g., internal/external).
+*   **CI/CD Integration:** This setup implies an automated CI/CD pipeline that builds container images, generates/updates Kubernetes manifests, and deploys them to a Kubernetes cluster.
+
+### Modular Application Management (Frontend - Inferred)
+The frontend likely supports a modular architecture where various "sub-applications" or features can be dynamically managed.
+*   **Dynamic Registration:** A mechanism exists (`registerApplication`, `unregisterApplication`) to add, remove, or manage different application modules at runtime.
+*   **User Interface:** The `ApplicationsPage` component is designed to display these registered applications in a user-friendly grid, showing titles, descriptions, and images, and allowing navigation (`router.push`) to them.
+*   **Platform Approach:** This suggests Hapsara is not just a single monolithic application but potentially a platform capable of hosting and integrating multiple distinct, manageable features or external applications.
+
+This `GEMINI.md` file provides an overview of the project, its technical stack, how to run it, key development practices, and inferred architectural patterns.
