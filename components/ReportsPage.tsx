@@ -1,15 +1,15 @@
-
-
-
 import React, { useState, useMemo } from 'react';
 import { Farmer, FarmerStatus, PlantationMethod } from '../types';
 import { GEO_DATA } from '../data/geoData';
-import { getGeoName } from '../lib/utils';
+import { getGeoName, farmerModelToPlain } from '../lib/utils';
 import { exportToExcel } from '../lib/export';
 import { GoogleGenAI } from '@google/genai';
+import { useDatabase } from '../DatabaseContext';
+import { FarmerModel } from '../db';
+import { useQuery } from '../hooks/useQuery';
 
 interface ReportsPageProps {
-    allFarmers: Farmer[];
+    allFarmers?: Farmer[]; // Made optional
     onBack: () => void;
 }
 
@@ -71,7 +71,7 @@ const CustomPieChart: React.FC<{ title: string, data: { label: string, value: nu
         <div className="bg-white p-6 rounded-lg shadow-md h-full">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{title}</h3>
             <div className="flex flex-col md:flex-row items-center gap-6">
-                <div 
+                <div
                     className="w-32 h-32 rounded-full"
                     style={{ background: `conic-gradient(${conicGradient})` }}
                     role="img"
@@ -95,6 +95,25 @@ const CustomPieChart: React.FC<{ title: string, data: { label: string, value: nu
 
 
 const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
+
+    const database = useDatabase();
+    // Fetch farmers if allFarmers is not provided or empty
+    const fetchedFarmers = useQuery<FarmerModel>(
+        useMemo(() => {
+            if (allFarmers && allFarmers.length > 0) {
+                // Return a query that returns nothing, as we won't use it
+                return database.get<FarmerModel>('farmers').query(Q.where('id', 'nothing'));
+            }
+            return database.get<FarmerModel>('farmers').query();
+        }, [allFarmers, database])
+    );
+
+    // Combine passed farmers or fetched farmers
+    const combinedFarmers = useMemo(() => {
+        if (allFarmers && allFarmers.length > 0) return allFarmers;
+        return fetchedFarmers.map(f => farmerModelToPlain(f)!);
+    }, [allFarmers, fetchedFarmers]);
+
     const [filters, setFilters] = useState({
         district: '',
         mandal: '',
@@ -119,7 +138,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
         });
         setCurrentPage(1); // Reset page on filter change
     };
-    
+
     const clearFilters = () => {
         setFilters({ district: '', mandal: '', status: '', plantationMethod: '', dateFrom: '', dateTo: '' });
         setCurrentPage(1);
@@ -131,7 +150,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
     }, [filters.district]);
 
     const filteredFarmers = useMemo(() => {
-        return allFarmers.filter(f => {
+        return combinedFarmers.filter(f => {
             if (filters.district && f.district !== filters.district) return false;
             if (filters.mandal && f.mandal !== filters.mandal) return false;
             if (filters.status && f.status !== filters.status) return false;
@@ -144,7 +163,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
             }
             return true;
         });
-    }, [allFarmers, filters]);
+    }, [combinedFarmers, filters]);
 
     // Data processing for charts and stats
     const stats = useMemo(() => {
@@ -164,9 +183,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
             acc[status] = 0;
             return acc;
         }, {} as Record<FarmerStatus, number>);
-        
+
         filteredFarmers.forEach(f => { counts[f.status as FarmerStatus]++; });
-        
+
         const colors = {
             [FarmerStatus.Registered]: '#3b82f6', [FarmerStatus.Sanctioned]: '#f97316',
             [FarmerStatus.Planted]: '#22c55e', [FarmerStatus.PaymentDone]: '#a855f7',
@@ -176,7 +195,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
 
     const methodDistribution = useMemo(() => {
         const counts = { [PlantationMethod.Square]: 0, [PlantationMethod.Triangle]: 0 };
-        filteredFarmers.forEach(f => { 
+        filteredFarmers.forEach(f => {
             if (f.methodOfPlantation === PlantationMethod.Square) counts[PlantationMethod.Square]++;
             if (f.methodOfPlantation === PlantationMethod.Triangle) counts[PlantationMethod.Triangle]++;
         });
@@ -185,10 +204,10 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
             { label: 'Triangle', value: counts[PlantationMethod.Triangle], color: '#fbbf24' },
         ];
     }, [filteredFarmers]);
-    
+
     const genderDistribution = useMemo(() => {
         const counts = { 'Male': 0, 'Female': 0, 'Other': 0 };
-        filteredFarmers.forEach(f => { 
+        filteredFarmers.forEach(f => {
             if (f.gender === 'Male') counts.Male++;
             else if (f.gender === 'Female') counts.Female++;
             else counts.Other++;
@@ -211,7 +230,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                 mandalExtents[f.mandal] += f.approvedExtent || 0;
             }
         });
-        
+
         const colors = ['#818cf8', '#fb923c', '#4ade80', '#f87171', '#38bdf8', '#fbbf24'];
         return Object.entries(mandalExtents)
             .map(([mandalCode, totalExtent], index) => ({
@@ -277,13 +296,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                 Write a brief, insightful report in markdown format. Highlight key trends, significant numbers, and potential areas of success or concern.
                 Structure your report with a main title (e.g., using '#'), a brief overview paragraph, and a few bullet points for key takeaways. Do not invent any data.
             `;
-            
+
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
             });
 
-            setAiReport(response.text);
+            setAiReport(response.text());
 
         } catch (err: any) {
             console.error("Gemini API error:", err);
@@ -292,7 +311,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
             setIsGeneratingReport(false);
         }
     };
-    
+
     // Simple markdown renderer
     const renderMarkdown = (text: string) => {
         return text
@@ -326,7 +345,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                         Back to Dashboard
                     </button>
                 </div>
-                
+
                 <div className="bg-white rounded-lg shadow-md p-4 mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
                         {/* Filters */}
@@ -346,8 +365,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                     {filters.district && <CustomBarChart title={`Total Extent by Mandal in ${getGeoName('district', { district: filters.district })}`} data={extentByMandal} />}
 
                     <div className="bg-white p-6 rounded-lg shadow-md border-2 border-dashed border-gray-300 text-center">
-                         <h3 className="font-bold text-gray-700">Coming Soon: Genetic Variety Performance Report</h3>
-                         <p className="text-sm mt-2 text-gray-500">Analyze the performance of different oil palm genetic varieties across regions to provide data-driven recommendations to farmers.</p>
+                        <h3 className="font-bold text-gray-700">Coming Soon: Genetic Variety Performance Report</h3>
+                        <p className="text-sm mt-2 text-gray-500">Analyze the performance of different oil palm genetic varieties across regions to provide data-driven recommendations to farmers.</p>
                     </div>
 
                     <div className="bg-white p-6 rounded-lg shadow-md">
@@ -355,7 +374,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ allFarmers, onBack }) => {
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2l4.45 1.18a1 1 0 01.548 1.564l-3.6 3.296 1.056 4.882a1 1 0 01-1.479 1.054L12 16.222l-4.12 2.85a1 1 0 01-1.479-1.054l1.056-4.882-3.6-3.296a1 1 0 01.548-1.564L8.854 7.2 10.033 2.744A1 1 0 0112 2z" clipRule="evenodd" /></svg>
                             AI Report Assistant
                         </h3>
-                         <p className="text-sm text-gray-500 mb-4">Ask a question about the current filtered data to get an AI-generated summary.</p>
+                        <p className="text-sm text-gray-500 mb-4">Ask a question about the current filtered data to get an AI-generated summary.</p>
                         <div className="flex flex-col md:flex-row gap-4">
                             <textarea value={aiQuery} onChange={e => setAiQuery(e.target.value)} placeholder="e.g., 'Which status group is the largest?' or 'Highlight any potential issues in this data.'" className="flex-1 p-2 border border-gray-300 rounded-md" rows={2}></textarea>
                             <button onClick={handleGenerateReport} disabled={isGeneratingReport || filteredFarmers.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm disabled:bg-gray-400 flex items-center justify-center gap-2">

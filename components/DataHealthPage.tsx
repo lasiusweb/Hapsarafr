@@ -1,8 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Farmer, FarmerStatus } from '../types';
+import { useDatabase } from '../DatabaseContext';
+import { useQuery } from '../hooks/useQuery';
+import { FarmerModel } from '../db';
+import { farmerModelToPlain } from '../lib/utils';
+import { Q } from '@nozbe/watermelondb';
 
 interface DataHealthPageProps {
-    allFarmers: Farmer[];
+    allFarmers?: Farmer[];
     onNavigate: (path: string) => void;
     onBack: () => void;
 }
@@ -69,12 +74,30 @@ const AccordionCard: React.FC<{ result: HealthCheckResult; onNavigate: (path: st
 
 const DataHealthPage: React.FC<DataHealthPageProps> = ({ allFarmers, onNavigate, onBack }) => {
 
+    const database = useDatabase();
+
+    // Fetch farmers if allFarmers is not provided or empty
+    const fetchedFarmers = useQuery<FarmerModel>(
+        useMemo(() => {
+            if (allFarmers && allFarmers.length > 0) {
+                return database.get<FarmerModel>('farmers').query(Q.where('id', 'nothing'));
+            }
+            return database.get<FarmerModel>('farmers').query();
+        }, [allFarmers, database])
+    );
+
+    // Combine passed farmers or fetched farmers
+    const combinedFarmers = useMemo(() => {
+        if (allFarmers && allFarmers.length > 0) return allFarmers;
+        return fetchedFarmers.map(f => farmerModelToPlain(f)!);
+    }, [allFarmers, fetchedFarmers]);
+
     const healthChecks = useMemo((): HealthCheckResult[] => {
-        const missingBankDetails = allFarmers.filter(f => !f.bankAccountNumber || !f.ifscCode);
-        const unverifiedAccounts = allFarmers.filter(f => f.bankAccountNumber && !f.accountVerified);
-        const missingPlantationDate = allFarmers.filter(f => f.status === FarmerStatus.Planted && !f.plantationDate);
-        const missingPhoto = allFarmers.filter(f => !f.photo);
-        const incorrectPlantDensity = allFarmers.filter(f => {
+        const missingBankDetails = combinedFarmers.filter(f => !f.bankAccountNumber || !f.ifscCode);
+        const unverifiedAccounts = combinedFarmers.filter(f => f.bankAccountNumber && !f.accountVerified);
+        const missingPlantationDate = combinedFarmers.filter(f => f.status === FarmerStatus.Planted && !f.plantationDate);
+        const missingPhoto = combinedFarmers.filter(f => !f.photo);
+        const incorrectPlantDensity = combinedFarmers.filter(f => {
             if (!f.approvedExtent || !f.numberOfPlants || f.approvedExtent < 0.5) return false;
             const expectedPlants = f.approvedExtent * PLANT_DENSITY_PER_ACRE;
             const lowerBound = expectedPlants * (1 - DENSITY_TOLERANCE);
@@ -114,7 +137,7 @@ const DataHealthPage: React.FC<DataHealthPageProps> = ({ allFarmers, onNavigate,
                 icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2.5m3-2.5v-6.5m0 0a1.5 1.5 0 013 0v6.5m0 0a1.5 1.5 0 01-3 0m0 0a1.5 1.5 0 01-3 0m0 0a1.5 1.5 0 013 0" /></svg>,
             },
         ];
-    }, [allFarmers]);
+    }, [combinedFarmers]);
 
 
     return (

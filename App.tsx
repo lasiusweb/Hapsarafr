@@ -23,7 +23,7 @@ import DiscussModeModal from './components/DiscussModeModal';
 const FarmerDirectoryPage = lazy(() => import('./components/FarmerDirectoryPage'));
 const FarmerDetailsPage = lazy(() => import('./components/FarmerDetailsPage'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const SettingsPage = lazy(() => import('./components/AdminPage')); 
+const SettingsPage = lazy(() => import('./components/AdminPage'));
 const ReportsPage = lazy(() => import('./components/ReportsPage'));
 const IdVerificationPage = lazy(() => import('./components/IdVerificationPage'));
 const DataHealthPage = lazy(() => import('./components/DataHealthPage'));
@@ -38,6 +38,7 @@ const PrintQueuePage = lazy(() => import('./components/PrintQueuePage'));
 const ContentManagerPage = lazy(() => import('./components/ContentManagerPage'));
 const CropHealthScannerPage = lazy(() => import('./components/CropHealthScannerPage'));
 const YieldPredictionPage = lazy(() => import('./components/YieldPredictionPage'));
+const FinancialDashboardPage = lazy(() => import('./components/FinancialDashboardPage'));
 const FinancialLedgerPage = lazy(() => import('./components/FinancialLedgerPage'));
 const SatelliteAnalysisPage = lazy(() => import('./components/SatelliteAnalysisPage'));
 const SustainabilityDashboard = lazy(() => import('./components/SustainabilityDashboard'));
@@ -77,43 +78,43 @@ const CommoditexDashboard = lazy(() => import('./components/CommoditexDashboard'
 const IoTManagementPage = lazy(() => import('./components/IoTManagementPage'));
 
 // Wrapper to provide navigation prop to existing components and handle params
-const RouteWrapper = ({ 
-  component: Component, 
-  currentUser, 
-  permissions, 
-  tenants, 
-  users, 
-  setNotification, 
-  ...rest 
+const RouteWrapper = ({
+    component: Component,
+    currentUser,
+    permissions,
+    tenants,
+    users,
+    setNotification,
+    ...rest
 }: any) => {
-  const navigate = useNavigate();
-  const params = useParams();
+    const navigate = useNavigate();
+    const params = useParams();
 
-  // Adapter for legacy onNavigate calls
-  const handleNavigate = (view: string, param?: string) => {
-    if (view === 'farmer-details') navigate(`/farmers/${param}`);
-    else if (view === 'product-list') navigate(`/marketplace/category/${param}`);
-    else if (view === 'order-confirmation') navigate(`/marketplace/order/${param}`);
-    else navigate(`/${view}`);
-  };
+    // Adapter for legacy onNavigate calls
+    const handleNavigate = (view: string, param?: string) => {
+        if (view === 'farmer-details') navigate(`/farmers/${param}`);
+        else if (view === 'product-list') navigate(`/marketplace/category/${param}`);
+        else if (view === 'order-confirmation') navigate(`/marketplace/order/${param}`);
+        else navigate(`/${view}`);
+    };
 
-  const handleBack = () => navigate(-1);
+    const handleBack = () => navigate(-1);
 
-  // Merge params into props so components can access IDs (e.g. farmerId)
-  const mergedProps = { ...rest, ...params };
+    // Merge params into props so components can access IDs (e.g. farmerId)
+    const mergedProps = { ...rest, ...params };
 
-  return (
-    <Component
-      {...mergedProps}
-      currentUser={currentUser}
-      permissions={permissions}
-      tenants={tenants}
-      users={users}
-      setNotification={setNotification}
-      onNavigate={handleNavigate}
-      onBack={handleBack}
-    />
-  );
+    return (
+        <Component
+            {...mergedProps}
+            currentUser={currentUser}
+            permissions={permissions}
+            tenants={tenants}
+            users={users}
+            setNotification={setNotification}
+            onNavigate={handleNavigate}
+            onBack={handleBack}
+        />
+    );
 };
 
 // Main App Content (Inside Router)
@@ -147,7 +148,7 @@ const AppContent = () => {
         const checkSecurity = async () => {
             const lastActiveStr = localStorage.getItem('hapsara_last_active');
             const now = Date.now();
-            const MAX_INACTIVITY = 30 * 24 * 60 * 60 * 1000; 
+            const MAX_INACTIVITY = 30 * 24 * 60 * 60 * 1000;
 
             if (lastActiveStr) {
                 const lastActive = parseInt(lastActiveStr, 10);
@@ -173,31 +174,31 @@ const AppContent = () => {
             const allUsers = await usersCollection.query().fetch();
             const plainUsers = allUsers.map(u => ({ ...u._raw } as unknown as User));
             setUsers(plainUsers);
-            
+
             const tenantsCollection = database.get<TenantModel>('tenants');
             const allTenants = await tenantsCollection.query().fetch();
             const plainTenants = allTenants.map(t => ({ ...t._raw } as unknown as Tenant));
             setTenants(plainTenants);
 
-             if (plainUsers.length > 0 && !currentUser) {
-                 const user = plainUsers[0];
-                 setCurrentUser(user);
-                 const tenant = plainTenants.find(t => t.id === user.tenantId) || null;
-                 setCurrentTenant(tenant);
+            if (plainUsers.length > 0 && !currentUser) {
+                const user = plainUsers[0];
+                setCurrentUser(user);
+                const tenant = plainTenants.find(t => t.id === user.tenantId) || null;
+                setCurrentTenant(tenant);
 
-                 try {
+                try {
                     const group = await database.get<GroupModel>('groups').find(user.groupId);
                     setPermissions(new Set(JSON.parse(group.permissionsStr || '[]')));
-                 } catch (e) {
-                     setPermissions(new Set());
-                 }
-             }
+                } catch (e) {
+                    setPermissions(new Set());
+                }
+            }
         };
         checkAuth();
     }, [database, currentUser]);
 
     const handleNavigate = (path: string) => navigate(`/${path}`);
-    
+
     const handleLogout = () => {
         setCurrentUser(null);
         setCurrentTenant(null);
@@ -211,7 +212,7 @@ const AppContent = () => {
         }
         return <LoginScreen supabase={getSupabase()} />;
     }
-    
+
     // Standalone Fullscreen Views
     if (location.pathname === '/mitra') {
         return (
@@ -220,7 +221,7 @@ const AppContent = () => {
             </Suspense>
         );
     }
-    
+
     if (location.pathname === '/pulse') {
         return (
             <Suspense fallback={<div className="flex items-center justify-center h-screen text-white bg-gray-900">Loading Pulse Command...</div>}>
@@ -231,8 +232,8 @@ const AppContent = () => {
 
     return (
         <div className="flex h-screen bg-gray-100 font-sans">
-             <Sidebar 
-                currentUser={currentUser} 
+            <Sidebar
+                currentUser={currentUser}
                 permissions={permissions}
                 isOnline={isOnline}
                 printQueueLength={printQueue.length}
@@ -241,33 +242,34 @@ const AppContent = () => {
                 onOpenDiscuss={() => setIsDiscussModeOpen(true)}
             />
             <main className="flex-1 overflow-y-auto relative">
-                 {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
-                 <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
+                {notification && <Notification message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
+                <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
                     <Routes>
                         <Route path="/" element={<RouteWrapper component={Dashboard} farmers={[]} onNavigateWithFilter={(v: string, f: any) => { console.log(f); navigate('/farmer-directory'); }} />} />
                         <Route path="/dashboard" element={<RouteWrapper component={Dashboard} farmers={[]} onNavigateWithFilter={(v: string, f: any) => { console.log(f); navigate('/farmer-directory'); }} />} />
-                        
+
                         <Route path="/farmer-directory" element={<RouteWrapper component={FarmerDirectoryPage} users={users} tenants={tenants} currentUser={currentUser} permissions={permissions} newlyAddedFarmerId={newlyAddedFarmerId} onHighlightComplete={() => setNewlyAddedFarmerId(null)} setNotification={setNotification} />} />
-                        
+
                         {/* Parameterized Routes */}
                         <Route path="/farmers/:farmerId" element={<RouteWrapper component={FarmerDetailsPage} users={users} currentUser={currentUser} permissions={permissions} tenants={tenants} setNotification={setNotification} allTenants={tenants} allTerritories={[]} />} />
-                        
-                        <Route path="/settings" element={<RouteWrapper component={SettingsPage} users={users} groups={[]} currentUser={currentUser} onSaveUsers={async () => {}} onSaveGroups={async () => {}} setNotification={setNotification} />} />
+
+                        <Route path="/settings" element={<RouteWrapper component={SettingsPage} users={users} groups={[]} currentUser={currentUser} onSaveUsers={async () => { }} onSaveGroups={async () => { }} setNotification={setNotification} />} />
                         <Route path="/reports" element={<RouteWrapper component={ReportsPage} allFarmers={[]} />} />
                         <Route path="/id-verification" element={<RouteWrapper component={IdVerificationPage} allFarmers={[]} />} />
                         <Route path="/data-health" element={<RouteWrapper component={DataHealthPage} allFarmers={[]} />} />
                         <Route path="/geo-management" element={<RouteWrapper component={GeoManagementPage} />} />
                         <Route path="/schema-manager" element={<RouteWrapper component={SchemaManagerPage} />} />
                         <Route path="/tenant-management" element={<RouteWrapper component={TenantManagementPage} />} />
-                        <Route path="/profile" element={<RouteWrapper component={ProfilePage} currentUser={currentUser} groups={[]} onSave={async () => {}} setNotification={setNotification} />} />
+                        <Route path="/profile" element={<RouteWrapper component={ProfilePage} currentUser={currentUser} groups={[]} onSave={async () => { }} setNotification={setNotification} />} />
                         <Route path="/usage-analytics" element={<RouteWrapper component={UsageAnalyticsPage} currentUser={currentUser} supabase={getSupabase()} />} />
                         <Route path="/billing" element={<RouteWrapper component={BillingPage} currentUser={currentUser} currentTenant={currentTenant!} setNotification={setNotification} />} />
                         <Route path="/subscription-management" element={<RouteWrapper component={SubscriptionManagementPage} currentUser={currentUser} />} />
-                        <Route path="/print-queue" element={<RouteWrapper component={PrintQueuePage} queuedFarmerIds={printQueue} users={users} onRemove={() => {}} onClear={() => setPrintQueue([])} />} />
-                        <Route path="/content-manager" element={<RouteWrapper component={ContentManagerPage} supabase={getSupabase()} currentContent={appContent} onContentSave={() => {}} />} />
+                        <Route path="/print-queue" element={<RouteWrapper component={PrintQueuePage} queuedFarmerIds={printQueue} users={users} onRemove={() => { }} onClear={() => setPrintQueue([])} />} />
+                        <Route path="/content-manager" element={<RouteWrapper component={ContentManagerPage} supabase={getSupabase()} currentContent={appContent} onContentSave={() => { }} />} />
                         <Route path="/crop-health" element={<RouteWrapper component={CropHealthScannerPage} currentUser={currentUser} setNotification={setNotification} />} />
                         <Route path="/yield-prediction" element={<RouteWrapper component={YieldPredictionPage} allFarmers={[]} />} />
                         <Route path="/financial-ledger" element={<RouteWrapper component={FinancialLedgerPage} allFarmers={[]} currentUser={currentUser} />} />
+                        <Route path="/financial-dashboard" element={<RouteWrapper component={FinancialDashboardPage} />} />
                         <Route path="/satellite-analysis" element={<RouteWrapper component={SatelliteAnalysisPage} />} />
                         <Route path="/sustainability" element={<RouteWrapper component={SustainabilityDashboard} />} />
                         <Route path="/tasks" element={<RouteWrapper component={TaskManagementPage} currentUser={currentUser} allDirectives={[]} allTenants={tenants} allTerritories={[]} />} />
@@ -287,12 +289,12 @@ const AppContent = () => {
                         <Route path="/community-forum" element={<RouteWrapper component={CommunityForumPage} currentUser={currentUser} setNotification={setNotification} />} />
                         <Route path="/mentorship" element={<RouteWrapper component={MentorshipPage} currentUser={currentUser} setNotification={setNotification} />} />
                         <Route path="/marketplace" element={<RouteWrapper component={MarketplacePage} currentUser={currentUser} />} />
-                        
+
                         <Route path="/marketplace/category/:categoryId" element={<RouteWrapper component={ProductListPage} currentUser={currentUser} />} />
                         <Route path="/vendor-management" element={<RouteWrapper component={VendorManagementPage} currentUser={currentUser} setNotification={setNotification} />} />
                         <Route path="/checkout" element={<RouteWrapper component={CheckoutPage} onOrderPlaced={() => navigate('/marketplace/order/confirmed')} />} />
                         <Route path="/marketplace/order/:orderId" element={<RouteWrapper component={OrderConfirmationPage} />} />
-                        
+
                         <Route path="/agri-store" element={<RouteWrapper component={AgriStorePage} />} />
                         <Route path="/climate-resilience" element={<RouteWrapper component={CaelusDashboard} />} />
                         <Route path="/hapsara-nexus" element={<RouteWrapper component={HapsaraNexusPage} currentUser={currentUser} />} />
@@ -303,14 +305,14 @@ const AppContent = () => {
                         <Route path="/genetica" element={<RouteWrapper component={SeedRegistryPage} currentUser={currentUser} />} />
                         <Route path="/performance-tracker" element={<RouteWrapper component={PerformanceTracker} currentUser={currentUser} />} />
                         <Route path="/commoditex" element={<RouteWrapper component={CommoditexDashboard} currentUser={currentUser} />} />
-                        
+
                         <Route path="*" element={<RouteWrapper component={NotFoundPage} />} />
                     </Routes>
-                 </Suspense>
+                </Suspense>
             </main>
 
             {/* Global Modals */}
-            <SupabaseSettingsModal isOpen={isSupabaseSettingsOpen} onClose={() => setIsSupabaseSettingsOpen(false)} onConnect={() => {}} />
+            <SupabaseSettingsModal isOpen={isSupabaseSettingsOpen} onClose={() => setIsSupabaseSettingsOpen(false)} onConnect={() => { }} />
             <HelpModal onClose={() => setIsHelpModalOpen(false)} appContent={appContent} />
             <PrivacyModal onClose={() => setIsPrivacyModalOpen(false)} appContent={appContent} />
             <FeedbackModal onClose={() => setIsFeedbackModalOpen(false)} />
