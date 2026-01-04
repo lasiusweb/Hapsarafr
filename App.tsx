@@ -14,6 +14,8 @@ import AppModals from './components/AppModals';
 import { useAuth } from './hooks/useAuth';
 import { useSecurityKillSwitch } from './hooks/useSecurityKillSwitch';
 import { useNotification } from './hooks/useNotification';
+import { useAppModals } from './hooks/useAppModals';
+import { useAppState } from './hooks/useAppState';
 import AppRoutes from './routes/AppRoutes'; // Import the new AppRoutes component
 
 // Main App Content (Inside Router)
@@ -39,19 +41,27 @@ const AppContent = () => {
     } = useAuth();
 
     const { notification, setNotification, dismissNotification } = useNotification();
-    const [printQueue, setPrintQueue] = useState<string[]>([]);
-    const [newlyAddedFarmerId, setNewlyAddedFarmerId] = useState<string | null>(null);
+    const {
+        printQueue,
+        setPrintQueue,
+        newlyAddedFarmerId,
+        setNewlyAddedFarmerId,
+        appContent,
+        setAppContent,
+        onHighlightComplete,
+        onClearPrintQueue,
+    } = useAppState();
 
     const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
-    const [appContent, setAppContent] = useState<any>(null);
 
-    // Modals state, pass setters to AppModals to manage open/close
-    const [isSupabaseSettingsOpen, setIsSupabaseSettingsOpen] = useState(false);
-    const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-    const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
-    const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-    const [isInvitationModalOpen, setIsInvitationModalOpen] = useState(false);
-    const [isDiscussModeOpen, setIsDiscussModeOpen] = useState(false);
+    const {
+        isSupabaseSettingsOpen, openSupabaseSettings, closeSupabaseSettings,
+        isHelpModalOpen, openHelpModal, closeHelpModal,
+        isPrivacyModalOpen, openPrivacyModal, closePrivacyModal,
+        isFeedbackModalOpen, openFeedbackModal, closeFeedbackModal,
+        isInvitationModalOpen, openInvitationModal, closeInvitationModal,
+        isDiscussModeOpen, openDiscussModal, closeDiscussModal,
+    } = useAppModals();
 
     useSecurityKillSwitch(); // Use the new hook
 
@@ -76,8 +86,8 @@ const AppContent = () => {
                 isOnline={isOnline}
                 printQueueLength={printQueue.length}
                 onLogout={handleLogout}
-                onOpenHelp={() => setIsHelpModalOpen(true)}
-                onOpenDiscuss={() => setIsDiscussModeOpen(true)}
+                onOpenHelp={openHelpModal}
+                onOpenDiscuss={openDiscussModal}
             />
             <main className="flex-1 overflow-y-auto relative">
                 {notification && <Notification message={notification.message} type={notification.type} onDismiss={dismissNotification} />}
@@ -89,7 +99,7 @@ const AppContent = () => {
                     setNotification={setNotification}
                     printQueue={printQueue}
                     newlyAddedFarmerId={newlyAddedFarmerId}
-                    onHighlightComplete={() => setNewlyAddedFarmerId(null)}
+                    onHighlightComplete={onHighlightComplete}
                     appContent={appContent}
                 />
             </main>
@@ -97,17 +107,17 @@ const AppContent = () => {
             {/* Global Modals */}
             <AppModals
                 isSupabaseSettingsOpen={isSupabaseSettingsOpen}
-                setIsSupabaseSettingsOpen={setIsSupabaseSettingsOpen}
+                setIsSupabaseSettingsOpen={closeSupabaseSettings}
                 isHelpModalOpen={isHelpModalOpen}
-                setIsHelpModalOpen={setIsHelpModalOpen}
+                setIsHelpModalOpen={closeHelpModal}
                 isPrivacyModalOpen={isPrivacyModalOpen}
-                setIsPrivacyModalOpen={setIsPrivacyModalOpen}
+                setIsPrivacyModalOpen={closePrivacyModal}
                 isFeedbackModalOpen={isFeedbackModalOpen}
-                setIsFeedbackModalOpen={setIsFeedbackModalOpen}
+                setIsFeedbackModalOpen={closeFeedbackModal}
                 isInvitationModalOpen={isInvitationModalOpen}
-                setIsInvitationModalOpen={setIsInvitationModalOpen}
+                setIsInvitationModalOpen={closeInvitationModal}
                 isDiscussModeOpen={isDiscussModeOpen}
-                setIsDiscussModeOpen={setIsDiscussModeOpen}
+                setIsDiscussModeOpen={closeDiscussModal}
                 currentUser={currentUser}
                 appContent={appContent}
             />
