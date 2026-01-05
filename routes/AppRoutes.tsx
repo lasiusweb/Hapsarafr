@@ -51,7 +51,7 @@ const CheckoutPage = lazy(() => import('../components/CheckoutPage'));
 const OrderConfirmationPage = lazy(() => import('../components/OrderConfirmationPage'));
 const AgriStorePage = lazy(() => import('../components/AgriStorePage'));
 const CaelusDashboard = lazy(() => import('../components/CaelusDashboard'));
-const HapsaraNexusPage = lazy(() => import import('../components/HapsaraNexusPage'));
+const HapsaraNexusPage = lazy(() => import('../components/HapsaraNexusPage'));
 const StateCraftDashboard = lazy(() => import('../components/StateCraftDashboard'));
 const FamilyShield = lazy(() => import('../components/FamilyShield'));
 const RealtyPage = lazy(() => import('../components/RealtyPage'));
