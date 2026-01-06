@@ -9,7 +9,7 @@ This plan outlines the phases and tasks required to enhance the data synchroniza
 ### Tasks
 
 -   [x] **Task:** Analyze the existing data synchronization logic between WatermelonDB and Supabase for farmer records. [9cd2eb6]
--   [ ] **Task:** Research and document different conflict resolution strategies (e.g., last-write-wins, three-way merge, operational transformation).
+-   [x] **Task:** Research and document different conflict resolution strategies (e.g., last-write-wins, three-way merge, operational transformation). [945680d]
 -   [ ] **Task:** Design a conflict resolution mechanism suitable for the project's needs, and document the proposed architecture.
 -   [ ] **Task:** Design the UI/UX for user notifications regarding synchronization status and conflicts.
 -   [ ] **Task:** Conductor - User Manual Verification 'Analysis and Design' (Protocol in workflow.md)
