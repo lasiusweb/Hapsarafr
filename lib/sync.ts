@@ -125,7 +125,7 @@ export const sync = async () => {
                 console.log("Sync: Pulling changes since", lastPulledAt);
                 
                 const changes: any = {};
-                let timestamp = new Date().getTime();
+                const timestamp = new Date().getTime();
                 
                 // Turbo-Sync: Process in batches to prevent timeouts on low-bandwidth
                 const tableBatches = chunkArray(SYNC_TABLE_ORDER, 5);
@@ -146,10 +146,12 @@ export const sync = async () => {
                                  changes[table] = { created: [], updated: [], deleted: [] };
                                  return;
                             }
+                            
+                            const updated = (data || []).map(r => ({ ...r, server_modified_at: new Date(r.updated_at).getTime() }));
 
                             changes[table] = {
                                 created: [], 
-                                updated: data || [],
+                                updated: updated,
                                 deleted: [], 
                             };
                         } catch (e) {
@@ -169,15 +171,48 @@ export const sync = async () => {
                     if (!changeSet) continue;
 
                     if (changeSet.created.length > 0) {
-                        const records = changeSet.created.map(r => r._raw);
+                        const records = changeSet.created.map(r => {
+                            const { server_modified_at, ...rest } = r._raw;
+                            return rest;
+                        });
                         const { error } = await supabase.from(table).upsert(records);
                         if (error) console.error(`Push create error ${table}:`, error);
                     }
 
                     if (changeSet.updated.length > 0) {
-                        const records = changeSet.updated.map(r => r._raw);
-                        const { error } = await supabase.from(table).upsert(records);
-                        if (error) console.error(`Push update error ${table}:`, error);
+                        for (const record of changeSet.updated) {
+                            const { data: serverRecord, error: fetchError } = await supabase
+                                .from(table)
+                                .select('updated_at')
+                                .eq('id', record.id);
+
+                            if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = 'exact one row not found'
+                                console.error(`Error fetching server record for conflict check:`, fetchError);
+                                continue; // or handle error more gracefully
+                            }
+
+                            const serverModifiedAt = serverRecord && serverRecord.length > 0 ? new Date(serverRecord[0].updated_at).getTime() : 0;
+                            const clientLastPulledAt = (record as any).server_modified_at || 0;
+
+                            if (serverModifiedAt > clientLastPulledAt) {
+                                // Conflict detected
+                                console.log(`Conflict detected for record ${record.id} in table ${table}. Logging to conflicts table.`);
+                                const { data: fullServerRecord } = await supabase.from(table).select('*').eq('id', record.id);
+                                await supabase.from('conflicts').insert([{
+                                    table_name: table,
+                                    record_id: record.id,
+                                    client_record: record._raw,
+                                    server_record: fullServerRecord && fullServerRecord.length > 0 ? fullServerRecord[0] : null,
+                                    status: 'unresolved'
+                                }]);
+                                // TODO: Update local record's syncStatusLocal to 'conflicted'
+                            } else {
+                                // No conflict, proceed with upsert
+                                const { server_modified_at, ...rest } = record._raw;
+                                const { error } = await supabase.from(table).upsert(rest);
+                                if (error) console.error(`Push update error ${table}:`, error);
+                            }
+                        }
                     }
 
                     if (changeSet.deleted.length > 0) {

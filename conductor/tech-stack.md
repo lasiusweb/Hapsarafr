@@ -19,6 +19,17 @@ This document outlines the core technologies and frameworks utilized in the Haps
 
 *   **AI API:** Google Gemini API (`@google/genai`) - for integrating artificial intelligence capabilities into the application.
 
+## Testing Framework
+
+*   **Test Runner:** `vitest`
+*   **Assertions:** `vitest` (includes Chai and Jest-compatible assertion syntax)
+
+---
+
+### Tech Stack Evolution
+
+**2026-01-06:** Added `vitest` as the testing framework to enable unit and integration testing, which was not previously configured in the project. This is a necessary addition to adhere to the TDD workflow outlined in `conductor/workflow.md`.
+
 ## Other Key Libraries/Tools
 
 *   `date-fns` - for date manipulation.
