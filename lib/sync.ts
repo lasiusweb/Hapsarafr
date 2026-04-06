@@ -119,10 +119,12 @@ export const sync = async () => {
     }
 
     try {
+        console.group("Synchronization Process");
         await synchronize({
             database,
             pullChanges: async ({ lastPulledAt, schemaVersion, migration }) => {
-                console.log("Sync: Pulling changes since", lastPulledAt);
+                const lastPulledDate = lastPulledAt ? new Date(lastPulledAt).toISOString() : new Date(0).toISOString();
+                console.log(`Sync: Pulling changes since ${lastPulledDate}`);
                 
                 const changes: any = {};
                 const timestamp = new Date().getTime();
@@ -133,8 +135,6 @@ export const sync = async () => {
                 for (const batch of tableBatches) {
                     await Promise.all(batch.map(async (table) => {
                         try {
-                            const lastPulledDate = lastPulledAt ? new Date(lastPulledAt).toISOString() : new Date(0).toISOString();
-                            
                             // Fetch only modified records
                             const { data, error } = await supabase
                                 .from(table)
@@ -154,6 +154,9 @@ export const sync = async () => {
                                 updated: updated,
                                 deleted: [], 
                             };
+                            if (updated.length > 0) {
+                                console.log(`Sync: Pulled ${updated.length} updates for ${table}`);
+                            }
                         } catch (e) {
                             console.error(`CRITICAL SYNC ERROR ${table}:`, e);
                             changes[table] = { created: [], updated: [], deleted: [] };
@@ -170,7 +173,13 @@ export const sync = async () => {
                     const changeSet = changes[table];
                     if (!changeSet) continue;
 
+                    const hasChanges = changeSet.created.length > 0 || changeSet.updated.length > 0 || changeSet.deleted.length > 0;
+                    if (!hasChanges) continue;
+
+                    console.group(`Pushing changes for ${table}`);
+
                     if (changeSet.created.length > 0) {
+                        console.log(`Creating ${changeSet.created.length} records`);
                         const records = changeSet.created.map(r => {
                             const { server_modified_at, ...rest } = r._raw;
                             return rest;
@@ -180,15 +189,16 @@ export const sync = async () => {
                     }
 
                     if (changeSet.updated.length > 0) {
+                        console.log(`Updating ${changeSet.updated.length} records with conflict check`);
                         for (const record of changeSet.updated) {
                             const { data: serverRecord, error: fetchError } = await supabase
                                 .from(table)
                                 .select('updated_at')
                                 .eq('id', record.id);
 
-                            if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = 'exact one row not found'
-                                console.error(`Error fetching server record for conflict check:`, fetchError);
-                                continue; // or handle error more gracefully
+                            if (fetchError && fetchError.code !== 'PGRST116') {
+                                console.error(`Error fetching server record for ${table}/${record.id}:`, fetchError);
+                                continue;
                             }
 
                             const serverModifiedAt = serverRecord && serverRecord.length > 0 ? new Date(serverRecord[0].updated_at).getTime() : 0;
@@ -196,7 +206,7 @@ export const sync = async () => {
 
                             if (serverModifiedAt > clientLastPulledAt) {
                                 // Conflict detected
-                                console.log(`Conflict detected for record ${record.id} in table ${table}. Logging to conflicts table.`);
+                                console.warn(`CONFLICT: ${table}/${record.id}. Server: ${new Date(serverModifiedAt).toISOString()}, Client last pull: ${new Date(clientLastPulledAt).toISOString()}`);
                                 const { data: fullServerRecord } = await supabase.from(table).select('*').eq('id', record.id);
                                 await supabase.from('conflicts').insert([{
                                     table_name: table,
@@ -205,6 +215,7 @@ export const sync = async () => {
                                     server_record: fullServerRecord && fullServerRecord.length > 0 ? fullServerRecord[0] : null,
                                     status: 'unresolved'
                                 }]);
+                                
                                 // Update local record's syncStatusLocal to 'conflicted'
                                 const localTable = database.get(table as any);
                                 try {
@@ -215,22 +226,25 @@ export const sync = async () => {
                                         });
                                     });
                                 } catch (localError) {
-                                    console.error(`Failed to update local record ${record.id} to conflicted status:`, localError);
+                                    console.error(`Failed to mark ${table}/${record.id} as conflicted locally:`, localError);
                                 }
                             } else {
                                 // No conflict, proceed with upsert
                                 const { server_modified_at, ...rest } = record._raw;
                                 const { error } = await supabase.from(table).upsert(rest);
-                                if (error) console.error(`Push update error ${table}:`, error);
+                                if (error) console.error(`Push update error ${table}/${record.id}:`, error);
                             }
                         }
                     }
 
                     if (changeSet.deleted.length > 0) {
+                        console.log(`Deleting ${changeSet.deleted.length} records`);
                         const ids = changeSet.deleted;
                         const { error } = await supabase.from(table).delete().in('id', ids);
                         if (error) console.error(`Push delete error ${table}:`, error);
                     }
+
+                    console.groupEnd();
                 }
             },
             migrationsEnabledAtVersion: 1,
@@ -238,5 +252,8 @@ export const sync = async () => {
         console.log("Sync completed successfully.");
     } catch (error) {
         console.error("Sync failed globally:", error);
+        throw error; // Re-throw to allow SyncService to catch it
+    } finally {
+        console.groupEnd();
     }
 };
