@@ -21,7 +21,7 @@ This plan outlines the phases and tasks required to enhance the data synchroniza
 ### Tasks
 
 -   [x] **Task:** Write Tests: Develop unit tests for the conflict resolution logic based on the design from Phase 1. [7a7ee3a]
--   [ ] **Task:** Implement Feature: Implement the core conflict resolution logic.
+-   [x] **Task:** Implement Feature: Implement the core conflict resolution logic. [ab6cf0f]
 -   [ ] **Task:** Write Tests: Develop integration tests to simulate data synchronization conflicts between WatermelonDB and Supabase.
 -   [ ] **Task:** Implement Feature: Integrate the conflict resolution logic into the existing data synchronization process.
 -   [ ] **Task:** Implement Feature: Develop the UI components for user notifications.
