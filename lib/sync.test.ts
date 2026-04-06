@@ -43,6 +43,7 @@ describe('sync with conflict detection', () => {
       delete: vi.fn().mockReturnThis(),
       in: vi.fn().mockResolvedValue({ error: null }),
       eq: vi.fn().mockResolvedValue({ error: null }),
+      gt: vi.fn().mockResolvedValue({ data: [], error: null }),
     };
     (getSupabase as vi.Mock).mockReturnValue(mockSupabaseClient);
   });
@@ -109,6 +110,34 @@ describe('sync with conflict detection', () => {
     // Verify local record was updated to 'conflicted'
     expect(mockRecord.update).toHaveBeenCalled();
     expect(mockRecord.syncStatusLocal).toBe('conflicted');
+  });
+
+  it('should attach server_modified_at to records during pullChanges', async () => {
+    const serverTimestamp = '2023-01-01T12:00:00Z';
+    const serverFarmer = {
+      id: 'farmer-1',
+      name: 'John Doe',
+      updated_at: serverTimestamp,
+    };
+
+    mockSupabaseClient.from.mockImplementation((table: string) => {
+      if (table === 'farmers') {
+        return {
+          ...mockSupabaseClient,
+          select: vi.fn().mockReturnThis(),
+          gt: vi.fn().mockResolvedValue({ data: [serverFarmer], error: null }),
+        }
+      }
+      return mockSupabaseClient;
+    });
+
+    await sync();
+    const syncCall = (synchronize as vi.Mock).mock.calls[0][0];
+    const pullChanges = syncCall.pullChanges;
+
+    const result = await pullChanges({ lastPulledAt: null, schemaVersion: 1 });
+
+    expect(result.changes.farmers.updated[0].server_modified_at).toBe(new Date(serverTimestamp).getTime());
   });
 
   it('should upsert the record if no conflict is detected', async () => {
