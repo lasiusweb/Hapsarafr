@@ -16,10 +16,12 @@ describe('sync with conflict detection', () => {
 
     mockSupabaseClient = {
       from: vi.fn().mockReturnThis(),
-      select: vi.fn(),
+      select: vi.fn().mockReturnThis(),
       upsert: vi.fn().mockResolvedValue({ error: null }),
       insert: vi.fn().mockResolvedValue({ error: null }),
-      delete: vi.fn().mockResolvedValue({ error: null }),
+      delete: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({ error: null }),
+      eq: vi.fn().mockResolvedValue({ error: null }),
     };
     (getSupabase as vi.Mock).mockReturnValue(mockSupabaseClient);
   });
