@@ -41,6 +41,8 @@ export const schema = appSchema({
         { name: 'proposed_year', type: 'string', isOptional: true },
         { name: 'sync_status', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
         { name: 'created_by', type: 'string' },
@@ -137,6 +139,8 @@ export const schema = appSchema({
         { name: 'delivery_address', type: 'string' },
         { name: 'delivery_instructions', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'order_items', columns: [
         { name: 'order_id', type: 'string' },
@@ -162,6 +166,8 @@ export const schema = appSchema({
         { name: 'notes', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'created_by', type: 'string', isOptional: true },
     ] }),
     tableSchema({ name: 'assistance_applications', columns: [
@@ -193,6 +199,8 @@ export const schema = appSchema({
         { name: 'photo_url', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'pending_uploads', columns: [
         { name: 'file_path', type: 'string' },
@@ -233,7 +241,9 @@ export const schema = appSchema({
         { name: 'due_date', type: 'string', isOptional: true },
         { name: 'assignee_id', type: 'string', isOptional: true },
         { name: 'farmer_id', type: 'string', isOptional: true },
-        { name: 'created_by', type: 'string', isOptional: true },
+        { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'source', type: 'string', isOptional: true },
         { name: 'directive_assignment_id', type: 'string', isOptional: true },
@@ -241,6 +251,8 @@ export const schema = appSchema({
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'harvests', columns: [
         { name: 'farmer_id', type: 'string' },
@@ -251,6 +263,8 @@ export const schema = appSchema({
         { name: 'assessed_by_id', type: 'string' },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'quality_assessments', columns: [
         { name: 'harvest_id', type: 'string' },
@@ -261,6 +275,8 @@ export const schema = appSchema({
         { name: 'assessment_date', type: 'string' },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'quality_metrics', columns: [
         { name: 'assessment_id', type: 'string' },
@@ -275,6 +291,8 @@ export const schema = appSchema({
         { name: 'notes', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'processing_steps', columns: [
         { name: 'batch_id', type: 'string' },
@@ -285,6 +303,8 @@ export const schema = appSchema({
         { name: 'parameters', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'equipment', columns: [
         { name: 'name', type: 'string' },
@@ -294,6 +314,8 @@ export const schema = appSchema({
         { name: 'last_maintenance_date', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'manual_ledger_entries', columns: [
         { name: 'farmer_id', type: 'string' },
@@ -341,6 +363,8 @@ export const schema = appSchema({
         { name: 'reason', type: 'string' },
         { name: 'status', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'visit_requests', columns: [
         { name: 'farmer_id', type: 'string' },
@@ -353,6 +377,8 @@ export const schema = appSchema({
         { name: 'created_by', type: 'string' },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'priority_score', type: 'number', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'resolution_notes', type: 'string', isOptional: true },
@@ -449,6 +475,8 @@ export const schema = appSchema({
         { name: 'is_active', type: 'boolean' },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'collection_appointments', columns: [
         { name: 'farmer_id', type: 'string' },
@@ -457,6 +485,8 @@ export const schema = appSchema({
         { name: 'end_time', type: 'string' },
         { name: 'status', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'cancellation_reason', type: 'string', isOptional: true },
     ] }),
     tableSchema({ name: 'sustainability_actions', columns: [
@@ -489,6 +519,8 @@ export const schema = appSchema({
         { name: 'due_date', type: 'string', isOptional: true },
         { name: 'status', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'created_at', type: 'number' },
     ] }),
     tableSchema({ name: 'directive_assignments', columns: [
@@ -496,6 +528,8 @@ export const schema = appSchema({
         { name: 'tenant_id', type: 'string' },
         { name: 'status', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'claimed_at', type: 'string', isOptional: true },
         { name: 'completion_details_json', type: 'string', isOptional: true },
     ] }),
@@ -506,6 +540,8 @@ export const schema = appSchema({
         { name: 'payout_amount', type: 'number', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'protection_subscriptions', columns: [
         { name: 'farmer_id', type: 'string' },
@@ -516,6 +552,8 @@ export const schema = appSchema({
         { name: 'premium_paid', type: 'number' },
         { name: 'status', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'protection_products', columns: [
         { name: 'name', type: 'string' },
@@ -540,6 +578,8 @@ export const schema = appSchema({
         { name: 'description', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'created_at', type: 'number' },
     ] }),
     tableSchema({ name: 'land_valuation_history', columns: [
@@ -548,6 +588,8 @@ export const schema = appSchema({
         { name: 'calculated_at', type: 'number' },
         { name: 'factors_json', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'seed_varieties', columns: [
         { name: 'name', type: 'string' },
@@ -599,19 +641,25 @@ export const schema = appSchema({
         { name: 'location', type: 'string' },
         { name: 'created_by', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
     ] }),
     tableSchema({ name: 'event_rsvps', columns: [
         { name: 'event_id', type: 'string' },
         { name: 'user_id', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'tenant_partner_configs', columns: [
         { name: 'tenant_id', type: 'string' },
         { name: 'revenue_share_enabled', type: 'boolean' },
         { name: 'blocked_categories_json', type: 'string', isOptional: true },
-        { name: 'sync_status', type: 'string', isOptional: true },
-    ] }),
+        { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        ] }),
     tableSchema({ name: 'partners', columns: [
         { name: 'name', type: 'string' },
         { name: 'status', type: 'string' },
@@ -645,6 +693,8 @@ export const schema = appSchema({
         { name: 'due_date', type: 'string', isOptional: true },
         { name: 'status', type: 'string' },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'loan_applications', columns: [
         { name: 'farmer_id', type: 'string' },
@@ -658,6 +708,8 @@ export const schema = appSchema({
         { name: 'updated_at', type: 'number' },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'iot_devices', columns: [
         { name: 'serial_number', type: 'string' },
@@ -668,6 +720,8 @@ export const schema = appSchema({
         { name: 'farm_plot_id', type: 'string', isOptional: true },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'user_profiles', columns: [
         { name: 'user_id', type: 'string' },
@@ -709,6 +763,8 @@ export const schema = appSchema({
         { name: 'performed_by_id', type: 'string' },
         { name: 'tenant_id', type: 'string', isOptional: true },
         { name: 'sync_status_local', type: 'string', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
+        { name: 'server_modified_at', type: 'number', isOptional: true },
     ] }),
     tableSchema({ name: 'dealers', columns: [
         { name: 'user_id', type: 'string' },
@@ -756,6 +812,7 @@ export class FarmerModel extends Model {
   @text('proposed_year') proposedYear!: string;
   @text('sync_status') syncStatus!: string;
   @text('sync_status_local') syncStatusLocal!: string;
+  @field('server_modified_at') serverModifiedAt!: number;
   @date('created_at') createdAt!: number;
   @date('updated_at') updatedAt!: number;
   @text('created_by') createdBy!: string;
@@ -901,6 +958,7 @@ export class OrderModel extends Model {
     @text('delivery_address') deliveryAddress!: string;
     @text('delivery_instructions') deliveryInstructions!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class OrderItemModel extends Model {
@@ -932,6 +990,7 @@ export class SubsidyPaymentModel extends Model {
     @text('notes') notes!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @text('created_by') createdBy!: string;
 }
 
@@ -975,6 +1034,7 @@ export class InteractionModel extends Model {
     @text('photo_url') photoUrl!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class PendingUploadModel extends Model {
@@ -1036,6 +1096,7 @@ export class TaskModel extends Model {
     @date('created_at') createdAt!: number;
     @date('updated_at') updatedAt!: number;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class HarvestModel extends Model {
@@ -1048,6 +1109,7 @@ export class HarvestModel extends Model {
     @text('assessed_by_id') assessedById!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class QualityAssessmentModel extends Model {
@@ -1063,6 +1125,7 @@ export class QualityAssessmentModel extends Model {
     @text('assessment_date') assessmentDate!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @relation('harvests', 'harvest_id') harvest!: any;
 }
 
@@ -1082,6 +1145,7 @@ export class ProcessingBatchModel extends Model {
     @text('notes') notes!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class ProcessingStepModel extends Model {
@@ -1094,6 +1158,7 @@ export class ProcessingStepModel extends Model {
     @text('parameters') parameters!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class EquipmentModel extends Model {
@@ -1105,6 +1170,7 @@ export class EquipmentModel extends Model {
     @text('last_maintenance_date') lastMaintenanceDate!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class ManualLedgerEntryModel extends Model {
@@ -1167,6 +1233,7 @@ export class TerritoryDisputeModel extends Model {
     @text('reason') reason!: string;
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class VisitRequestModel extends Model {
@@ -1181,6 +1248,7 @@ export class VisitRequestModel extends Model {
     @text('created_by') createdBy!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @field('priority_score') priorityScore!: number;
     @date('created_at') createdAt!: number;
     @text('resolution_notes') resolutionNotes!: string;
@@ -1298,6 +1366,7 @@ export class ServicePointModel extends Model {
     @field('is_active') isActive!: boolean;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class CollectionAppointmentModel extends Model {
@@ -1308,6 +1377,7 @@ export class CollectionAppointmentModel extends Model {
     @text('end_time') endTime!: string;
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @text('cancellation_reason') cancellationReason!: string;
 }
 
@@ -1346,6 +1416,7 @@ export class DirectiveModel extends Model {
     @text('due_date') dueDate!: string;
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @date('created_at') createdAt!: number;
 }
 
@@ -1358,6 +1429,7 @@ export class DirectiveAssignmentModel extends Model {
     @text('tenant_id') tenantId!: string;
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @text('claimed_at') claimedAt!: string;
     @text('completion_details_json') completionDetailsJson!: string;
     @relation('directives', 'directive_id') directive!: any;
@@ -1371,6 +1443,7 @@ export class ProtectionClaimModel extends Model {
     @field('payout_amount') payoutAmount!: number;
     @date('created_at') createdAt!: number;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class ProtectionSubscriptionModel extends Model {
@@ -1383,6 +1456,7 @@ export class ProtectionSubscriptionModel extends Model {
     @field('premium_paid') premiumPaid!: number;
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class ProtectionProductModel extends Model {
@@ -1411,6 +1485,7 @@ export class LandListingModel extends Model {
     @text('description') description!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @date('created_at') createdAt!: number;
 }
 
@@ -1421,6 +1496,7 @@ export class LandValuationHistoryModel extends Model {
     @date('calculated_at') calculatedAt!: number;
     @text('factors_json') factorsJson!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class SeedVarietyModel extends Model {
@@ -1482,6 +1558,7 @@ export class EventModel extends Model {
     @text('location') location!: string;
     @text('created_by') createdBy!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
     @text('tenant_id') tenantId!: string;
 }
 
@@ -1490,6 +1567,7 @@ export class EventRsvpModel extends Model {
     @text('event_id') eventId!: string;
     @text('user_id') userId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class TenantPartnerConfigModel extends Model {
@@ -1540,6 +1618,7 @@ export class KhataRecordModel extends Model {
     @text('due_date') dueDate!: string;
     @text('status') status!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class LoanApplicationModel extends Model {
@@ -1554,6 +1633,7 @@ export class LoanApplicationModel extends Model {
     @text('created_at') createdAt!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class IoTDeviceModel extends Model {
@@ -1566,6 +1646,7 @@ export class IoTDeviceModel extends Model {
     @text('farm_plot_id') farmPlotId!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class UserProfileModel extends Model {
@@ -1619,6 +1700,7 @@ export class EquipmentMaintenanceLogModel extends Model {
     @text('performed_by_id') performedById!: string;
     @text('tenant_id') tenantId!: string;
     @text('sync_status_local') syncStatusLocal!: string;
+    @field('server_modified_at') serverModifiedAt!: number;
 }
 
 export class DealerModel extends Model {

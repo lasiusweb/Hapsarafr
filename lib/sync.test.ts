@@ -2,17 +2,38 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sync } from './sync';
 import { synchronize } from '@nozbe/watermelondb/sync';
 import { getSupabase } from './supabase';
+import database from '../db';
 
 // Mock dependencies
 vi.mock('@nozbe/watermelondb/sync');
 vi.mock('./supabase');
+vi.mock('../db', () => ({
+  default: {
+    get: vi.fn(),
+    write: vi.fn((cb) => cb()),
+  },
+}));
 
 describe('sync with conflict detection', () => {
   let mockSupabaseClient: any;
+  let mockTable: any;
+  let mockRecord: any;
 
   beforeEach(() => {
     // Reset mocks before each test
     vi.clearAllMocks();
+
+    mockRecord = {
+      id: 'farmer-1',
+      syncStatusLocal: '',
+      update: vi.fn().mockImplementation((cb) => cb(mockRecord)),
+    };
+
+    mockTable = {
+      find: vi.fn().mockResolvedValue(mockRecord),
+    };
+
+    (database.get as vi.Mock).mockReturnValue(mockTable);
 
     mockSupabaseClient = {
       from: vi.fn().mockReturnThis(),
@@ -84,6 +105,10 @@ describe('sync with conflict detection', () => {
     
     // The original table should NOT be updated
     expect(mockSupabaseClient.upsert).not.toHaveBeenCalled();
+
+    // Verify local record was updated to 'conflicted'
+    expect(mockRecord.update).toHaveBeenCalled();
+    expect(mockRecord.syncStatusLocal).toBe('conflicted');
   });
 
   it('should upsert the record if no conflict is detected', async () => {

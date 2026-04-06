@@ -205,7 +205,18 @@ export const sync = async () => {
                                     server_record: fullServerRecord && fullServerRecord.length > 0 ? fullServerRecord[0] : null,
                                     status: 'unresolved'
                                 }]);
-                                // TODO: Update local record's syncStatusLocal to 'conflicted'
+                                // Update local record's syncStatusLocal to 'conflicted'
+                                const localTable = database.get(table as any);
+                                try {
+                                    const localRecord = await localTable.find(record.id);
+                                    await database.write(async () => {
+                                        await localRecord.update(rec => {
+                                            (rec as any).syncStatusLocal = 'conflicted';
+                                        });
+                                    });
+                                } catch (localError) {
+                                    console.error(`Failed to update local record ${record.id} to conflicted status:`, localError);
+                                }
                             } else {
                                 // No conflict, proceed with upsert
                                 const { server_modified_at, ...rest } = record._raw;
