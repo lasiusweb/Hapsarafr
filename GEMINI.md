@@ -66,6 +66,11 @@ This command compiles the TypeScript code and bundles the assets into the `dist`
 *   **State Management:** State is managed locally within components, and globally through React Context (e.g., `DatabaseContext`, `CartContext`) and observable patterns from WatermelonDB.
 *   **Environment Variables:** Vite's `loadEnv` mechanism is utilized to securely inject environment variables, ensuring that sensitive keys like `API_KEY` are handled correctly during the build process.
 *   **Security Features:** A "kill switch" mechanism is implemented in `App.tsx` that automatically resets the local database and clears `localStorage` after a prolonged period of inactivity (30 days), enhancing data security.
+*   **Data Synchronization & Conflict Resolution:** The application implements a hybrid conflict resolution strategy.
+    *   **Detection:** During the synchronization process (`lib/sync.ts`), conflicts are detected by comparing the server's `updated_at` timestamp with the client's `server_modified_at` (captured during the last successful pull).
+    *   **Flagging:** Conflicted records are logged to a central `conflicts` table in Supabase and flagged locally in WatermelonDB with a `sync_status_local = 'conflicted'` state.
+    *   **Resolution:** A dedicated `ConflictResolutionPage` allows users to manually review and resolve conflicts by choosing between the local or server version of the data.
+    *   **Notification:** The UI includes a global `SyncIndicator` that alerts users to pending changes and active conflicts, along with toast notifications for real-time alerts.
 
 ## Inferred Architectural Components and Practices (Based on additional snippets):
 

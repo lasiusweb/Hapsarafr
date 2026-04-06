@@ -21,6 +21,10 @@ import InteractiveBarChart from './ui/InteractiveBarChart';
 import InteractivePieChart from './ui/InteractivePieChart';
 import IntellectusAlerts from './IntellectusAlerts';
 
+interface DashboardProps {
+  farmers: Farmer[];
+  onNavigateWithFilter?: (path: string, filter: Partial<Filters>) => void;
+}
 
 const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) => {
     const [dateRange, setDateRange] = useState<'all' | 'month' | 'week'>('all');
@@ -136,19 +140,19 @@ const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) 
                     <ActionCard
                         title="Pending Sanction"
                         count={quickLinks.pendingSanction}
-                        onClick={() => onNavigateWithFilter('farmer-directory', { status: FarmerStatus.Registered })}
+                        onClick={() => onNavigateWithFilter?.('farmer-directory', { status: FarmerStatus.Registered })}
                         icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                     />
                     <ActionCard
                         title="Awaiting Plantation"
                         count={quickLinks.pendingPlantation}
-                        onClick={() => onNavigateWithFilter('farmer-directory', { status: FarmerStatus.Sanctioned })}
+                        onClick={() => onNavigateWithFilter?.('farmer-directory', { status: FarmerStatus.Sanctioned })}
                         icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                     />
                     <ActionCard
                         title="Unverified Bank Accounts"
                         count={quickLinks.unverifiedAccounts}
-                        onClick={() => onNavigateWithFilter('farmer-directory', {})} // No simple filter for this, but can still navigate
+                        onClick={() => onNavigateWithFilter?.('farmer-directory', { status: undefined })}
                         icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>}
                     />
                 </div>
@@ -158,12 +162,12 @@ const Dashboard: React.FC<DashboardProps> = ({ farmers, onNavigateWithFilter }) 
                 <InteractivePieChart
                     title="Farmer Status"
                     data={statusData}
-                    onSliceClick={(status) => onNavigateWithFilter('farmer-directory', { status })}
+                    onSliceClick={(status) => onNavigateWithFilter?.('farmer-directory', { status })}
                 />
                 <InteractiveBarChart
                     title="Farmers by District"
                     data={districtData}
-                    onBarClick={(districtCode) => onNavigateWithFilter('farmer-directory', { district: districtCode })}
+                    onBarClick={(districtCode) => onNavigateWithFilter?.('farmer-directory', { district: districtCode })}
                 />
             </div>
         </div>

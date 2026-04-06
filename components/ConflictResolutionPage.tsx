@@ -65,7 +65,19 @@ export default function ConflictResolutionPage() {
       
       await database.write(async () => {
         await localRecord.update((rec: any) => {
-          Object.assign(rec, finalRecord);
+          // Map snake_case server/client data to model properties
+          // This assumes common mapping patterns in the project
+          Object.entries(finalRecord).forEach(([key, value]) => {
+            if (key === 'id') return; // Don't update ID
+            
+            // Try direct property (camelCase or matching)
+            const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+            if (camelKey in rec) {
+              rec[camelKey] = value;
+            } else if (key in rec) {
+              rec[key] = value;
+            }
+          });
           rec.syncStatusLocal = 'synced'; // Mark as resolved locally
         });
       });

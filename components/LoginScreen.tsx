@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Input } from './ui/Input';
 import { Label } from './ui/Label';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/Card';
+import { User } from '../types';
 
 interface LoginScreenProps {
   supabase: any;
+  setCurrentUser?: (user: User | null) => void;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ supabase }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ supabase, setCurrentUser }) => {
     const [email, setEmail] = useState('');
     const [otp, setOtp] = useState('');
     const [view, setView] = useState<'email' | 'otp'>('email');

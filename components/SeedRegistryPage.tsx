@@ -144,4 +144,53 @@ const SeedRegistryPage: React.FC<SeedRegistryPageProps> = ({ onBack, currentUser
                 </div>
 
                 <div className="bg-white rounded-lg shadow-md p-4 mb-8">
-                    <div className="grid grid-cols-1 md:grid-cols-3
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="flex flex-col">
+                            <label className="text-sm font-medium text-gray-600">Filter by Type</label>
+                            <select 
+                                value={filterType} 
+                                onChange={(e) => setFilterType(e.target.value)}
+                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+                            >
+                                <option value="">All Types</option>
+                                <option value="HEIRLOOM">Heirloom</option>
+                                <option value="HYBRID">Hybrid</option>
+                                <option value="GMO">GMO</option>
+                                <option value="WILD">Wild</option>
+                            </select>
+                        </div>
+                        <div className="flex flex-col md:col-span-2">
+                            <label className="text-sm font-medium text-gray-600">Search</label>
+                            <input 
+                                type="text" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search varieties..."
+                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {filteredSeeds.map((seed) => (
+                        <SeedCard 
+                            key={seed.id} 
+                            seed={seed} 
+                            performanceScore={seedScores[seed.id] || 0}
+                            onClick={() => setSelectedSeed(seed)}
+                        />
+                    ))}
+                </div>
+
+                {filteredSeeds.length === 0 && (
+                    <div className="text-center py-12 text-gray-500">
+                        No seed varieties found. Register a new variety to get started.
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default SeedRegistryPage;
