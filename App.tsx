@@ -2,10 +2,11 @@
 
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { HashRouter as Router, Routes } from 'react-router-dom'; // Only need Routes from react-router-dom for the main App component, specific Route and Navigate from AppRoutes
+import { HashRouter as Router, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import { User } from './types'; // Only User type is directly used for currentUser prop
+import { User } from './types';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { useDatabase } from './DatabaseContext';
 import { getSupabase } from './lib/supabase';
 import LoginScreen from './components/LoginScreen';
 import Notification from './components/Notification';
@@ -16,7 +17,8 @@ import { useSecurityKillSwitch } from './hooks/useSecurityKillSwitch';
 import { useNotification } from './hooks/useNotification';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppState } from './hooks/useAppState';
-import AppRoutes from './routes/AppRoutes'; // Import the new AppRoutes component
+import AppRoutes from './routes/AppRoutes';
+import { SyncService } from './lib/syncService';
 
 // Main App Content (Inside Router)
 const AppContent = () => {
@@ -40,7 +42,22 @@ const AppContent = () => {
         isLoadingAuth,
     } = useAuth();
 
-    const { notification, setNotification, dismissNotification } = useNotification();
+    const { notification, setNotification, showNotification, dismissNotification } = useNotification();
+    
+    // Subscribe to sync conflicts
+    useEffect(() => {
+        const syncService = SyncService.getInstance();
+        let lastConflictCount = 0;
+
+        const unsubscribe = syncService.subscribe((status) => {
+            if (status.conflictCount > lastConflictCount) {
+                showNotification(`Synchronization conflict detected: ${status.conflictCount} records need manual resolution.`, 'error');
+            }
+            lastConflictCount = status.conflictCount;
+        });
+
+        return unsubscribe;
+    }, [showNotification]);
     const {
         printQueue,
         setPrintQueue,
@@ -75,7 +92,7 @@ const AppContent = () => {
         if (pendingInvitation) {
             return <AcceptInvitation invitationCode={pendingInvitation} onAccept={() => setPendingInvitation(null)} />;
         }
-        return <LoginScreen supabase={getSupabase()} setCurrentUser={setCurrentUser} />; // Pass setCurrentUser for login success
+        return <LoginScreen supabase={getSupabase()} />;
     }
 
     return (

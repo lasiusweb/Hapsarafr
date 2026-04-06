@@ -61,6 +61,9 @@ const SeedRegistryPage = lazy(() => import('../components/SeedRegistryPage'));
 const PerformanceTracker = lazy(() => import('../components/PerformanceTracker'));
 const CommoditexDashboard = lazy(() => import('../components/CommoditexDashboard'));
 const IoTManagementPage = lazy(() => import('../components/IoTManagementPage'));
+const FarmerRegistrationPage = lazy(() => import('../components/farmer-registration/FarmerRegistrationPage'));
+const AdminDashboard = lazy(() => import('../components/AdminDashboard'));
+const ConflictResolutionPage = lazy(() => import('../components/ConflictResolutionPage'));
 
 
 interface AppRoutesProps {
@@ -168,6 +171,9 @@ const AppRoutes: React.FC<AppRoutesProps> = ({
         { path: "/genetica", component: SeedRegistryPage, props: { currentUser } },
         { path: "/performance-tracker", component: PerformanceTracker, props: { currentUser } },
         { path: "/commoditex", component: CommoditexDashboard, props: { currentUser } },
+        { path: "/register-farmer", component: FarmerRegistrationPage, props: { userId: currentUser?.id } },
+        { path: "/admin-dashboard", component: AdminDashboard, props: { currentUser } },
+        { path: "/conflicts", component: ConflictResolutionPage },
         { path: "*", component: NotFoundPage }
     ];
 
